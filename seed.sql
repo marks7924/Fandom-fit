@@ -1,6 +1,9 @@
 -- Supabase Database Seeding script for Fandom Fit
 -- RUN THIS IN THE SUPABASE SQL EDITOR
 
+-- 0. Ensure the products table has the images array column to match frontend expectations
+ALTER TABLE products ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT '{}';
+
 -- 1. Seed Categories (using fixed UUIDs so they map to products consistently)
 INSERT INTO categories (id, slug, name_en, name_ar, display_order, is_hidden) VALUES
 ('11111111-1111-1111-1111-111111111111', 'games', 'Games', 'ألعاب', 1, false),
