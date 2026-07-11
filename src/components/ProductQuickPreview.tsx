@@ -42,8 +42,8 @@ export default function ProductQuickPreview() {
 
   const name = locale === 'ar' ? previewProduct.name_ar : previewProduct.name_en;
   const description = locale === 'ar' ? previewProduct.description_ar : previewProduct.description_en;
-  const price = previewProduct.price;
-  const salePrice = previewProduct.sale_price;
+  const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
+  const { hasDiscount, originalPrice, discountedPrice } = getProductEffectivePrice(previewProduct);
 
   const defaultPlaceholder = 
     previewProduct.category_id === '4' ? '/placeholders/manga_front.jpg' : 
@@ -166,18 +166,18 @@ export default function ProductQuickPreview() {
 
                   {/* Prices */}
                   <div className="mt-3 flex items-baseline gap-2.5">
-                    {salePrice ? (
+                    {hasDiscount ? (
                       <>
                         <span className="text-base line-through text-black/40 font-extrabold">
-                          {tp('price_egp', { price })}
+                          {tp('price_egp', { price: originalPrice })}
                         </span>
                         <span className="text-2xl font-black text-brand-accent">
-                          {tp('price_egp', { price: salePrice })}
+                          {tp('price_egp', { price: discountedPrice })}
                         </span>
                       </>
                     ) : (
                       <span className="text-2xl font-black text-black">
-                        {tp('price_egp', { price })}
+                        {tp('price_egp', { price: originalPrice })}
                       </span>
                     )}
                   </div>

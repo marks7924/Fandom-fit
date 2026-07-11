@@ -18,8 +18,8 @@ export default function ProductCard({ product }: ProductCardProps) {
   const setCheckoutProduct = useStore((state) => state.setCheckoutProduct);
 
   const name = locale === 'ar' ? product.name_ar : product.name_en;
-  const price = product.price;
-  const salePrice = product.sale_price;
+  const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
+  const { hasDiscount, originalPrice, discountedPrice } = getProductEffectivePrice(product);
 
   // Image fallback strategy
   const defaultPlaceholder = 
@@ -129,18 +129,18 @@ export default function ProductCard({ product }: ProductCardProps) {
               {name}
             </h4>
             <div className="flex flex-col items-end">
-              {salePrice ? (
+              {hasDiscount ? (
                 <>
                   <span className="text-xs line-through text-black/40 font-bold">
-                    {t('price_egp', { price })}
+                    {t('price_egp', { price: originalPrice })}
                   </span>
                   <span className="text-sm font-black text-brand-accent">
-                    {t('price_egp', { price: salePrice })}
+                    {t('price_egp', { price: discountedPrice })}
                   </span>
                 </>
               ) : (
                 <span className="text-sm font-black text-black">
-                  {t('price_egp', { price })}
+                  {t('price_egp', { price: originalPrice })}
                 </span>
               )}
             </div>

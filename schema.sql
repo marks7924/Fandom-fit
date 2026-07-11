@@ -57,6 +57,9 @@ CREATE TABLE IF NOT EXISTS offers (
     discount_text_en VARCHAR(255),
     discount_text_ar VARCHAR(255),
     code VARCHAR(50) UNIQUE NOT NULL,
+    discount_percent INT DEFAULT 10,
+    max_uses INT,
+    max_uses_per_user INT,
     is_active BOOLEAN DEFAULT TRUE,
     start_date TIMESTAMP WITH TIME ZONE,
     end_date TIMESTAMP WITH TIME ZONE,
@@ -202,4 +205,23 @@ CREATE POLICY "Allow public update on products bucket" ON storage.objects
 
 CREATE POLICY "Allow public delete on products bucket" ON storage.objects 
     FOR DELETE USING (bucket_id = 'products');
+
+-- 12. Create Discount Campaigns table
+CREATE TABLE IF NOT EXISTS discount_campaigns (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    discount_percent INT NOT NULL,
+    category_id UUID REFERENCES categories(id) ON DELETE CASCADE, -- NULL means all items
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE discount_campaigns ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read on discount_campaigns" ON discount_campaigns 
+    FOR SELECT USING (TRUE);
+
+CREATE POLICY "Allow admin all on discount_campaigns" ON discount_campaigns 
+    FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
 

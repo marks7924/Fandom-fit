@@ -11,7 +11,7 @@ export default function CheckoutModal() {
   const tp = useTranslations('products');
   const locale = useLocale();
 
-  const { checkoutProduct, setCheckoutProduct, offers, addOrder } = useStore();
+  const { checkoutProduct, setCheckoutProduct, offers, addOrder, validateCoupon } = useStore();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -71,31 +71,34 @@ export default function CheckoutModal() {
   if (!checkoutProduct) return null;
 
   const productName = locale === 'ar' ? checkoutProduct.name_ar : checkoutProduct.name_en;
-  const originalPrice = checkoutProduct.sale_price !== null ? checkoutProduct.sale_price : checkoutProduct.price;
+  
+  const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
+  const { hasDiscount, originalPrice: basePrice, discountedPrice } = getProductEffectivePrice(checkoutProduct);
+  const originalPrice = discountedPrice; 
 
   // Apply Coupon
-  const handleApplyCoupon = () => {
+  const handleApplyCoupon = async () => {
     setDiscountErr('');
     setDiscountMsg('');
-    const code = couponCode.trim().toUpperCase();
+    const code = couponCode.trim();
 
     if (!code) return;
 
-    const offer = offers.find(o => o.code.toUpperCase() === code && o.is_active);
+    const res = await validateCoupon(code, phone);
 
-    if (!offer) {
-      setDiscountErr(t('coupon_invalid'));
+    if (!res.isValid) {
+      if (res.error === 'limit_reached') {
+        setDiscountErr(locale === 'ar' ? 'لقد انتهت صلاحية هذا الكوبون (وصل للحد الأقصى للاستخدام)' : 'This coupon has reached its maximum usage limit.');
+      } else if (res.error === 'user_limit_reached') {
+        setDiscountErr(locale === 'ar' ? 'لقد استخدمت هذا الكوبون الحد الأقصى المسموح به' : 'You have already reached the maximum usage limit for this coupon.');
+      } else {
+        setDiscountErr(t('coupon_invalid'));
+      }
       setAppliedDiscount(0);
       return;
     }
 
-    // Determine discount value based on code name
-    let pct = 15; // default 15%
-    if (code.includes('25')) pct = 25;
-    else if (code.includes('20')) pct = 20;
-    else if (code.includes('30')) pct = 30;
-    else if (code.includes('50')) pct = 50;
-
+    const pct = res.discountPercent || 10;
     setAppliedDiscount(pct);
     setDiscountMsg(t('coupon_success', { discount: `${pct}%` }));
   };
@@ -119,8 +122,25 @@ export default function CheckoutModal() {
 
     setIsSubmitting(true);
 
+    // Double-check coupon validity with the entered phone number
+    if (couponCode.trim()) {
+      const res = await validateCoupon(couponCode, cleanPhone);
+      if (!res.isValid) {
+        let errMsg = locale === 'ar' ? 'الكوبون غير صالح' : 'Invalid coupon code';
+        if (res.error === 'limit_reached') {
+          errMsg = locale === 'ar' ? 'لقد انتهت صلاحية هذا الكوبون (وصل للحد الأقصى للاستخدام)' : 'This coupon has reached its maximum usage limit.';
+        } else if (res.error === 'user_limit_reached') {
+          errMsg = locale === 'ar' ? 'لقد استخدمت هذا الكوبون الحد الأقصى المسموح به' : 'You have already reached the maximum usage limit for this coupon.';
+        }
+        alert(errMsg);
+        setAppliedDiscount(0);
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     const sizeNotes = `Size: ${selectedSize} | Fabric: ${selectedFabric}`;
-    const fullNotes = `${sizeNotes}${notes ? ` | Customer Note: ${notes}` : ''}${appliedDiscount > 0 ? ` | Coupon Code: ${couponCode.toUpperCase()} (${appliedDiscount}% Off)` : ''}`;
+    const fullNotes = `${sizeNotes}${notes ? ` | Customer Note: ${notes}` : ''}${appliedDiscount > 0 ? ` | Coupon Code: ${couponCode} (${appliedDiscount}% Off)` : ''}`;
 
     const result = await addOrder({
       product_id: checkoutProduct.id,

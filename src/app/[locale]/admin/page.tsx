@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store';
 import supabase, { isUsingMock } from '@/lib/supabase';
 import { 
   LayoutDashboard, ShoppingBag, FolderOpen, Ticket, Palette, Settings, 
-  LogOut, Plus, Edit, Trash2, Copy, Eye, ToggleLeft, ToggleRight, Check, Save, X, ShoppingCart
+  LogOut, Plus, Edit, Trash2, Copy, Eye, ToggleLeft, ToggleRight, Check, Save, X, ShoppingCart, Tag
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -17,6 +17,7 @@ export default function AdminPage() {
   // Zustand Store
   const { 
     products, categories, offers, settings, customRequests, orders, announcement,
+    discountCampaigns, addDiscountCampaign, updateDiscountCampaign, deleteDiscountCampaign,
     fetchInitialData, addProduct, updateProduct, deleteProduct,
     addCategory, updateCategory, deleteCategory,
     addOffer, updateOffer, deleteOffer,
@@ -56,8 +57,15 @@ export default function AdminPage() {
 
   const [offerForm, setOfferForm] = useState({
     title_en: '', title_ar: '', description_en: '', description_ar: '',
-    discount_text_en: '', discount_text_ar: '', code: '', is_active: true
+    discount_text_en: '', discount_text_ar: '', code: '', is_active: true,
+    discount_percent: 10, max_uses: '' as string | number, max_uses_per_user: '' as string | number
   });
+
+  const [campaignForm, setCampaignForm] = useState({
+    name: '', discount_percent: 10, category_id: '', is_active: true
+  });
+
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
   const [settingsForm, setSettingsForm] = useState({
     brand_name: '', tagline: '', instagram_url: '', tiktok_url: '', facebook_url: '',
@@ -188,10 +196,34 @@ export default function AdminPage() {
 
   const handleSaveOffer = async (e: React.FormEvent) => {
     e.preventDefault();
+    const finalOffer = {
+      ...offerForm,
+      discount_percent: Number(offerForm.discount_percent),
+      max_uses: offerForm.max_uses ? Number(offerForm.max_uses) : null,
+      max_uses_per_user: offerForm.max_uses_per_user ? Number(offerForm.max_uses_per_user) : null
+    };
+
     if (editingItem) {
-      await updateOffer(editingItem.id, offerForm);
+      await updateOffer(editingItem.id, finalOffer);
     } else {
-      await addOffer(offerForm);
+      await addOffer(finalOffer);
+    }
+    setIsFormOpen(false);
+    setEditingItem(null);
+  };
+
+  const handleSaveCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalCampaign = {
+      ...campaignForm,
+      discount_percent: Number(campaignForm.discount_percent),
+      category_id: campaignForm.category_id || null
+    };
+
+    if (editingItem) {
+      await updateDiscountCampaign(editingItem.id, finalCampaign);
+    } else {
+      await addDiscountCampaign(finalCampaign);
     }
     setIsFormOpen(false);
     setEditingItem(null);
@@ -340,6 +372,7 @@ export default function AdminPage() {
               { id: 'products', name: t('sidebar.products'), icon: <ShoppingBag size={16} /> },
               { id: 'categories', name: t('sidebar.categories'), icon: <FolderOpen size={16} /> },
               { id: 'offers', name: t('sidebar.offers'), icon: <Ticket size={16} /> },
+              { id: 'discounts', name: locale === 'ar' ? 'حملات الخصم' : 'Discounts', icon: <Tag size={16} /> },
               { id: 'requests', name: t('sidebar.custom_requests'), icon: <Palette size={16} /> },
               { id: 'orders', name: locale === 'ar' ? 'الطلبات' : 'Orders', icon: <ShoppingCart size={16} /> },
               { id: 'settings', name: t('sidebar.settings'), icon: <Settings size={16} /> },
@@ -395,7 +428,10 @@ export default function AdminPage() {
                   {orders.filter(o => o.status === 'completed').reduce((sum, o) => sum + Number(o.price), 0)} EGP
                 </span>
               </div>
-              <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl shadow-sm">
+              <div 
+                onClick={() => { setActiveTab('orders'); setOrderStatusFilter('pending'); }}
+                className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl shadow-sm cursor-pointer hover:bg-zinc-800/85 transition-colors"
+              >
                 <span className="text-[10px] uppercase font-bold text-zinc-500 block">{locale === 'ar' ? 'الطلبات المعلقة' : 'Pending Orders'}</span>
                 <span className="text-3xl font-black text-amber-500 mt-1 block">
                   {orders.filter(o => o.status === 'pending').length}
@@ -1007,7 +1043,8 @@ export default function AdminPage() {
                     setEditingItem(null);
                     setOfferForm({
                       title_en: '', title_ar: '', description_en: '', description_ar: '',
-                      discount_text_en: '10% OFF', discount_text_ar: 'خصم ١٠٪', code: '', is_active: true
+                      discount_text_en: '10% OFF', discount_text_ar: 'خصم ١٠٪', code: '', is_active: true,
+                      discount_percent: 10, max_uses: '', max_uses_per_user: ''
                     });
                     setIsFormOpen(true);
                   }}
@@ -1085,6 +1122,36 @@ export default function AdminPage() {
                   />
                 </div>
 
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Discount %</label>
+                    <input
+                      type="number" required min={1} max={100}
+                      value={offerForm.discount_percent}
+                      onChange={(e) => setOfferForm({ ...offerForm, discount_percent: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Max Total Uses</label>
+                    <input
+                      type="number" placeholder="Unlimited"
+                      value={offerForm.max_uses}
+                      onChange={(e) => setOfferForm({ ...offerForm, max_uses: e.target.value ? Number(e.target.value) : '' })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Max per User</label>
+                    <input
+                      type="number" placeholder="Unlimited"
+                      value={offerForm.max_uses_per_user}
+                      onChange={(e) => setOfferForm({ ...offerForm, max_uses_per_user: e.target.value ? Number(e.target.value) : '' })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <input 
                     type="checkbox" 
@@ -1133,7 +1200,12 @@ export default function AdminPage() {
                           <button
                             onClick={() => {
                               setEditingItem(o);
-                              setOfferForm(o);
+                              setOfferForm({
+                                ...o,
+                                discount_percent: o.discount_percent || 10,
+                                max_uses: o.max_uses ?? '',
+                                max_uses_per_user: o.max_uses_per_user ?? ''
+                              });
                               setIsFormOpen(true);
                             }}
                             className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white"
@@ -1154,6 +1226,169 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+          </div>
+        )}
+
+        {/* TAB 4.5: DISCOUNT CAMPAIGNS CRUD */}
+        {activeTab === 'discounts' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-3xl font-black uppercase text-white">{locale === 'ar' ? 'حملات الخصم' : 'Discount Campaigns'}</h2>
+              
+              {!isFormOpen && (
+                <button
+                  onClick={() => {
+                    setEditingItem(null);
+                    setCampaignForm({
+                      name: '', discount_percent: 10, category_id: '', is_active: true
+                    });
+                    setIsFormOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-xs cursor-pointer"
+                >
+                  <Plus size={14} />
+                  {t('discounts.add_new') || 'Add Campaign'}
+                </button>
+              )}
+            </div>
+
+            {isFormOpen ? (
+              <form onSubmit={handleSaveCampaign} className="bg-zinc-900 border border-zinc-800 p-4 sm:p-6 rounded-2xl space-y-4 max-w-md">
+                <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
+                    {editingItem ? (locale === 'ar' ? 'تعديل حملة الخصم' : 'Edit Discount Campaign') : (locale === 'ar' ? 'إنشاء حملة خصم جديدة' : 'Create Discount Campaign')}
+                  </h3>
+                  <button 
+                    type="button" 
+                    onClick={() => { setIsFormOpen(false); setEditingItem(null); }}
+                    className="text-xs uppercase font-extrabold text-zinc-500 hover:text-zinc-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Campaign Name</label>
+                  <input
+                    type="text" required placeholder="e.g. Summer Special 15%"
+                    value={campaignForm.name}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Discount %</label>
+                    <input
+                      type="number" required min={1} max={100}
+                      value={campaignForm.discount_percent}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, discount_percent: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Target Category</label>
+                    <select
+                      value={campaignForm.category_id}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, category_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    >
+                      <option value="">{locale === 'ar' ? 'كل المنتجات (عام)' : 'All Items (Global)'}</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name_en}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    checked={campaignForm.is_active}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, is_active: e.target.checked })}
+                    className="accent-brand-accent" 
+                  />
+                  <label className="text-xs font-bold text-zinc-300">Active Campaign</label>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-xs cursor-pointer"
+                >
+                  Save Campaign
+                </button>
+              </form>
+            ) : (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm max-w-2xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[550px] text-left font-mono">
+                    <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
+                      <tr>
+                        <th className="p-4">Name</th>
+                        <th className="p-4">Category</th>
+                        <th className="p-4">Discount</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800 text-xs">
+                      {discountCampaigns && discountCampaigns.length > 0 ? (
+                        discountCampaigns.map((c) => (
+                          <tr key={c.id} className="hover:bg-zinc-800/20 text-zinc-300">
+                            <td className="p-4 font-bold text-white">{c.name}</td>
+                            <td className="p-4">
+                              {c.category_id 
+                                ? (categories.find(cat => cat.id === c.category_id)?.name_en || 'Uncategorized')
+                                : (locale === 'ar' ? 'كل المنتجات (عام)' : 'All Items (Global)')}
+                            </td>
+                            <td className="p-4 font-bold text-brand-accent">{c.discount_percent}% OFF</td>
+                            <td className="p-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                c.is_active 
+                                  ? 'bg-green-950/50 text-green-400 border border-green-900' 
+                                  : 'bg-red-950/50 text-red-400 border border-red-900'
+                              }`}>
+                                {c.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right flex justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingItem(c);
+                                  setCampaignForm({
+                                    name: c.name,
+                                    discount_percent: c.discount_percent,
+                                    category_id: c.category_id || '',
+                                    is_active: c.is_active
+                                  });
+                                  setIsFormOpen(true);
+                                }}
+                                className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirmId(c.id)}
+                                className="p-1.5 hover:bg-red-950/30 rounded text-zinc-400 hover:text-red-400"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="p-8 text-center text-zinc-500 font-semibold">
+                            No discount campaigns active yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1355,6 +1590,26 @@ export default function AdminPage() {
               />
             </div>
 
+            <div className="flex gap-2 border-b border-zinc-800 pb-2">
+              {[
+                { id: 'all', label: locale === 'ar' ? 'كل الطلبات' : 'All Orders' },
+                { id: 'pending', label: locale === 'ar' ? 'قيد الانتظار' : 'Pending' },
+                { id: 'completed', label: locale === 'ar' ? 'المكتملة' : 'Completed' },
+              ].map((status) => (
+                <button
+                  key={status.id}
+                  onClick={() => setOrderStatusFilter(status.id as any)}
+                  className={`px-4 py-2 text-xs font-bold uppercase rounded-lg border transition-all cursor-pointer ${
+                    orderStatusFilter === status.id
+                      ? 'bg-zinc-800 text-brand-accent border-zinc-700'
+                      : 'bg-zinc-950 text-zinc-400 border-zinc-900 hover:text-white'
+                  }`}
+                >
+                  {status.label}
+                </button>
+              ))}
+            </div>
+
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[950px] text-left font-mono">
@@ -1372,6 +1627,9 @@ export default function AdminPage() {
                   {orders && orders.length > 0 ? (
                     (() => {
                       const filtered = [...orders].filter(o => {
+                        const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+                        if (!matchesStatus) return false;
+
                         const code = o.id.split('-')[0].toLowerCase();
                         const query = orderSearchQuery.toLowerCase();
                         return code.includes(query) || 
@@ -1452,6 +1710,7 @@ export default function AdminPage() {
                   if (activeTab === 'products') await deleteProduct(deleteConfirmId);
                   else if (activeTab === 'categories') await deleteCategory(deleteConfirmId);
                   else if (activeTab === 'offers') await deleteOffer(deleteConfirmId);
+                  else if (activeTab === 'discounts') await deleteDiscountCampaign(deleteConfirmId);
                   setDeleteConfirmId(null);
                 }}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-xs font-bold text-white rounded uppercase cursor-pointer"

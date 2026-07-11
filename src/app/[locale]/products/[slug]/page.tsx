@@ -65,8 +65,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
   const name = locale === 'ar' ? product.name_ar : product.name_en;
   const description = locale === 'ar' ? product.description_ar : product.description_en;
-  const price = product.price;
-  const salePrice = product.sale_price;
+  const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
+  const { hasDiscount, originalPrice, discountedPrice } = getProductEffectivePrice(product);
 
   const defaultPlaceholder = 
     product.category_id === '4' ? '/placeholders/manga_front.jpg' : 
@@ -176,20 +176,19 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                   {name}
                 </h1>
 
-                {/* Prices */}
                 <div className="mt-4 flex items-baseline gap-3">
-                  {salePrice ? (
+                  {hasDiscount ? (
                     <>
                       <span className="text-lg line-through text-black/40 font-extrabold">
-                        {tp('price_egp', { price })}
+                        {tp('price_egp', { price: originalPrice })}
                       </span>
                       <span className="text-3xl font-black text-brand-accent">
-                        {tp('price_egp', { price: salePrice })}
+                        {tp('price_egp', { price: discountedPrice })}
                       </span>
                     </>
                   ) : (
                     <span className="text-3xl font-black text-black">
-                      {tp('price_egp', { price })}
+                      {tp('price_egp', { price: originalPrice })}
                     </span>
                   )}
                 </div>

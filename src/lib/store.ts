@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import supabase from './supabase';
+import supabase, { isUsingMock } from './supabase';
 
 export interface Category {
   id: string;
@@ -42,6 +42,9 @@ export interface Offer {
   discount_text_en: string;
   discount_text_ar: string;
   code: string;
+  discount_percent: number;
+  max_uses?: number | null;
+  max_uses_per_user?: number | null;
   is_active: boolean;
 }
 
@@ -117,12 +120,39 @@ interface StoreState {
   addOffer: (offer: Omit<Offer, 'id'>) => Promise<void>;
   updateOffer: (id: string, offer: Partial<Offer>) => Promise<void>;
   deleteOffer: (id: string) => Promise<void>;
+
+  // Discount Campaigns CRUD
+  discountCampaigns: DiscountCampaign[];
+  getProductEffectivePrice: (product: Product) => {
+    hasDiscount: boolean;
+    originalPrice: number;
+    discountedPrice: number;
+    campaignName: string | null;
+  };
+  addDiscountCampaign: (campaign: Omit<DiscountCampaign, 'id'>) => Promise<void>;
+  updateDiscountCampaign: (id: string, campaign: Partial<DiscountCampaign>) => Promise<void>;
+  deleteDiscountCampaign: (id: string) => Promise<void>;
+  validateCoupon: (code: string, phone: string) => Promise<{
+    isValid: boolean;
+    discountPercent?: number;
+    error?: 'invalid' | 'limit_reached' | 'user_limit_reached';
+  }>;
 }
+
+export interface DiscountCampaign {
+  id: string;
+  name: string;
+  discount_percent: number;
+  category_id: string | null;
+  is_active: boolean;
+}
+
 
 export const useStore = create<StoreState>((set, get) => ({
   categories: [],
   products: [],
   offers: [],
+  discountCampaigns: [],
   settings: {},
   customRequests: [],
   orders: [],
@@ -143,6 +173,7 @@ export const useStore = create<StoreState>((set, get) => ({
       const { data: products } = await supabase.from('products').select('*');
       const { data: offers } = await supabase.from('offers').select('*');
       const { data: settingsData } = await supabase.from('settings').select('*');
+      const { data: discountCampaigns } = await supabase.from('discount_campaigns').select('*');
 
       const settingsMap: Record<string, any> = {};
       if (settingsData) {
@@ -155,6 +186,7 @@ export const useStore = create<StoreState>((set, get) => ({
         categories: categories || [],
         products: products || [],
         offers: offers || [],
+        discountCampaigns: discountCampaigns || [],
         settings: settingsMap,
         announcement: settingsMap.announcement || '',
         announcement_ar: settingsMap.announcement_ar || '',
@@ -385,5 +417,107 @@ export const useStore = create<StoreState>((set, get) => ({
     } catch (error) {
       console.error('Error deleting offer:', error);
     }
+  },
+
+  getProductEffectivePrice: (product) => {
+    const campaigns = get().discountCampaigns || [];
+    const activeCampaign = campaigns.find(
+      c => c.is_active && (c.category_id === null || c.category_id === product.category_id)
+    );
+
+    if (activeCampaign) {
+      const discountPct = activeCampaign.discount_percent;
+      const basePrice = product.price;
+      const discountedPrice = Math.round(basePrice * (1 - discountPct / 100));
+      return {
+        hasDiscount: true,
+        originalPrice: basePrice,
+        discountedPrice: discountedPrice,
+        campaignName: activeCampaign.name
+      };
+    }
+
+    return {
+      hasDiscount: product.sale_price !== null,
+      originalPrice: product.price,
+      discountedPrice: product.sale_price !== null ? product.sale_price : product.price,
+      campaignName: null
+    };
+  },
+
+  addDiscountCampaign: async (campaign) => {
+    try {
+      const { error } = await supabase.from('discount_campaigns').insert([campaign]);
+      if (error) throw error;
+      const { data: allCampaigns } = await supabase.from('discount_campaigns').select('*');
+      if (allCampaigns) set({ discountCampaigns: allCampaigns });
+    } catch (error) {
+      console.error('Error adding discount campaign:', error);
+    }
+  },
+
+  updateDiscountCampaign: async (id, campaign) => {
+    try {
+      const { error } = await supabase.from('discount_campaigns').update(campaign).eq('id', id);
+      if (error) throw error;
+      const { data: allCampaigns } = await supabase.from('discount_campaigns').select('*');
+      if (allCampaigns) set({ discountCampaigns: allCampaigns });
+    } catch (error) {
+      console.error('Error updating discount campaign:', error);
+    }
+  },
+
+  deleteDiscountCampaign: async (id) => {
+    try {
+      const { error } = await supabase.from('discount_campaigns').delete().eq('id', id);
+      if (error) throw error;
+      set({ discountCampaigns: get().discountCampaigns.filter(c => c.id !== id) });
+    } catch (error) {
+      console.error('Error deleting discount campaign:', error);
+    }
+  },
+
+  validateCoupon: async (code, phone) => {
+    const cleanCode = code.trim().toLowerCase();
+    const offer = get().offers.find(o => o.code.trim().toLowerCase() === cleanCode && o.is_active);
+
+    if (!offer) {
+      return { isValid: false, error: 'invalid' };
+    }
+
+    if (isUsingMock) {
+      return { isValid: true, discountPercent: offer.discount_percent };
+    }
+
+    // Check max_uses overall if specified
+    if (offer.max_uses !== null && offer.max_uses !== undefined && offer.max_uses > 0) {
+      // Query database to count how many orders contain this coupon code
+      const { count, error } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .ilike('notes', `%Coupon Code: ${offer.code}%`);
+      
+      if (!error && count !== null && count >= offer.max_uses) {
+        return { isValid: false, error: 'limit_reached' };
+      }
+    }
+
+    // Check max_uses_per_user (by phone number) if specified
+    if (offer.max_uses_per_user !== null && offer.max_uses_per_user !== undefined && offer.max_uses_per_user > 0) {
+      const cleanPhone = phone.trim();
+      if (cleanPhone) {
+        const { count, error } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('customer_phone', cleanPhone)
+          .ilike('notes', `%Coupon Code: ${offer.code}%`);
+
+        if (!error && count !== null && count >= offer.max_uses_per_user) {
+          return { isValid: false, error: 'user_limit_reached' };
+        }
+      }
+    }
+
+    return { isValid: true, discountPercent: offer.discount_percent };
   }
 }));

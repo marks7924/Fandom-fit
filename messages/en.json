@@ -218,6 +218,32 @@
       "is_hidden": "Hidden",
       "confirm_delete": "Are you sure you want to delete this category? Products in this category will be orphaned."
     },
+    "offers": {
+      "add_new": "Add Coupon",
+      "add": "Add Coupon",
+      "edit_offer": "Edit Coupon",
+      "code": "Coupon Code",
+      "discount_percent": "Discount Percentage (%)",
+      "max_uses": "Max Usage Count (optional)",
+      "max_uses_per_user": "Max Usage Per User (optional)",
+      "discount_text_en": "Discount Tag (EN, e.g. 10% OFF)",
+      "discount_text_ar": "Discount Tag (AR, e.g. خصم ١٠٪)",
+      "title_en": "Coupon Title (EN)",
+      "title_ar": "Coupon Title (AR)",
+      "is_active": "Active Coupon",
+      "confirm_delete": "Are you sure you want to delete this coupon?"
+    },
+    "discounts": {
+      "add_new": "Add Campaign",
+      "add": "Add Campaign",
+      "edit_campaign": "Edit Campaign",
+      "name": "Campaign Name",
+      "discount_percent": "Discount Percentage (%)",
+      "category": "Target Category (Select 'All Items' for global)",
+      "all_items": "All Items (Global)",
+      "is_active": "Active Campaign",
+      "confirm_delete": "Are you sure you want to delete this discount campaign?"
+    },
     "custom_requests": {
       "client": "Client",
       "instagram": "Instagram",
