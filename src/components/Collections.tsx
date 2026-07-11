@@ -102,7 +102,7 @@ export default function Collections() {
       nameKey: 'custom_designs',
       descKey: 'custom_designs_desc',
       icon: <Paintbrush size={28} />,
-      themeClass: 'bg-[#E07A5F] text-white border-dashed hover:bg-black hover:text-[#EDE0D0] hover:border-solid',
+      themeClass: 'bg-[#E07A5F] text-white border-dashed hover:bg-white hover:text-black hover:border-solid',
     }
   ];
 
@@ -118,7 +118,7 @@ export default function Collections() {
   };
 
   return (
-    <section id="collections" className="py-24 bg-[#EDE0D0] border-b-4 border-black relative">
+    <section id="collections" className="py-10 sm:py-24 bg-[#EDE0D0] border-b-4 border-black relative">
       {/* Decorative scrap tape */}
       <div className="absolute -top-3 right-[10%] px-6 py-1 masking-tape rotate-3 z-10 text-sm">
         ★ CHOOSE YOUR FANDOM ★
@@ -127,17 +127,17 @@ export default function Collections() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Title */}
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <h2 className="text-5xl font-black uppercase tracking-tight text-black">
+        <div className="text-center max-w-2xl mx-auto mb-6 sm:mb-16">
+          <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tight text-black">
             {t('title')}
           </h2>
-          <p className="mt-4 text-lg font-semibold text-black/70 font-handwriting">
+          <p className="mt-2 sm:mt-4 text-base sm:text-lg font-semibold text-black/70 font-handwriting">
             {t('subtitle')}
           </p>
         </div>
 
         {/* Categories Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 select-none">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 select-none">
           {collections.map((item, idx) => (
             <motion.div
               key={item.slug}
@@ -146,7 +146,7 @@ export default function Collections() {
               viewport={{ once: true }}
               transition={{ delay: idx * 0.05 }}
               onClick={() => handleCategorySelect(item.slug)}
-              className={`relative bg-white border-3 border-black p-6 rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 cursor-pointer flex flex-col justify-between aspect-[1.1] z-20 ${item.themeClass}`}
+              className={`relative bg-white border-3 border-black p-3 sm:p-6 rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 cursor-pointer flex flex-col justify-between aspect-square sm:aspect-[1.1] z-20 ${item.themeClass}`}
             >
               {item.hoverDecorations}
               
@@ -161,11 +161,11 @@ export default function Collections() {
               </div>
 
               {/* Title / Description */}
-              <div className="mt-8">
-                <h3 className="text-2xl font-black uppercase tracking-tight">
+              <div className="mt-3 sm:mt-8">
+                <h3 className="text-base sm:text-2xl font-black uppercase tracking-tight">
                   {getLocalizedName(item.slug)}
                 </h3>
-                <p className="text-xs font-semibold uppercase tracking-wider opacity-85 mt-2">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider opacity-85 mt-1 sm:mt-2 hidden sm:block">
                   {getLocalizedDesc(item.slug)}
                 </p>
               </div>
