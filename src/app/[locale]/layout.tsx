@@ -19,12 +19,90 @@ const gochiHand = Gochi_Hand({
   display: 'swap',
 });
 
+const SITE_URL = 'https://fandom-fit.vercel.app';
+const SITE_TITLE = 'Fandom Fit | Wear What You Love';
+const SITE_DESCRIPTION = 'Premium Egyptian Streetwear inspired by gaming, anime, movies, football, and music culture. Wear What You Love. Made in Egypt.';
+const OG_IMAGE = `${SITE_URL}/og-image.png`;
+
 export const metadata: Metadata = {
-  title: "Fandom Fit | Wear What You Love",
-  description: "Premium Egyptian Streetwear brand inspired by gaming, anime, movies, football, and music culture. Made for fandom lovers.",
+  metadataBase: new URL(SITE_URL),
+
+  // --- Core ---
+  title: {
+    default: SITE_TITLE,
+    template: '%s | Fandom Fit',
+  },
+  description: SITE_DESCRIPTION,
+  keywords: [
+    'Fandom Fit', 'Egyptian streetwear', 'anime tshirts', 'gaming shirts',
+    'custom tshirts Egypt', 'fandom clothing', 'made in Egypt fashion',
+    'anime merch', 'football shirts Egypt', 'custom design shirts'
+  ],
+  authors: [{ name: 'Fandom Fit', url: SITE_URL }],
+  creator: 'Fandom Fit',
+  publisher: 'Fandom Fit',
+
+  // --- Favicon & Icons ---
   icons: {
-    icon: "/favicon.ico",
-  }
+    icon: [
+      { url: '/icon-512.png', type: 'image/png' },
+      { url: '/favicon.ico' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: '/icon-512.png',
+  },
+
+  // --- PWA Manifest ---
+  manifest: '/manifest.json',
+
+  // --- Open Graph (Facebook, WhatsApp, Discord, LinkedIn, Telegram) ---
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: SITE_URL,
+    siteName: 'Fandom Fit',
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [
+      {
+        url: OG_IMAGE,
+        width: 1200,
+        height: 630,
+        alt: 'Fandom Fit — Wear What You Love. Premium Egyptian Streetwear.',
+        type: 'image/png',
+      },
+    ],
+  },
+
+  // --- Twitter / X Card ---
+  twitter: {
+    card: 'summary_large_image',
+    site: '@fandomfit',
+    creator: '@fandomfit',
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [OG_IMAGE],
+  },
+
+  // --- Robots ---
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+    },
+  },
+
+  // --- Theme color for browser chrome ---
+  other: {
+    'theme-color': '#000000',
+    'msapplication-TileColor': '#000000',
+    'msapplication-TileImage': '/icon-512.png',
+  },
 };
 
 export default async function LocaleLayout({

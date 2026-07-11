@@ -1,0 +1,25 @@
+{
+  "name": "Fandom Fit",
+  "short_name": "Fandom Fit",
+  "description": "Premium Egyptian Streetwear inspired by gaming, anime, movies, football, and music culture. Wear What You Love. Made in Egypt.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["shopping", "lifestyle", "fashion"]
+}
