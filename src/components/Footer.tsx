@@ -52,6 +52,7 @@ export default function Footer() {
                   alt="Fandom Fit"
                   width={140}
                   height={45}
+                  unoptimized
                   onError={() => setLogoError(true)}
                   className="h-10 w-auto object-contain invert"
                 />

@@ -13,7 +13,7 @@ export default function ProductQuickPreview() {
   const tp = useTranslations('products');
   const locale = useLocale();
   
-  const { previewProduct, setPreviewProduct, setCheckoutProduct } = useStore();
+  const { previewProduct, setPreviewProduct, setCheckoutProduct, getProductEffectivePrice } = useStore();
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedFabric, setSelectedFabric] = useState('Standard Cotton');
@@ -42,7 +42,6 @@ export default function ProductQuickPreview() {
 
   const name = locale === 'ar' ? previewProduct.name_ar : previewProduct.name_en;
   const description = locale === 'ar' ? previewProduct.description_ar : previewProduct.description_en;
-  const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
   const { hasDiscount, originalPrice, discountedPrice } = getProductEffectivePrice(previewProduct);
 
   const defaultPlaceholder = 
@@ -156,9 +155,17 @@ export default function ProductQuickPreview() {
                 <div>
                   
                   {/* Badge & Title */}
-                  <span className="text-[9px] font-black tracking-widest bg-black text-[#EDE0D0] px-2 py-0.5 rounded-full uppercase border border-white/20">
-                    {tp('unisex')}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[9px] font-black tracking-widest bg-black text-[#EDE0D0] px-2 py-0.5 rounded-full uppercase border border-white/20">
+                      {tp('unisex')}
+                    </span>
+                    {hasDiscount && (
+                      <span className="text-[9px] font-black tracking-wider uppercase bg-brand-accent text-white px-2.5 py-0.5 rounded-full border-2 border-black shadow-[1px_1px_0px_rgba(0,0,0,1)] flex items-center gap-1">
+                        <span>🔥</span>
+                        {locale === 'ar' ? `خصم ${Math.round(((originalPrice - discountedPrice) / originalPrice) * 100)}٪` : `${Math.round(((originalPrice - discountedPrice) / originalPrice) * 100)}% OFF`}
+                      </span>
+                    )}
+                  </div>
 
                   <h3 className="text-3xl font-black uppercase text-black mt-2 leading-tight">
                     {name}

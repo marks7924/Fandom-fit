@@ -46,6 +46,12 @@ export default function ProductCard({ product }: ProductCardProps) {
       
       {/* Absolute Badges Overlay */}
       <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5 pointer-events-none">
+        {hasDiscount && (
+          <span className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1 bg-brand-accent text-white border-2 border-black rounded-md rotate-[2deg] shadow-[1px_1px_0px_rgba(0,0,0,1)] flex items-center gap-1">
+            <span className="text-[9px]">🔥</span>
+            {locale === 'ar' ? `خصم ${Math.round(((originalPrice - discountedPrice) / originalPrice) * 100)}٪` : `${Math.round(((originalPrice - discountedPrice) / originalPrice) * 100)}% OFF`}
+          </span>
+        )}
         {product.is_new_arrival && (
           <span className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1 bg-[#81B29A] text-black border-2 border-black rounded-md rotate-[-2deg]">
             {t('new')}

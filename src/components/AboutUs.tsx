@@ -60,6 +60,7 @@ export default function AboutUs() {
                     src="/placeholders/about_1.jpg"
                     alt="Apparel Printing"
                     fill
+                    unoptimized
                     onError={() => setPhotoError1(true)}
                     className="object-cover"
                   />
@@ -90,6 +91,7 @@ export default function AboutUs() {
                     src="/placeholders/about_2.jpg"
                     alt="Streetwear Fit"
                     fill
+                    unoptimized
                     onError={() => setPhotoError2(true)}
                     className="object-cover"
                   />

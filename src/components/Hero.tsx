@@ -156,6 +156,7 @@ export default function Hero() {
                     fill
                     sizes="(max-width: 640px) 280px, 320px"
                     priority
+                    unoptimized
                     onError={() => setBannerError(true)}
                     className="object-cover"
                   />

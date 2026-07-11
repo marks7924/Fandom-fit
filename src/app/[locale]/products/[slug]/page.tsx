@@ -168,9 +168,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               
               <div>
                 {/* Unisex Fit */}
-                <span className="text-[10px] font-black tracking-widest bg-black text-[#EDE0D0] px-3 py-1 rounded-full uppercase border border-white/20">
-                  {tp('unisex')}
-                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-black tracking-widest bg-black text-[#EDE0D0] px-3 py-1 rounded-full uppercase border border-white/20">
+                    {tp('unisex')}
+                  </span>
+                  {hasDiscount && (
+                    <span className="text-[10px] font-black tracking-wider uppercase bg-brand-accent text-white px-3 py-1 rounded-full border-2 border-black shadow-[1px_1px_0px_rgba(0,0,0,1)] flex items-center gap-1">
+                      <span>🔥</span>
+                      {locale === 'ar' ? `خصم ${Math.round(((originalPrice - discountedPrice) / originalPrice) * 100)}٪` : `${Math.round(((originalPrice - discountedPrice) / originalPrice) * 100)}% OFF`}
+                    </span>
+                  )}
+                </div>
 
                 <h1 className="text-4xl sm:text-5xl font-black uppercase text-black mt-3 leading-none">
                   {name}
