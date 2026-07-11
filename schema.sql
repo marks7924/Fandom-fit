@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS offers (
     max_uses INT,
     max_uses_per_user INT,
     is_active BOOLEAN DEFAULT TRUE,
+    show_on_homepage BOOLEAN DEFAULT FALSE,
     start_date TIMESTAMP WITH TIME ZONE,
     end_date TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -205,7 +206,7 @@ CREATE POLICY "Allow public update on products bucket" ON storage.objects
 
 CREATE POLICY "Allow public delete on products bucket" ON storage.objects 
     FOR DELETE USING (bucket_id = 'products');
-
+ 
 -- 12. Create Discount Campaigns table
 CREATE TABLE IF NOT EXISTS discount_campaigns (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

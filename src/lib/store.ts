@@ -46,6 +46,7 @@ export interface Offer {
   max_uses?: number | null;
   max_uses_per_user?: number | null;
   is_active: boolean;
+  show_on_homepage: boolean;
 }
 
 export interface CustomRequest {

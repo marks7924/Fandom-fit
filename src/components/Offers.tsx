@@ -40,7 +40,9 @@ export default function Offers() {
     }
   ];
 
-  const activeOffers = offers.length > 0 ? offers.filter(o => o.is_active) : defaultOffers;
+  const activeOffers = offers.filter(o => o.is_active && o.show_on_homepage);
+
+  if (activeOffers.length === 0) return null;
 
   return (
     <section className="py-20 bg-[#EDE0D0] border-b-4 border-black relative select-none">

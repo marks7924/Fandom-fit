@@ -58,7 +58,8 @@ export default function AdminPage() {
   const [offerForm, setOfferForm] = useState({
     title_en: '', title_ar: '', description_en: '', description_ar: '',
     discount_text_en: '', discount_text_ar: '', code: '', is_active: true,
-    discount_percent: 10, max_uses: '' as string | number, max_uses_per_user: '' as string | number
+    discount_percent: 10, max_uses: '' as string | number, max_uses_per_user: '' as string | number,
+    show_on_homepage: false
   });
 
   const [campaignForm, setCampaignForm] = useState({
@@ -200,7 +201,8 @@ export default function AdminPage() {
       ...offerForm,
       discount_percent: Number(offerForm.discount_percent),
       max_uses: offerForm.max_uses ? Number(offerForm.max_uses) : null,
-      max_uses_per_user: offerForm.max_uses_per_user ? Number(offerForm.max_uses_per_user) : null
+      max_uses_per_user: offerForm.max_uses_per_user ? Number(offerForm.max_uses_per_user) : null,
+      show_on_homepage: !!offerForm.show_on_homepage
     };
 
     if (editingItem) {
@@ -1044,7 +1046,8 @@ export default function AdminPage() {
                     setOfferForm({
                       title_en: '', title_ar: '', description_en: '', description_ar: '',
                       discount_text_en: '10% OFF', discount_text_ar: 'خصم ١٠٪', code: '', is_active: true,
-                      discount_percent: 10, max_uses: '', max_uses_per_user: ''
+                      discount_percent: 10, max_uses: '', max_uses_per_user: '',
+                      show_on_homepage: false
                     });
                     setIsFormOpen(true);
                   }}
@@ -1162,6 +1165,16 @@ export default function AdminPage() {
                   <label className="text-xs font-bold text-zinc-300">Active Offer</label>
                 </div>
 
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    checked={offerForm.show_on_homepage}
+                    onChange={(e) => setOfferForm({ ...offerForm, show_on_homepage: e.target.checked })}
+                    className="accent-brand-accent" 
+                  />
+                  <label className="text-xs font-bold text-zinc-300">Show in Homepage (Fandom Loot)</label>
+                </div>
+
                 <button
                   type="submit"
                   className="w-full py-2.5 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-xs cursor-pointer"
@@ -1204,7 +1217,8 @@ export default function AdminPage() {
                                 ...o,
                                 discount_percent: o.discount_percent || 10,
                                 max_uses: o.max_uses ?? '',
-                                max_uses_per_user: o.max_uses_per_user ?? ''
+                                max_uses_per_user: o.max_uses_per_user ?? '',
+                                show_on_homepage: o.show_on_homepage ?? false
                               });
                               setIsFormOpen(true);
                             }}
