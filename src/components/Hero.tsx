@@ -90,8 +90,8 @@ export default function Hero() {
         <LightningDoodle />
       </motion.div>
 
-      {/* Decorative Scrapbook Masking Tapes */}
-      <div className="absolute top-[10%] left-[50%] -translate-x-1/2 px-8 py-1.5 masking-tape z-10 select-none">
+      {/* Decorative Scrapbook Masking Tapes — hidden on mobile to avoid covering headline */}
+      <div className="absolute top-[10%] left-[50%] -translate-x-1/2 px-8 py-1.5 masking-tape z-10 select-none hidden sm:block">
         #MADE_IN_EGYPT
       </div>
 
