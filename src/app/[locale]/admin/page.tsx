@@ -67,6 +67,29 @@ export default function AdminPage() {
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
+  // Sizing & Fabric dynamic options states
+  const [sizeOptions, setSizeOptions] = useState(['S', 'M', 'L', 'XL', 'XXL', '3XL']);
+  const [fabricOptions, setFabricOptions] = useState(['Standard Cotton', 'Premium Cotton', 'Heavy Cotton', 'Over-sized Heavy']);
+  const [newCustomSize, setNewCustomSize] = useState('');
+  const [newCustomFabric, setNewCustomFabric] = useState('');
+
+  useEffect(() => {
+    if (prodForm.available_sizes) {
+      prodForm.available_sizes.forEach(size => {
+        if (size && !sizeOptions.includes(size)) {
+          setSizeOptions(prev => [...prev, size]);
+        }
+      });
+    }
+    if (prodForm.material_options) {
+      prodForm.material_options.forEach(fabric => {
+        if (fabric && !fabricOptions.includes(fabric)) {
+          setFabricOptions(prev => [...prev, fabric]);
+        }
+      });
+    }
+  }, [prodForm.available_sizes, prodForm.material_options]);
+
   // Load Initial Data
   useEffect(() => {
     fetchInitialData();
@@ -511,26 +534,123 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Available Sizes (comma-separated)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. S, M, L, XL"
-                      value={Array.isArray(prodForm.available_sizes) ? prodForm.available_sizes.join(', ') : prodForm.available_sizes}
-                      onChange={(e) => setProdForm({ ...prodForm, available_sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Sizes Selection Menu */}
+                  <div className="bg-zinc-950 p-4 border border-zinc-800 rounded-xl space-y-3">
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block border-b border-zinc-900 pb-1.5">
+                      Available Sizes Menu
+                    </label>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      {sizeOptions.map((size) => {
+                        const isChecked = prodForm.available_sizes.includes(size);
+                        return (
+                          <button
+                            type="button"
+                            key={size}
+                            onClick={() => {
+                              const updated = isChecked
+                                ? prodForm.available_sizes.filter(s => s !== size)
+                                : [...prodForm.available_sizes, size];
+                              setProdForm({ ...prodForm, available_sizes: updated });
+                            }}
+                            className={`px-3 py-1 text-xs font-mono font-bold rounded-lg border transition-all cursor-pointer ${
+                              isChecked
+                                ? 'bg-brand-accent text-white border-brand-accent shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)]'
+                                : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                            }`}
+                          >
+                            {size}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Add Custom Size Field */}
+                    <div className="flex gap-2 pt-1.5 border-t border-zinc-900">
+                      <input
+                        type="text"
+                        placeholder="Add size (e.g. XS)"
+                        value={newCustomSize}
+                        onChange={(e) => setNewCustomSize(e.target.value.trim().toUpperCase())}
+                        className="flex-grow px-2.5 py-1 bg-zinc-900 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newCustomSize && !sizeOptions.includes(newCustomSize)) {
+                            setSizeOptions(prev => [...prev, newCustomSize]);
+                            setProdForm({ 
+                              ...prodForm, 
+                              available_sizes: [...prodForm.available_sizes, newCustomSize] 
+                            });
+                            setNewCustomSize('');
+                          }
+                        }}
+                        className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] uppercase font-black transition-colors cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Fabrics/Materials (comma-separated)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Standard Cotton, Premium Cotton"
-                      value={Array.isArray(prodForm.material_options) ? prodForm.material_options.join(', ') : prodForm.material_options}
-                      onChange={(e) => setProdForm({ ...prodForm, material_options: e.target.value.split(',').map(m => m.trim()).filter(Boolean) })}
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
-                    />
+
+                  {/* Fabrics Selection Menu */}
+                  <div className="bg-zinc-950 p-4 border border-zinc-800 rounded-xl space-y-3">
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block border-b border-zinc-900 pb-1.5">
+                      Fabrics & Materials Menu
+                    </label>
+
+                    <div className="flex flex-wrap gap-2">
+                      {fabricOptions.map((fabric) => {
+                        const isChecked = prodForm.material_options.includes(fabric);
+                        return (
+                          <button
+                            type="button"
+                            key={fabric}
+                            onClick={() => {
+                              const updated = isChecked
+                                ? prodForm.material_options.filter(f => f !== fabric)
+                                : [...prodForm.material_options, fabric];
+                              setProdForm({ ...prodForm, material_options: updated });
+                            }}
+                            className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                              isChecked
+                                ? 'bg-brand-accent text-white border-brand-accent shadow-[2px_2px_0px_0px_rgba(255,255,255,0.15)]'
+                                : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
+                            }`}
+                          >
+                            {fabric}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Add Custom Fabric Field */}
+                    <div className="flex gap-2 pt-1.5 border-t border-zinc-900">
+                      <input
+                        type="text"
+                        placeholder="Add fabric (e.g. Heavy Blend)"
+                        value={newCustomFabric}
+                        onChange={(e) => setNewCustomFabric(e.target.value)}
+                        className="flex-grow px-2.5 py-1 bg-zinc-900 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newCustomFabric && !fabricOptions.includes(newCustomFabric)) {
+                            setFabricOptions(prev => [...prev, newCustomFabric]);
+                            setProdForm({ 
+                              ...prodForm, 
+                              material_options: [...prodForm.material_options, newCustomFabric] 
+                            });
+                            setNewCustomFabric('');
+                          }
+                        }}
+                        className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] uppercase font-black transition-colors cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </div>
                   </div>
                 </div>
 

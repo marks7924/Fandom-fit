@@ -93,11 +93,20 @@ export default function ProductCard({ product }: ProductCardProps) {
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           onError={() => setImgSrc(defaultPlaceholder)}
-          className="object-contain p-2 group-hover:scale-105 transition-transform duration-500"
+          className={`object-contain p-2 group-hover:scale-105 transition-transform duration-500 ${!product.is_in_stock ? 'blur-[3px] opacity-50' : ''}`}
         />
 
+        {/* Out of Stock visual label */}
+        {!product.is_in_stock && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 select-none">
+            <span className="px-4 py-2 border-3 border-black bg-zinc-900 text-[#EDE0D0] text-xs font-black uppercase tracking-wider rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] rotate-[-4deg]">
+              {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
+            </span>
+          </div>
+        )}
+
         {/* Quick View Hover Overlay */}
-        <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
+        <div className={`absolute inset-0 bg-black/25 opacity-0 ${product.is_in_stock ? 'group-hover:opacity-100' : 'pointer-events-none'} transition-opacity duration-300 flex items-center justify-center gap-2`}>
           <button
             onClick={() => setPreviewProduct(product)}
             className="flex items-center gap-1 px-4 py-2 text-xs font-black uppercase bg-white text-black border-2 border-black rounded-lg hover:bg-[#EDE0D0] transition-colors"
@@ -161,12 +170,21 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* CTA Button */}
         <div className="mt-4 pt-3 border-t border-black/10">
-          <button
-            onClick={() => setCheckoutProduct(product)}
-            className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white transition-all duration-300 border-2 border-black rounded-lg cursor-pointer"
-          >
-            {t('order_now')}
-          </button>
+          {product.is_in_stock ? (
+            <button
+              onClick={() => setCheckoutProduct(product)}
+              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white transition-all duration-300 border-2 border-black rounded-lg cursor-pointer"
+            >
+              {t('order_now')}
+            </button>
+          ) : (
+            <button
+              disabled
+              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-zinc-400 text-zinc-100 border-2 border-zinc-500 rounded-lg cursor-not-allowed"
+            >
+              {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
+            </button>
+          )}
         </div>
       </div>
 

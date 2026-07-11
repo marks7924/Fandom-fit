@@ -120,8 +120,15 @@ export default function ProductQuickPreview() {
                     alt={name}
                     fill
                     sizes="400px"
-                    className="object-contain p-3"
+                    className={`object-contain p-3 ${!previewProduct.is_in_stock ? 'blur-[3px] opacity-60' : ''}`}
                   />
+                  {!previewProduct.is_in_stock && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 select-none pointer-events-none">
+                      <span className="px-4 py-2 border-3 border-black bg-zinc-900 text-[#EDE0D0] text-xs font-black uppercase tracking-wider rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] rotate-[-4deg]">
+                        {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Thumbnails list */}
@@ -246,15 +253,24 @@ export default function ProductQuickPreview() {
           <div className="p-6 bg-white border-t-3 border-black flex flex-col sm:flex-row gap-3">
             
             {/* Direct Order Button */}
-            <button
-              onClick={() => {
-                setCheckoutProduct(previewProduct);
-                setPreviewProduct(null); // Close quick preview
-              }}
-              className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
-            >
-              {tp('order_now')}
-            </button>
+            {previewProduct.is_in_stock ? (
+              <button
+                onClick={() => {
+                  setCheckoutProduct(previewProduct);
+                  setPreviewProduct(null); // Close quick preview
+                }}
+                className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
+              >
+                {tp('order_now')}
+              </button>
+            ) : (
+              <button
+                disabled
+                className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase bg-zinc-400 text-zinc-100 border-3 border-zinc-500 rounded-xl cursor-not-allowed"
+              >
+                {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
+              </button>
+            )}
 
             {/* Share link button */}
             <button

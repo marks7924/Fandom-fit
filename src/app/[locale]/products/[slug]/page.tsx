@@ -11,6 +11,7 @@ import { Link } from '@/i18n/routing';
 import { ArrowLeft, Share2, ClipboardCheck, Tag } from 'lucide-react';
 import InstagramIcon from '@/components/InstagramIcon';
 import CheckoutModal from '@/components/CheckoutModal';
+import TrackOrderModal from '@/components/TrackOrderModal';
 
 export default function ProductDetailPage({ params }: { params: Promise<{ slug: string, locale: string }> }) {
   const t = useTranslations('product_detail');
@@ -120,8 +121,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                   fill
                   priority
                   sizes="(max-width: 640px) 100vw, 500px"
-                  className="object-contain p-4"
+                  className={`object-contain p-4 ${!product.is_in_stock ? 'blur-[3px] opacity-60' : ''}`}
                 />
+                {!product.is_in_stock && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/10 select-none pointer-events-none">
+                    <span className="px-4 py-2 border-3 border-black bg-zinc-900 text-[#EDE0D0] text-xs font-black uppercase tracking-wider rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] rotate-[-4deg]">
+                      {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Thumbnails */}
@@ -239,12 +247,21 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               <div className="mt-8 pt-6 border-t border-black/10 flex flex-col sm:flex-row gap-4">
                 
                 {/* Order Direct Web Checkout */}
-                <button
-                  onClick={() => setCheckoutProduct(product)}
-                  className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
-                >
-                  {tp('order_now')}
-                </button>
+                {product.is_in_stock ? (
+                  <button
+                    onClick={() => setCheckoutProduct(product)}
+                    className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
+                  >
+                    {tp('order_now')}
+                  </button>
+                ) : (
+                  <button
+                    disabled
+                    className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase bg-zinc-400 text-zinc-100 border-3 border-zinc-500 rounded-xl cursor-not-allowed"
+                  >
+                    {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
+                  </button>
+                )}
 
                 {/* Share Button */}
                 <button
@@ -292,6 +309,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
       <Footer />
       <CheckoutModal />
+      <TrackOrderModal />
     </>
   );
 }

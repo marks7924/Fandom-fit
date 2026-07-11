@@ -127,7 +127,7 @@ CREATE POLICY "Allow public read on categories" ON categories
     FOR SELECT USING (is_hidden = FALSE OR EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
 CREATE POLICY "Allow public read on products" ON products 
-    FOR SELECT USING (is_in_stock = TRUE OR EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+    FOR SELECT USING (TRUE);
 
 CREATE POLICY "Allow public read on product_images" ON product_images 
     FOR SELECT USING (TRUE);
