@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useStore } from '@/lib/store';
+import { useStore, getFabricPremium } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { X, Ticket, CheckCircle, MapPin, Phone, User, HelpCircle } from 'lucide-react';
@@ -74,7 +74,8 @@ export default function CheckoutModal() {
   const productName = locale === 'ar' ? checkoutProduct.name_ar : checkoutProduct.name_en;
   
   const { hasDiscount, originalPrice: basePrice, discountedPrice } = getProductEffectivePrice(checkoutProduct);
-  const originalPrice = discountedPrice; 
+  const fabricPremium = getFabricPremium(selectedFabric);
+  const originalPrice = discountedPrice + fabricPremium; 
 
   // Apply Coupon
   const handleApplyCoupon = async () => {

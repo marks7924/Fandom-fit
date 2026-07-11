@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useStore } from '@/lib/store';
+import { useStore, getFabricPremium } from '@/lib/store';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
@@ -67,6 +67,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const description = locale === 'ar' ? product.description_ar : product.description_en;
   const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
   const { hasDiscount, originalPrice, discountedPrice } = getProductEffectivePrice(product);
+  const premium = getFabricPremium(selectedFabric);
 
   const defaultPlaceholder = 
     product.category_id === '4' ? '/placeholders/manga_front.jpg' : 
@@ -188,15 +189,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                   {hasDiscount ? (
                     <>
                       <span className="text-lg line-through text-black/40 font-extrabold">
-                        {tp('price_egp', { price: originalPrice })}
+                        {tp('price_egp', { price: originalPrice + premium })}
                       </span>
                       <span className="text-3xl font-black text-brand-accent">
-                        {tp('price_egp', { price: discountedPrice })}
+                        {tp('price_egp', { price: discountedPrice + premium })}
                       </span>
                     </>
                   ) : (
                     <span className="text-3xl font-black text-black">
-                      {tp('price_egp', { price: originalPrice })}
+                      {tp('price_egp', { price: originalPrice + premium })}
                     </span>
                   )}
                 </div>

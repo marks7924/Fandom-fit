@@ -522,3 +522,12 @@ export const useStore = create<StoreState>((set, get) => ({
     return { isValid: true, discountPercent: offer.discount_percent };
   }
 }));
+
+export const getFabricPremium = (fabric: string): number => {
+  const f = fabric.toLowerCase();
+  if (f.includes('standard')) return 0;
+  if (f.includes('oversized') || f.includes('over-sized')) return 150;
+  if (f.includes('heavy')) return 100;
+  if (f.includes('premium')) return 50;
+  return 0; // default/fallback
+};

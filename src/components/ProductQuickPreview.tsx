@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useStore } from '@/lib/store';
+import { useStore, getFabricPremium } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { X, Share2, ClipboardCheck, Tag } from 'lucide-react';
@@ -43,6 +43,7 @@ export default function ProductQuickPreview() {
   const name = locale === 'ar' ? previewProduct.name_ar : previewProduct.name_en;
   const description = locale === 'ar' ? previewProduct.description_ar : previewProduct.description_en;
   const { hasDiscount, originalPrice, discountedPrice } = getProductEffectivePrice(previewProduct);
+  const premium = getFabricPremium(selectedFabric);
 
   const defaultPlaceholder = 
     previewProduct.category_id === '4' ? '/placeholders/manga_front.jpg' : 
@@ -176,15 +177,15 @@ export default function ProductQuickPreview() {
                     {hasDiscount ? (
                       <>
                         <span className="text-base line-through text-black/40 font-extrabold">
-                          {tp('price_egp', { price: originalPrice })}
+                          {tp('price_egp', { price: originalPrice + premium })}
                         </span>
                         <span className="text-2xl font-black text-brand-accent">
-                          {tp('price_egp', { price: discountedPrice })}
+                          {tp('price_egp', { price: discountedPrice + premium })}
                         </span>
                       </>
                     ) : (
                       <span className="text-2xl font-black text-black">
-                        {tp('price_egp', { price: originalPrice })}
+                        {tp('price_egp', { price: originalPrice + premium })}
                       </span>
                     )}
                   </div>
