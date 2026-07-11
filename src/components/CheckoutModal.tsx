@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import { X, Ticket, CheckCircle, MapPin, Phone, User, HelpCircle } from 'lucide-react';
 
 export default function CheckoutModal() {
@@ -206,14 +207,29 @@ export default function CheckoutModal() {
                 {/* Product Summary Box */}
                 <div className="p-4 bg-white border-3 border-black rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-16 h-16 bg-[#F2CC8F]/30 rounded-full blur-xl pointer-events-none"></div>
-                  <span className="text-[9px] font-black uppercase tracking-wider text-black/50 block mb-1">
-                    {tp('unisex')}
-                  </span>
-                  <h4 className="text-lg font-black text-black uppercase leading-tight">
-                    {productName}
-                  </h4>
-                  <div className="mt-2 text-sm font-black text-brand-accent">
-                    {tp('price_egp', { price: originalPrice })}
+                  
+                  <div className="flex gap-4 items-center">
+                    <div className="w-16 h-16 border-2 border-black rounded-lg overflow-hidden shrink-0 relative bg-[#EDE0D0]/30 flex items-center justify-center">
+                      <Image
+                        src={(checkoutProduct.images && checkoutProduct.images.length > 0) ? checkoutProduct.images[0] : (checkoutProduct.category_id === '4' ? '/placeholders/manga_front.jpg' : '/placeholders/arcade_front.jpg')}
+                        alt={productName}
+                        fill
+                        unoptimized
+                        className="object-contain p-1"
+                      />
+                    </div>
+                    
+                    <div className="flex-1">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-black/50 block mb-0.5">
+                        {tp('unisex')}
+                      </span>
+                      <h4 className="text-sm font-black text-black uppercase leading-tight">
+                        {productName}
+                      </h4>
+                      <div className="mt-1 text-xs font-black text-brand-accent">
+                        {tp('price_egp', { price: originalPrice })}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Quick Sizing triggers directly in checkout */}
