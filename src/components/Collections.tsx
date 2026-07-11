@@ -102,7 +102,7 @@ export default function Collections() {
       nameKey: 'custom_designs',
       descKey: 'custom_designs_desc',
       icon: <Paintbrush size={28} />,
-      themeClass: 'bg-[#E07A5F] text-white border-dashed hover:bg-white hover:text-black hover:border-solid',
+      themeClass: 'bg-white text-black border-dashed hover:bg-black hover:text-white hover:border-solid',
     }
   ];
 

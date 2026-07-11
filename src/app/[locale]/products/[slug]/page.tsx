@@ -8,7 +8,7 @@ import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
 import Image from 'next/image';
 import { Link } from '@/i18n/routing';
-import { ArrowLeft, Share2, ClipboardCheck, Tag } from 'lucide-react';
+import { ArrowLeft, Share2, ClipboardCheck, Tag, Loader2 } from 'lucide-react';
 import InstagramIcon from '@/components/InstagramIcon';
 import CheckoutModal from '@/components/CheckoutModal';
 import TrackOrderModal from '@/components/TrackOrderModal';
@@ -26,6 +26,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedFabric, setSelectedFabric] = useState('Standard Cotton');
   const [shareCopied, setShareCopied] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
 
   useEffect(() => {
     if (products.length === 0) {
@@ -71,9 +72,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
   const handleShare = () => {
     if (typeof window === 'undefined') return;
-    navigator.clipboard.writeText(window.location.href);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
+    setIsCopying(true);
+    setTimeout(() => {
+      navigator.clipboard.writeText(window.location.href);
+      setIsCopying(false);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }, 600);
   };
 
   const getInstagramDMUrl = () => {
@@ -266,9 +271,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                 {/* Share Button */}
                 <button
                   onClick={handleShare}
-                  className="flex items-center justify-center gap-2 px-6 py-4 text-sm font-black uppercase bg-white text-black border-3 border-black rounded-xl sticker cursor-pointer"
+                  disabled={isCopying}
+                  className="flex items-center justify-center gap-2 px-6 py-4 text-sm font-black uppercase bg-white text-black border-3 border-black rounded-xl sticker cursor-pointer disabled:opacity-80"
                 >
-                  {shareCopied ? (
+                  {isCopying ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span className="font-handwriting normal-case text-base">Fandom Fit<span className="animate-pulse">...</span></span>
+                    </>
+                  ) : shareCopied ? (
                     <>
                       <ClipboardCheck size={18} className="text-green-600" />
                       {t('share_copied')}

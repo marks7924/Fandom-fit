@@ -17,13 +17,21 @@ import ProductQuickPreview from '@/components/ProductQuickPreview';
 import CheckoutModal from '@/components/CheckoutModal';
 import TrackOrderModal from '@/components/TrackOrderModal';
 import Footer from '@/components/Footer';
+import LoadingScreen from '@/components/LoadingScreen';
 
 export default function Home() {
   const fetchInitialData = useStore((state) => state.fetchInitialData);
+  const isLoading = useStore((state) => state.isLoading);
+  const products = useStore((state) => state.products);
 
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
+
+  // Show branded loading screen on first load
+  if (isLoading && products.length === 0) {
+    return <LoadingScreen />;
+  }
 
   return (
     <>
@@ -51,3 +59,4 @@ export default function Home() {
     </>
   );
 }
+
