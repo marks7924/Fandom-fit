@@ -251,21 +251,10 @@ export default function ProductQuickPreview() {
                 setCheckoutProduct(previewProduct);
                 setPreviewProduct(null); // Close quick preview
               }}
-              className="flex-1 flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
+              className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
             >
               {tp('order_now')}
             </button>
-
-            {/* Instagram Button backup */}
-            <a
-              href={getInstagramDMUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center px-5 py-4 border-3 border-black bg-white hover:bg-black/5 rounded-xl cursor-pointer"
-              title="Order via Instagram DM"
-            >
-              <InstagramIcon size={18} />
-            </a>
 
             {/* Share link button */}
             <button

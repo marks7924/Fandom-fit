@@ -653,7 +653,7 @@ export default function AdminPage() {
                           <button
                             onClick={() => {
                               setEditingItem(p);
-                              setProdForm({ ...p, sale_price: p.sale_price || '' });
+                              setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false });
                               setIsFormOpen(true);
                             }}
                             className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white"

@@ -160,22 +160,13 @@ export default function ProductCard({ product }: ProductCardProps) {
         </div>
 
         {/* CTA Button */}
-        <div className="mt-4 pt-3 border-t border-black/10 flex gap-2">
+        <div className="mt-4 pt-3 border-t border-black/10">
           <button
             onClick={() => setCheckoutProduct(product)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white transition-all duration-300 border-2 border-black rounded-lg cursor-pointer"
+            className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white transition-all duration-300 border-2 border-black rounded-lg cursor-pointer"
           >
             {t('order_now')}
           </button>
-          <a
-            href={getInstagramDMUrl()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 border-2 border-black bg-white hover:bg-black/5 rounded-lg flex items-center justify-center text-black transition-colors"
-            title="Order via Instagram DM"
-          >
-            <InstagramIcon size={14} />
-          </a>
         </div>
       </div>
 

@@ -97,14 +97,11 @@ export default function Navbar() {
               {t('switch_lang')}
             </button>
 
-            {/* Instagram CTA */}
+            {/* Shop Now CTA */}
             <a
-              href="https://www.instagram.com/fandom.__.fit?igsh=cG9udzFxcjg5MGZv"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 text-xs font-black uppercase text-white bg-black hover:bg-[#E07A5F] border-2 border-black rounded-lg transition-all duration-300 hover:translate-y-[-2px]"
+              href="#showcase"
+              className="flex items-center gap-2 px-4 py-2 text-xs font-black uppercase text-[#EDE0D0] bg-black hover:bg-brand-accent hover:text-white border-2 border-black rounded-lg transition-all duration-300 hover:translate-y-[-2px]"
             >
-              <InstagramIcon size={14} />
               {t('order_instagram')}
             </a>
           </div>
@@ -146,12 +143,10 @@ export default function Navbar() {
           </div>
           <div className="pt-4 flex flex-col gap-3">
             <a
-              href="https://www.instagram.com/fandom.__.fit?igsh=cG9udzFxcjg5MGZv"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 py-3 text-sm font-black uppercase text-white bg-black hover:bg-[#E07A5F] border-3 border-black rounded-xl transition-all duration-300"
+              href="#showcase"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center justify-center gap-2 py-3 text-sm font-black uppercase text-[#EDE0D0] bg-black hover:bg-brand-accent hover:text-white border-3 border-black rounded-xl transition-all duration-300"
             >
-              <InstagramIcon size={16} />
               {t('order_instagram')}
             </a>
           </div>

@@ -6,7 +6,7 @@
     "about": "About Us",
     "faq": "FAQ",
     "contact": "Contact",
-    "order_instagram": "Order on Instagram",
+    "order_instagram": "Order Now",
     "switch_lang": "العربية"
   },
   "hero": {
@@ -14,7 +14,7 @@
     "title_part2": "You Love.",
     "subtitle": "Premium fandom-inspired streetwear crafted proudly in Egypt. Celebrating games, anime, movies, football, and music culture.",
     "browse_collection": "Browse Collections",
-    "order_instagram": "Order on Instagram"
+    "order_instagram": "Order Directly"
   },
   "categories": {
     "title": "Browse by Fandom",
@@ -39,7 +39,7 @@
   "products": {
     "title": "The Showcase",
     "subtitle": "Explore our curated releases. Made to order.",
-    "order_now": "Order on Instagram",
+    "order_now": "Order Directly",
     "unisex": "Unisex Fit",
     "sizes": "Sizes",
     "material": "Material",
@@ -64,7 +64,7 @@
     "share_copied": "Link copied to clipboard!",
     "related_products": "Related Fandom Drops",
     "instagram_dm_text": "Hey Fandom Fit! I want to order the product: {name} (Size: {size}, Fabric: {fabric})",
-    "how_to_order_info": "Orders are processed exclusively via Instagram DM. Click the button to start your order!"
+    "how_to_order_info": "Complete the checkout form directly to place your order. Fast delivery across Egypt."
   },
   "custom_design": {
     "title": "Custom Design Lab",
@@ -152,7 +152,7 @@
   "contact_section": {
     "title": "Join the Club",
     "subtitle": "Drop us a line, check our latest drops, or start your custom order.",
-    "cta": "Order Through Instagram",
+    "cta": "Shop Collection",
     "location": "Based in Cairo, Egypt"
   },
   "footer": {

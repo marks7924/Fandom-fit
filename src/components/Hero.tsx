@@ -124,19 +124,16 @@ export default function Hero() {
               </a>
 
               <a
-                href="https://www.instagram.com/fandom.__.fit?igsh=cG9udzFxcjg5MGZv"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="#showcase"
                 className="flex items-center justify-center gap-2 px-8 py-4 text-base font-black uppercase bg-[#F2CC8F] hover:bg-[#F2CC8F]/80 text-black border-3 border-black rounded-xl sticker cursor-pointer transition-all duration-200"
               >
-                <InstagramIcon size={18} />
                 {t('order_instagram')}
               </a>
             </div>
 
             {/* Handwritten Tag */}
             <div className="mt-6 font-handwriting text-2xl text-black/60 rotate-[-1deg]">
-              ~ No checkout. Just pure fandom, custom orders & Instagram DMs.
+              ~ Egyptian crafted statement apparel. Ordered directly, delivered to your door.
             </div>
           </div>
 
