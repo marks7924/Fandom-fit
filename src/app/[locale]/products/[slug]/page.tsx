@@ -11,13 +11,14 @@ import { Link } from '@/i18n/routing';
 import { ArrowLeft, Share2, ClipboardCheck, Tag, Loader2 } from 'lucide-react';
 import InstagramIcon from '@/components/InstagramIcon';
 import CheckoutModal from '@/components/CheckoutModal';
+import LoadingScreen from '@/components/LoadingScreen';
 import TrackOrderModal from '@/components/TrackOrderModal';
 
 export default function ProductDetailPage({ params }: { params: Promise<{ slug: string, locale: string }> }) {
   const t = useTranslations('product_detail');
   const tp = useTranslations('products');
   const locale = useLocale();
-  const { products, categories, fetchInitialData, setCheckoutProduct } = useStore();
+  const { products, categories, fetchInitialData, setCheckoutProduct, isLoading } = useStore();
   
   const resolvedParams = use(params);
   const { slug } = resolvedParams;
@@ -35,6 +36,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   }, [products, fetchInitialData]);
 
   const product = products.find((p) => p.slug === slug);
+
+  // Still fetching — show branded loader instead of premature "not found"
+  if (isLoading && !product) {
+    return <LoadingScreen />;
+  }
 
   if (!product) {
     return (
