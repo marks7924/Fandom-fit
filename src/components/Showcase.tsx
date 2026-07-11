@@ -28,14 +28,19 @@ export default function Showcase() {
       product.description_en.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.description_ar.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesCategory && matchesSearch && product.is_in_stock;
+    return matchesCategory && matchesSearch;
   });
 
-  // Sort: Pinned items first, then by display_order
+  // Sort: Pinned items first, then in-stock items first, then by display_order
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     const aPinned = a.is_pinned ? 1 : 0;
     const bPinned = b.is_pinned ? 1 : 0;
     if (aPinned !== bPinned) return bPinned - aPinned;
+
+    const aStock = a.is_in_stock ? 1 : 0;
+    const bStock = b.is_in_stock ? 1 : 0;
+    if (aStock !== bStock) return bStock - aStock;
+
     return a.display_order - b.display_order;
   });
 
