@@ -351,7 +351,7 @@ export default function AdminPage() {
       </aside>
 
       {/* Main Panel Content Area */}
-      <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+      <main className="flex-1 p-4 sm:p-8 overflow-y-auto">
         
         {/* TAB 1: DASHBOARD STATS */}
         {activeTab === 'dashboard' && (
@@ -450,7 +450,7 @@ export default function AdminPage() {
 
             {isFormOpen ? (
               /* Add/Edit product form */
-              <form onSubmit={handleSaveProduct} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl space-y-4 max-w-2xl">
+              <form onSubmit={handleSaveProduct} className="bg-zinc-900 border border-zinc-800 p-4 sm:p-6 rounded-2xl space-y-4 max-w-2xl">
                 <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
                   <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
                     {editingItem ? 'Edit Product Details' : 'Add New Fandom Shirt'}
@@ -760,7 +760,8 @@ export default function AdminPage() {
             ) : (
               /* Products List */
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-                <table className="w-full text-left font-mono">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[750px] text-left font-mono">
                   <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
                     <tr>
                       <th className="p-4">{locale === 'ar' ? 'المنتج' : 'Product'}</th>
@@ -822,7 +823,8 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
+          )}
           </div>
         )}
 
@@ -850,7 +852,7 @@ export default function AdminPage() {
             </div>
 
             {isFormOpen ? (
-              <form onSubmit={handleSaveCategory} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl space-y-4 max-w-md">
+              <form onSubmit={handleSaveCategory} className="bg-zinc-900 border border-zinc-800 p-4 sm:p-6 rounded-2xl space-y-4 max-w-md">
                 <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
                   <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
                     {editingItem ? 'Edit Category' : 'Create New Collection'}
@@ -927,7 +929,8 @@ export default function AdminPage() {
               </form>
             ) : (
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm max-w-2xl">
-                <table className="w-full text-left font-mono">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[550px] text-left font-mono">
                   <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
                     <tr>
                       <th className="p-4">{locale === 'ar' ? 'الاسم بالإنكليزية' : 'Name (EN)'}</th>
@@ -965,7 +968,8 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
+          )}
           </div>
         )}
 
@@ -994,7 +998,7 @@ export default function AdminPage() {
             </div>
 
             {isFormOpen ? (
-              <form onSubmit={handleSaveOffer} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl space-y-4 max-w-md">
+              <form onSubmit={handleSaveOffer} className="bg-zinc-900 border border-zinc-800 p-4 sm:p-6 rounded-2xl space-y-4 max-w-md">
                 <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
                   <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
                     {editingItem ? 'Edit Promo Ticket' : 'Create Promo Ticket'}
@@ -1079,7 +1083,8 @@ export default function AdminPage() {
               </form>
             ) : (
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm max-w-2xl">
-                <table className="w-full text-left font-mono">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[550px] text-left font-mono">
                   <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
                     <tr>
                       <th className="p-4">Code</th>
@@ -1125,7 +1130,8 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
+          )}
           </div>
         )}
 
@@ -1135,7 +1141,8 @@ export default function AdminPage() {
             <h2 className="text-3xl font-black uppercase text-white">{t('sidebar.custom_requests')}</h2>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-              <table className="w-full text-left font-mono">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[800px] text-left font-mono">
                 <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
                   <tr>
                     <th className="p-4">{t('custom_requests.client')}</th>
@@ -1186,6 +1193,7 @@ export default function AdminPage() {
               </table>
             </div>
           </div>
+          </div>
         )}
 
         {/* TAB 6: SETTINGS */}
@@ -1193,7 +1201,7 @@ export default function AdminPage() {
           <div className="space-y-6">
             <h2 className="text-3xl font-black uppercase text-white">{t('sidebar.settings')}</h2>
 
-            <form onSubmit={handleSaveSettings} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl space-y-4 max-w-lg">
+            <form onSubmit={handleSaveSettings} className="bg-zinc-900 border border-zinc-800 p-4 sm:p-6 rounded-2xl space-y-4 max-w-lg">
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1326,7 +1334,8 @@ export default function AdminPage() {
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
-              <table className="w-full text-left font-mono">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[950px] text-left font-mono">
                 <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
                   <tr>
                     <th className="p-4">{locale === 'ar' ? 'الكود' : 'Code'}</th>
@@ -1395,6 +1404,7 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+          </div>
           </div>
         )}
 
