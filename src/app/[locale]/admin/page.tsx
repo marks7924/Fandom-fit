@@ -1051,7 +1051,7 @@ export default function AdminPage() {
                   className="flex items-center gap-1.5 px-4 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-xs cursor-pointer"
                 >
                   <Plus size={14} />
-                  {t('admin.offers.add_new') || 'Add Coupon'}
+                  {t('offers.add_new') || 'Add Coupon'}
                 </button>
               )}
             </div>
