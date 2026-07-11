@@ -93,7 +93,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           onError={() => setImgSrc(defaultPlaceholder)}
-          className="object-cover group-hover:scale-105 transition-transform duration-500"
+          className="object-contain p-2 group-hover:scale-105 transition-transform duration-500"
         />
 
         {/* Quick View Hover Overlay */}

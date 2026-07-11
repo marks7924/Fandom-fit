@@ -120,7 +120,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                   fill
                   priority
                   sizes="(max-width: 640px) 100vw, 500px"
-                  className="object-cover"
+                  className="object-contain p-4"
                 />
               </div>
 
@@ -137,7 +137,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                           : 'opacity-70 hover:opacity-100'
                       }`}
                     >
-                      <Image src={img} alt={`thumb-${idx}`} fill className="object-cover" />
+                      <Image src={img} alt={`thumb-${idx}`} fill className="object-contain p-1" />
                     </button>
                   ))}
                 </div>

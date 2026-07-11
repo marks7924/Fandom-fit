@@ -120,7 +120,7 @@ export default function ProductQuickPreview() {
                     alt={name}
                     fill
                     sizes="400px"
-                    className="object-cover"
+                    className="object-contain p-3"
                   />
                 </div>
 
@@ -137,7 +137,7 @@ export default function ProductQuickPreview() {
                             : 'opacity-70 hover:opacity-100'
                         }`}
                       >
-                        <Image src={img} alt={`thumb-${idx}`} fill className="object-cover" />
+                        <Image src={img} alt={`thumb-${idx}`} fill className="object-contain p-1" />
                       </button>
                     ))}
                   </div>
