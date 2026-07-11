@@ -72,7 +72,10 @@ export default function AdminPage() {
     brand_name: '', tagline: '', instagram_url: '', tiktok_url: '', facebook_url: '',
     seo_title: '', seo_desc: '', shipping_info_en: '', shipping_info_ar: '',
     announcement: '',
-    announcement_ar: ''
+    announcement_ar: '',
+    fabric_premium_premium: 50,
+    fabric_premium_heavy: 100,
+    fabric_premium_oversized: 150
   });
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
@@ -111,6 +114,7 @@ export default function AdminPage() {
       fetchAdminRequests();
       fetchOrders();
       // populate settings form once loaded
+      const premiums = settings.fabric_premiums || {};
       setSettingsForm({
         brand_name: settings.brand_name || 'Fandom Fit',
         tagline: settings.tagline || 'Wear What You Love.',
@@ -122,7 +126,10 @@ export default function AdminPage() {
         shipping_info_en: settings.shipping_info_en || '',
         shipping_info_ar: settings.shipping_info_ar || '',
         announcement: settings.announcement || '',
-        announcement_ar: settings.announcement_ar || ''
+        announcement_ar: settings.announcement_ar || '',
+        fabric_premium_premium: Number(premiums.premium ?? 50),
+        fabric_premium_heavy: Number(premiums.heavy ?? 100),
+        fabric_premium_oversized: Number(premiums.oversized ?? 150)
       });
     }
   }, [isAuthenticated, settings]);
@@ -1544,6 +1551,39 @@ export default function AdminPage() {
                     onChange={(e) => setSettingsForm({ ...settingsForm, seo_desc: e.target.value })}
                     className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
                   />
+                </div>
+              </div>
+
+              <div className="border-t border-zinc-800 pt-4">
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-2">Fabric Pricing Customization (Added Premiums in EGP)</label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Premium Fabric</label>
+                    <input
+                      type="number" min={0}
+                      value={settingsForm.fabric_premium_premium}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, fabric_premium_premium: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Heavy Fabric</label>
+                    <input
+                      type="number" min={0}
+                      value={settingsForm.fabric_premium_heavy}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, fabric_premium_heavy: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Oversized Fabric</label>
+                    <input
+                      type="number" min={0}
+                      value={settingsForm.fabric_premium_oversized}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, fabric_premium_oversized: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
                 </div>
               </div>
 

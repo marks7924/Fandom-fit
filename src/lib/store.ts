@@ -314,11 +314,42 @@ export const useStore = create<StoreState>((set, get) => ({
 
   saveSettings: async (newSettings) => {
     try {
-      // settings is stored as row key value in settings table
-      for (const [key, value] of Object.entries(newSettings)) {
-        await supabase.from('settings').update({ value }).eq('key', key);
+      const cleanSettings = { ...newSettings } as Record<string, any>;
+      
+      if (
+        'fabric_premium_premium' in cleanSettings ||
+        'fabric_premium_heavy' in cleanSettings ||
+        'fabric_premium_oversized' in cleanSettings
+      ) {
+        const premiums = {
+          premium: Number(cleanSettings.fabric_premium_premium ?? 50),
+          heavy: Number(cleanSettings.fabric_premium_heavy ?? 100),
+          oversized: Number(cleanSettings.fabric_premium_oversized ?? 150)
+        };
+        cleanSettings.fabric_premiums = premiums;
+        
+        delete cleanSettings.fabric_premium_premium;
+        delete cleanSettings.fabric_premium_heavy;
+        delete cleanSettings.fabric_premium_oversized;
       }
-      set({ settings: { ...get().settings, ...newSettings } });
+
+      for (const [key, value] of Object.entries(cleanSettings)) {
+        if (value !== undefined) {
+          const { error } = await supabase
+            .from('settings')
+            .upsert({ key, value }, { onConflict: 'key' });
+          if (error) throw error;
+        }
+      }
+
+      const { data: settingsData } = await supabase.from('settings').select('*');
+      if (settingsData) {
+        const settingsMap: Record<string, any> = {};
+        settingsData.forEach((row: any) => {
+          settingsMap[row.key] = row.value;
+        });
+        set({ settings: settingsMap });
+      }
     } catch (error) {
       console.error('Error saving settings:', error);
     }
