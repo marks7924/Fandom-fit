@@ -7,6 +7,7 @@ import { useStore } from '@/lib/store';
 import Image from 'next/image';
 import { Menu, X, Globe } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
+import TrackOrderModal from './TrackOrderModal';
 
 export default function Navbar() {
   const t = useTranslations('nav');
@@ -17,6 +18,8 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [logoError, setLogoError] = useState(false);
+
+  const setIsTrackOrderOpen = useStore((state) => state.setIsTrackOrderOpen);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -88,6 +91,14 @@ export default function Navbar() {
 
           {/* Right Action Buttons */}
           <div className="hidden md:flex items-center gap-4">
+            {/* Track Order */}
+            <button
+              onClick={() => setIsTrackOrderOpen(true)}
+              className="text-xs font-bold uppercase tracking-wide hover:text-brand-accent transition-colors cursor-pointer"
+            >
+              {locale === 'ar' ? 'تتبع طلبي' : 'Track Order'}
+            </button>
+
             {/* Language Switch */}
             <button
               onClick={toggleLanguage}
@@ -142,6 +153,15 @@ export default function Navbar() {
             ))}
           </div>
           <div className="pt-4 flex flex-col gap-3">
+            <button
+              onClick={() => {
+                setIsTrackOrderOpen(true);
+                setIsOpen(false);
+              }}
+              className="flex items-center justify-center gap-2 py-3 text-sm font-black uppercase bg-white text-black hover:bg-black/5 border-3 border-black rounded-xl transition-all duration-300 cursor-pointer"
+            >
+              {locale === 'ar' ? 'تتبع طلبي' : 'Track Order'}
+            </button>
             <a
               href="#showcase"
               onClick={() => setIsOpen(false)}
@@ -152,6 +172,7 @@ export default function Navbar() {
           </div>
         </div>
       )}
+      <TrackOrderModal />
     </nav>
   );
 }

@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Paintbrush, FileImage, Send, CheckCircle } from 'lucide-react';
+import { Paintbrush, FileImage, Send, CheckCircle, X } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
+import supabase from '@/lib/supabase';
 
 export default function CustomDesignForm() {
   const t = useTranslations('custom_design');
@@ -19,6 +20,22 @@ export default function CustomDesignForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  const [files, setFiles] = useState<File[]>([]);
+  const [filePreviews, setFilePreviews] = useState<string[]>([]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const selectedFiles = Array.from(e.target.files);
+    setFiles(prev => [...prev, ...selectedFiles]);
+    const newPreviews = selectedFiles.map(file => URL.createObjectURL(file));
+    setFilePreviews(prev => [...prev, ...newPreviews]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+    setFilePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
   const topics = [
     'Games', 'Movies', 'TV Shows', 'Singers', 'Football Clubs', 'Anime', 'Personal Art', 'Memes', 'Original Idea'
   ];
@@ -28,11 +45,28 @@ export default function CustomDesignForm() {
     if (!name || !instagram || !description) return;
 
     setIsSubmitting(true);
+
+    const uploadedUrls: string[] = [];
+    for (const file of files) {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `custom/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage.from('products').upload(fileName, file);
+      if (error) {
+        console.error('Reference image upload error:', error);
+        continue;
+      }
+      if (data) {
+        const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(data.path);
+        uploadedUrls.push(publicUrl);
+      }
+    }
+
     const success = await addCustomRequest({
       customer_name: name,
       instagram_username: instagram,
       description: `[Topic: ${selectedTopic}] ${description}`,
-      reference_images: []
+      reference_images: uploadedUrls
     });
     setIsSubmitting(false);
 
@@ -53,6 +87,8 @@ export default function CustomDesignForm() {
     setName('');
     setInstagram('');
     setDescription('');
+    setFiles([]);
+    setFilePreviews([]);
   };
 
   return (
@@ -168,16 +204,41 @@ export default function CustomDesignForm() {
                   />
                 </div>
 
-                {/* Reference images mock upload */}
+                {/* Reference images upload */}
                 <div>
                   <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
                     {t('images_label')}
                   </label>
-                  <div className="border-2 border-dashed border-black/35 rounded-xl p-4 bg-[#EDE0D0]/10 text-center hover:bg-black/5 cursor-pointer flex flex-col items-center">
+                  <label htmlFor="design-files" className="border-2 border-dashed border-black/35 rounded-xl p-4 bg-[#EDE0D0]/10 text-center hover:bg-black/5 cursor-pointer flex flex-col items-center block">
                     <FileImage className="text-black/55 mb-2" size={24} />
                     <span className="text-xs font-bold block">{t('choose_images')}</span>
                     <span className="text-[10px] font-bold text-black/40 block mt-1">{t('images_hint')}</span>
-                  </div>
+                    <input 
+                      type="file" 
+                      id="design-files"
+                      multiple 
+                      accept="image/*" 
+                      onChange={handleFileChange}
+                      className="hidden" 
+                    />
+                  </label>
+
+                  {filePreviews.length > 0 && (
+                    <div className="flex flex-wrap gap-2.5 mt-3">
+                      {filePreviews.map((preview, idx) => (
+                        <div key={idx} className="relative w-16 h-16 border-2 border-black rounded-lg overflow-hidden bg-white/50">
+                          <img src={preview} alt="preview" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(idx)}
+                            className="absolute top-0.5 right-0.5 bg-red-600 border border-black text-white rounded-full p-0.5 cursor-pointer hover:bg-red-700 transition-colors"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Submit button */}

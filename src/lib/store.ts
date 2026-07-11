@@ -81,6 +81,8 @@ interface StoreState {
   activeCategory: string; // 'all' or category slug
   previewProduct: Product | null;
   checkoutProduct: Product | null;
+  isTrackOrderOpen: boolean;
+  setIsTrackOrderOpen: (open: boolean) => void;
   fetchInitialData: () => Promise<void>;
   setActiveCategory: (slug: string) => void;
   setPreviewProduct: (product: Product | null) => void;
@@ -89,7 +91,8 @@ interface StoreState {
   
   // Order Operations
   fetchOrders: () => Promise<void>;
-  addOrder: (order: Omit<Order, 'id' | 'created_at' | 'status'>) => Promise<boolean>;
+  addOrder: (order: Omit<Order, 'id' | 'created_at' | 'status'>) => Promise<Order | null>;
+  fetchOrdersByPhone: (phone: string) => Promise<Order[]>;
   completeOrder: (id: string) => Promise<void>;
   updateAnnouncement: (message: string) => Promise<void>;
 
@@ -126,6 +129,9 @@ export const useStore = create<StoreState>((set, get) => ({
   activeCategory: 'all',
   previewProduct: null,
   checkoutProduct: null,
+  isTrackOrderOpen: false,
+
+  setIsTrackOrderOpen: (open) => set({ isTrackOrderOpen: open }),
 
   fetchInitialData: async () => {
     set({ isLoading: true });
@@ -190,12 +196,27 @@ export const useStore = create<StoreState>((set, get) => ({
 
   addOrder: async (order) => {
     try {
-      const { error } = await supabase.from('orders').insert([order]);
+      const { data, error } = await supabase.from('orders').insert([order]).select();
       if (error) throw error;
-      return true;
+      return data?.[0] || null;
     } catch (error) {
       console.error('Error submitting order:', error);
-      return false;
+      return null;
+    }
+  },
+
+  fetchOrdersByPhone: async (phone: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('customer_phone', phone)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching orders by phone:', error);
+      return [];
     }
   },
 

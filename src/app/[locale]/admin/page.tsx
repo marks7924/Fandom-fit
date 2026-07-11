@@ -65,6 +65,8 @@ export default function AdminPage() {
     announcement: ''
   });
 
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+
   // Load Initial Data
   useEffect(() => {
     fetchInitialData();
@@ -506,6 +508,29 @@ export default function AdminPage() {
                         <option key={c.id} value={c.id}>{c.name_en}</option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Available Sizes (comma-separated)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. S, M, L, XL"
+                      value={Array.isArray(prodForm.available_sizes) ? prodForm.available_sizes.join(', ') : prodForm.available_sizes}
+                      onChange={(e) => setProdForm({ ...prodForm, available_sizes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Fabrics/Materials (comma-separated)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Standard Cotton, Premium Cotton"
+                      value={Array.isArray(prodForm.material_options) ? prodForm.material_options.join(', ') : prodForm.material_options}
+                      onChange={(e) => setProdForm({ ...prodForm, material_options: e.target.value.split(',').map(m => m.trim()).filter(Boolean) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
+                    />
                   </div>
                 </div>
 
@@ -1144,12 +1169,22 @@ export default function AdminPage() {
         {/* TAB 7: ORDERS MANAGEMENT */}
         {activeTab === 'orders' && (
           <div className="space-y-6">
-            <h2 className="text-3xl font-black uppercase text-white">{locale === 'ar' ? 'إدارة الطلبات' : 'Orders Management'}</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h2 className="text-3xl font-black uppercase text-white">{locale === 'ar' ? 'إدارة الطلبات' : 'Orders Management'}</h2>
+              <input
+                type="text"
+                value={orderSearchQuery}
+                onChange={(e) => setOrderSearchQuery(e.target.value)}
+                placeholder={locale === 'ar' ? 'ابحث بالكود، الهاتف، أو الاسم...' : 'Search by code, phone, or name...'}
+                className="w-full sm:max-w-xs px-3.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
+              />
+            </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
               <table className="w-full text-left font-mono">
                 <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
                   <tr>
+                    <th className="p-4">{locale === 'ar' ? 'الكود' : 'Code'}</th>
                     <th className="p-4">{locale === 'ar' ? 'العميل' : 'Customer'}</th>
                     <th className="p-4">{locale === 'ar' ? 'رقم الهاتف' : 'Phone'}</th>
                     <th className="p-4">{locale === 'ar' ? 'المحافظة / العنوان' : 'Location'}</th>
@@ -1159,15 +1194,35 @@ export default function AdminPage() {
                 </thead>
                 <tbody className="divide-y divide-zinc-800 text-xs">
                   {orders && orders.length > 0 ? (
-                    [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((order) => (
-                      <tr key={order.id} className="hover:bg-zinc-800/20 text-zinc-300">
-                        <td className="p-4 font-bold text-white">{order.customer_name}</td>
-                        <td className="p-4 text-brand-accent font-semibold">{order.customer_phone}</td>
-                        <td className="p-4 max-w-xs font-semibold">{order.location}</td>
-                        <td className="p-4 max-w-sm">
-                          <div className="text-white font-bold">{order.product_name} ({order.price} EGP)</div>
-                          <div className="text-[10px] text-zinc-500 mt-0.5 whitespace-pre-wrap">{order.notes}</div>
-                        </td>
+                    (() => {
+                      const filtered = [...orders].filter(o => {
+                        const code = o.id.split('-')[0].toLowerCase();
+                        const query = orderSearchQuery.toLowerCase();
+                        return code.includes(query) || 
+                               o.customer_name.toLowerCase().includes(query) || 
+                               o.customer_phone.includes(query);
+                      });
+                      
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={6} className="p-8 text-center text-zinc-500 font-semibold">
+                              {locale === 'ar' ? 'لم يتم العثور على نتائج.' : 'No matching orders found.'}
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((order) => (
+                        <tr key={order.id} className="hover:bg-zinc-800/20 text-zinc-300">
+                          <td className="p-4 font-bold text-brand-accent uppercase">#{order.id.split('-')[0]}</td>
+                          <td className="p-4 font-bold text-white">{order.customer_name}</td>
+                          <td className="p-4 text-brand-accent font-semibold">{order.customer_phone}</td>
+                          <td className="p-4 max-w-xs font-semibold">{order.location}</td>
+                          <td className="p-4 max-w-sm">
+                            <div className="text-white font-bold">{order.product_name} ({order.price} EGP)</div>
+                            <div className="text-[10px] text-zinc-500 mt-0.5 whitespace-pre-wrap">{order.notes}</div>
+                          </td>
                         <td className="p-4 text-right">
                           {order.status === 'completed' ? (
                             <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-950/50 text-green-400 border border-green-900 uppercase">
@@ -1183,10 +1238,11 @@ export default function AdminPage() {
                           )}
                         </td>
                       </tr>
-                    ))
+                      ))
+                    })()
                   ) : (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-zinc-500 font-semibold">
+                      <td colSpan={6} className="p-8 text-center text-zinc-500 font-semibold">
                         {locale === 'ar' ? 'لا توجد طلبات بعد.' : 'No orders logged on this system yet.'}
                       </td>
                     </tr>

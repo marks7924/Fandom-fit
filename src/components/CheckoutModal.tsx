@@ -122,9 +122,7 @@ export default function CheckoutModal() {
     const sizeNotes = `Size: ${selectedSize} | Fabric: ${selectedFabric}`;
     const fullNotes = `${sizeNotes}${notes ? ` | Customer Note: ${notes}` : ''}${appliedDiscount > 0 ? ` | Coupon Code: ${couponCode.toUpperCase()} (${appliedDiscount}% Off)` : ''}`;
 
-    const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-    const success = await addOrder({
+    const result = await addOrder({
       product_id: checkoutProduct.id,
       product_name: `${productName} (${selectedSize})`,
       price: total,
@@ -136,8 +134,9 @@ export default function CheckoutModal() {
 
     setIsSubmitting(false);
 
-    if (success) {
-      setOrderRef(refId);
+    if (result) {
+      const shortCode = result.id.split('-')[0].toUpperCase();
+      setOrderRef(shortCode);
       setShowSuccess(true);
     } else {
       alert(locale === 'ar' ? 'فشل إتمام الطلب، الرجاء المحاولة مرة أخرى' : 'Failed to place order. Please try again.');
