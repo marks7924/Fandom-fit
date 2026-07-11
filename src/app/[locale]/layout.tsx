@@ -5,6 +5,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { routing } from '@/i18n/routing';
 import { notFound } from "next/navigation";
+import ScrollRestorer from '@/components/ScrollRestorer';
 
 const inter = Inter({
   subsets: ["latin"],
@@ -130,6 +131,7 @@ export default async function LocaleLayout({
       className={`${inter.variable} ${gochiHand.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#EDE0D0] text-[#000000] selection:bg-[#000000] selection:text-[#EDE0D0] overflow-x-hidden">
+        <ScrollRestorer />
         <NextIntlClientProvider messages={messages}>
           {children}
         </NextIntlClientProvider>

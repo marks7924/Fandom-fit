@@ -77,6 +77,7 @@ interface StoreState {
   customRequests: CustomRequest[];
   orders: Order[];
   announcement: string;
+  announcement_ar: string;
   isLoading: boolean;
   activeCategory: string; // 'all' or category slug
   previewProduct: Product | null;
@@ -95,6 +96,7 @@ interface StoreState {
   fetchOrdersByPhone: (phone: string) => Promise<Order[]>;
   completeOrder: (id: string) => Promise<void>;
   updateAnnouncement: (message: string) => Promise<void>;
+  updateAnnouncementAr: (message: string) => Promise<void>;
 
   // Admin Operations
   fetchAdminRequests: () => Promise<void>;
@@ -125,6 +127,7 @@ export const useStore = create<StoreState>((set, get) => ({
   customRequests: [],
   orders: [],
   announcement: '',
+  announcement_ar: '',
   isLoading: false,
   activeCategory: 'all',
   previewProduct: null,
@@ -154,6 +157,7 @@ export const useStore = create<StoreState>((set, get) => ({
         offers: offers || [],
         settings: settingsMap,
         announcement: settingsMap.announcement || '',
+        announcement_ar: settingsMap.announcement_ar || '',
         isLoading: false,
       });
     } catch (error) {
@@ -239,6 +243,18 @@ export const useStore = create<StoreState>((set, get) => ({
       set({ announcement: message });
     } catch (error) {
       console.error('Error updating announcement:', error);
+    }
+  },
+
+  updateAnnouncementAr: async (message) => {
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'announcement_ar', value: message }, { onConflict: 'key' });
+      if (error) throw error;
+      set({ announcement_ar: message });
+    } catch (error) {
+      console.error('Error updating Arabic announcement:', error);
     }
   },
 

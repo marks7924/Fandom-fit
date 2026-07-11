@@ -21,7 +21,7 @@ export default function AdminPage() {
     addCategory, updateCategory, deleteCategory,
     addOffer, updateOffer, deleteOffer,
     fetchAdminRequests, updateRequestStatus, saveSettings,
-    fetchOrders, completeOrder, updateAnnouncement
+    fetchOrders, completeOrder, updateAnnouncement, updateAnnouncementAr
   } = useStore();
 
   // Auth States
@@ -62,7 +62,8 @@ export default function AdminPage() {
   const [settingsForm, setSettingsForm] = useState({
     brand_name: '', tagline: '', instagram_url: '', tiktok_url: '', facebook_url: '',
     seo_title: '', seo_desc: '', shipping_info_en: '', shipping_info_ar: '',
-    announcement: ''
+    announcement: '',
+    announcement_ar: ''
   });
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
@@ -111,7 +112,8 @@ export default function AdminPage() {
         seo_desc: settings.seo_desc || '',
         shipping_info_en: settings.shipping_info_en || '',
         shipping_info_ar: settings.shipping_info_ar || '',
-        announcement: settings.announcement || ''
+        announcement: settings.announcement || '',
+        announcement_ar: settings.announcement_ar || ''
       });
     }
   }, [isAuthenticated, settings]);
@@ -200,6 +202,9 @@ export default function AdminPage() {
     await saveSettings(settingsForm);
     if (settingsForm.announcement !== undefined) {
       await updateAnnouncement(settingsForm.announcement);
+    }
+    if (settingsForm.announcement_ar !== undefined) {
+      await updateAnnouncementAr(settingsForm.announcement_ar);
     }
     alert(t('settings.save_success'));
   };
@@ -1264,14 +1269,34 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Scrolling Homepage Announcement Bar</label>
-                <input
-                  type="text"
-                  value={settingsForm.announcement}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, announcement: e.target.value })}
-                  placeholder="e.g. Free Shipping across Cairo for orders above 1000 EGP!"
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
-                />
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-2">Scrolling Homepage Announcement Bar</label>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1 flex items-center gap-1">
+                      <span className="px-1.5 py-0.5 bg-zinc-700 rounded text-zinc-300">EN</span> English Text
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsForm.announcement}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, announcement: e.target.value })}
+                      placeholder="e.g. Free Shipping across Cairo for orders above 1000 EGP!"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1 flex items-center gap-1">
+                      <span className="px-1.5 py-0.5 bg-zinc-700 rounded text-zinc-300">AR</span> Arabic Text
+                    </label>
+                    <input
+                      type="text"
+                      dir="rtl"
+                      value={settingsForm.announcement_ar}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, announcement_ar: e.target.value })}
+                      placeholder="مثال: شحن مجاني داخل القاهرة للطلبات فوق ١٠٠٠ جنيه!"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent text-right font-arabic"
+                    />
+                  </div>
+                </div>
               </div>
 
               <button

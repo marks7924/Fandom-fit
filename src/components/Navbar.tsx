@@ -31,6 +31,10 @@ export default function Navbar() {
 
   const toggleLanguage = () => {
     const nextLocale = locale === 'en' ? 'ar' : 'en';
+    // Save scroll position so ScrollRestorer can restore it after locale navigation
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('scrollRestoreY', String(window.scrollY));
+    }
     router.replace(pathname, { locale: nextLocale });
   };
 
