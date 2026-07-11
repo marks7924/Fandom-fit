@@ -11,7 +11,7 @@ export default function CheckoutModal() {
   const tp = useTranslations('products');
   const locale = useLocale();
 
-  const { checkoutProduct, setCheckoutProduct, offers, addOrder, validateCoupon } = useStore();
+  const { checkoutProduct, setCheckoutProduct, offers, addOrder, validateCoupon, getProductEffectivePrice } = useStore();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -72,7 +72,6 @@ export default function CheckoutModal() {
 
   const productName = locale === 'ar' ? checkoutProduct.name_ar : checkoutProduct.name_en;
   
-  const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
   const { hasDiscount, originalPrice: basePrice, discountedPrice } = getProductEffectivePrice(checkoutProduct);
   const originalPrice = discountedPrice; 
 
