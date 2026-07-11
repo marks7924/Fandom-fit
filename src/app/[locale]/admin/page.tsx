@@ -212,22 +212,43 @@ export default function AdminPage() {
   // File Upload Handlers (simulated local storage files in mock mode, or supabase upload)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
+    const selectedFiles = Array.from(e.target.files);
 
-    if (isUsingMock) {
-      // Mock File: create dynamic object URL
-      const mockUrl = URL.createObjectURL(file);
-      setProdForm({ ...prodForm, images: [...prodForm.images, mockUrl] });
-    } else {
-      // Real File Upload to Supabase bucket 'products'
-      const fileName = `${Date.now()}-${file.name}`;
-      const { data, error } = await supabase.storage.from('products').upload(fileName, file);
-      if (error) {
-        alert('File upload error: ' + error.message);
-      } else if (data) {
-        const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(data.path);
-        setProdForm({ ...prodForm, images: [...prodForm.images, publicUrl] });
+    // Attempt to automatically create the bucket to avoid "bucket not found" error
+    if (!isUsingMock) {
+      try {
+        await supabase.storage.createBucket('products', { public: true });
+      } catch (err) {
+        // Ignore (bucket likely already exists)
       }
+    }
+
+    const uploadedUrls: string[] = [];
+
+    for (const file of selectedFiles) {
+      if (isUsingMock) {
+        // Mock File: create dynamic object URL
+        const mockUrl = URL.createObjectURL(file);
+        uploadedUrls.push(mockUrl);
+      } else {
+        // Real File Upload to Supabase bucket 'products'
+        const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const { data, error } = await supabase.storage.from('products').upload(fileName, file);
+        if (error) {
+          console.error('File upload error:', error);
+          alert(`File upload failed for ${file.name}: ${error.message}`);
+        } else if (data) {
+          const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(data.path);
+          uploadedUrls.push(publicUrl);
+        }
+      }
+    }
+
+    if (uploadedUrls.length > 0) {
+      setProdForm((prev) => ({
+        ...prev,
+        images: [...prev.images, ...uploadedUrls]
+      }));
     }
   };
 
@@ -739,6 +760,7 @@ export default function AdminPage() {
                       <span className="text-[8px] mt-1 font-bold">Upload</span>
                       <input 
                         type="file" 
+                        multiple
                         accept="image/*" 
                         onChange={handleFileUpload} 
                         className="hidden" 

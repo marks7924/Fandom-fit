@@ -183,3 +183,23 @@ INSERT INTO settings (key, value) VALUES
 ('brand', '{"name": "Fandom Fit", "tagline": "Wear What You Love."}'),
 ('announcement', '"🔥 FREE SHIPPING on orders containing 3 or more shirts! Direct Web checkout active now! 🔥"')
 ON CONFLICT (key) DO NOTHING;
+
+-- 11. Storage Setup for Products (Reference Images & Product Images)
+-- Creates the public 'products' bucket and sets up permissive security policies so uploads work without auth errors
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('products', 'products', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage policies for the 'products' bucket
+CREATE POLICY "Allow public select on products bucket" ON storage.objects 
+    FOR SELECT USING (bucket_id = 'products');
+
+CREATE POLICY "Allow public insert on products bucket" ON storage.objects 
+    FOR INSERT WITH CHECK (bucket_id = 'products');
+
+CREATE POLICY "Allow public update on products bucket" ON storage.objects 
+    FOR UPDATE USING (bucket_id = 'products') WITH CHECK (bucket_id = 'products');
+
+CREATE POLICY "Allow public delete on products bucket" ON storage.objects 
+    FOR DELETE USING (bucket_id = 'products');
+
