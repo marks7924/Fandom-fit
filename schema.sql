@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS products (
     material_options TEXT[] DEFAULT ARRAY['Standard Cotton', 'Premium Cotton'],
     is_pinned BOOLEAN DEFAULT FALSE,
     gives_cotton_reward BOOLEAN DEFAULT FALSE,
+    tags TEXT[] DEFAULT ARRAY[]::TEXT[],
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
