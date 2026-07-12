@@ -16,7 +16,7 @@ export default function LoadingScreen() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: 'easeOut' }}
         >
-          <BrandLogo color="black" scale={1.35} />
+          <BrandLogo color="black" textSize={2.8} />
         </motion.div>
 
         {/* Bouncing dots */}

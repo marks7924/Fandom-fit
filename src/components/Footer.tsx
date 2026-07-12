@@ -45,7 +45,7 @@ export default function Footer() {
           {/* Logo & Info column */}
           <div className="flex flex-col gap-4">
             <a href="#home" className="inline-block select-none">
-              <BrandLogo color="#EDE0D0" scale={0.6} />
+              <BrandLogo color="#EDE0D0" textSize={1.6} />
             </a>
             <p className="text-xs font-semibold uppercase tracking-wider text-[#EDE0D0]/60 font-handwriting leading-relaxed max-w-xs">
               {locale === 'ar' 
