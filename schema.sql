@@ -120,14 +120,6 @@ CREATE TABLE IF NOT EXISTS orders (
     location VARCHAR(255) NOT NULL,
     notes TEXT,
     status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'completed'
-    items JSONB,
-    customer_email VARCHAR(255),
-    governorate VARCHAR(100),
-    city VARCHAR(100),
-    address TEXT,
-    coupon_code VARCHAR(100),
-    referral_code VARCHAR(100),
-    reward_coupon_code VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -144,57 +136,74 @@ ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 
 -- PUBLIC READ POLICIES (Anyone can read, write is admin only)
+DROP POLICY IF EXISTS "Allow public read on categories" ON categories;
 CREATE POLICY "Allow public read on categories" ON categories 
     FOR SELECT USING (is_hidden = FALSE OR EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
+DROP POLICY IF EXISTS "Allow public read on products" ON products;
 CREATE POLICY "Allow public read on products" ON products 
     FOR SELECT USING (TRUE);
 
+DROP POLICY IF EXISTS "Allow public read on product_images" ON product_images;
 CREATE POLICY "Allow public read on product_images" ON product_images 
     FOR SELECT USING (TRUE);
 
+DROP POLICY IF EXISTS "Allow public read on offers" ON offers;
 CREATE POLICY "Allow public read on offers" ON offers 
     FOR SELECT USING (is_active = TRUE);
 
+DROP POLICY IF EXISTS "Allow public read on settings" ON settings;
 CREATE POLICY "Allow public read on settings" ON settings 
     FOR SELECT USING (TRUE);
 
+DROP POLICY IF EXISTS "Allow public read on homepage_sections" ON homepage_sections;
 CREATE POLICY "Allow public read on homepage_sections" ON homepage_sections 
     FOR SELECT USING (TRUE);
 
 -- CUSTOM REQUESTS WRITE POLICY (Anyone can insert, but only admins can read/update)
+DROP POLICY IF EXISTS "Allow public insert on custom_requests" ON custom_requests;
 CREATE POLICY "Allow public insert on custom_requests" ON custom_requests 
     FOR INSERT WITH CHECK (TRUE);
 
+DROP POLICY IF EXISTS "Allow admin operations on custom_requests" ON custom_requests;
 CREATE POLICY "Allow admin operations on custom_requests" ON custom_requests 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
 -- ORDERS WRITE POLICY (Anyone can insert, but only admins can read/update)
+DROP POLICY IF EXISTS "Allow public insert on orders" ON orders;
 CREATE POLICY "Allow public insert on orders" ON orders 
     FOR INSERT WITH CHECK (TRUE);
 
+DROP POLICY IF EXISTS "Allow admin operations on orders" ON orders;
 CREATE POLICY "Allow admin operations on orders" ON orders 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
 -- ADMIN POLICIES (Only authenticated admins can modify)
+DROP POLICY IF EXISTS "Allow admin all on categories" ON categories;
 CREATE POLICY "Allow admin all on categories" ON categories 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
+DROP POLICY IF EXISTS "Allow admin all on products" ON products;
 CREATE POLICY "Allow admin all on products" ON products 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
+DROP POLICY IF EXISTS "Allow admin all on product_images" ON product_images;
 CREATE POLICY "Allow admin all on product_images" ON product_images 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
+DROP POLICY IF EXISTS "Allow admin all on offers" ON offers;
 CREATE POLICY "Allow admin all on offers" ON offers 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
+DROP POLICY IF EXISTS "Allow admin all on settings" ON settings;
 CREATE POLICY "Allow admin all on settings" ON settings 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
+DROP POLICY IF EXISTS "Allow admin all on homepage_sections" ON homepage_sections;
 CREATE POLICY "Allow admin all on homepage_sections" ON homepage_sections 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
+DROP POLICY IF EXISTS "Allow admin read own record" ON admins;
 CREATE POLICY "Allow admin read own record" ON admins 
     FOR SELECT USING (auth.uid() = id);
 
@@ -212,15 +221,19 @@ VALUES ('products', 'products', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Storage policies for the 'products' bucket
+DROP POLICY IF EXISTS "Allow public select on products bucket" ON storage.objects;
 CREATE POLICY "Allow public select on products bucket" ON storage.objects 
     FOR SELECT USING (bucket_id = 'products');
 
+DROP POLICY IF EXISTS "Allow public insert on products bucket" ON storage.objects;
 CREATE POLICY "Allow public insert on products bucket" ON storage.objects 
     FOR INSERT WITH CHECK (bucket_id = 'products');
 
+DROP POLICY IF EXISTS "Allow public update on products bucket" ON storage.objects;
 CREATE POLICY "Allow public update on products bucket" ON storage.objects 
     FOR UPDATE USING (bucket_id = 'products') WITH CHECK (bucket_id = 'products');
 
+DROP POLICY IF EXISTS "Allow public delete on products bucket" ON storage.objects;
 CREATE POLICY "Allow public delete on products bucket" ON storage.objects 
     FOR DELETE USING (bucket_id = 'products');
  
@@ -236,9 +249,11 @@ CREATE TABLE IF NOT EXISTS discount_campaigns (
 
 ALTER TABLE discount_campaigns ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Allow public read on discount_campaigns" ON discount_campaigns;
 CREATE POLICY "Allow public read on discount_campaigns" ON discount_campaigns 
     FOR SELECT USING (TRUE);
 
+DROP POLICY IF EXISTS "Allow admin all on discount_campaigns" ON discount_campaigns;
 CREATE POLICY "Allow admin all on discount_campaigns" ON discount_campaigns 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
