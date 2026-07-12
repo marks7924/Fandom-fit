@@ -59,7 +59,14 @@ export default function AdminPage() {
     title_en: '', title_ar: '', description_en: '', description_ar: '',
     discount_text_en: '', discount_text_ar: '', code: '', is_active: true,
     discount_percent: 10, max_uses: '' as string | number, max_uses_per_user: '' as string | number,
-    show_on_homepage: false
+    show_on_homepage: false,
+    discount_type: 'percentage',
+    discount_value: 0,
+    coupon_type: 'manual',
+    min_order_amount: 0,
+    is_one_time: false,
+    is_public: true,
+    expires_at: ''
   });
 
   const [campaignForm, setCampaignForm] = useState({
@@ -209,7 +216,14 @@ export default function AdminPage() {
       discount_percent: Number(offerForm.discount_percent),
       max_uses: offerForm.max_uses ? Number(offerForm.max_uses) : null,
       max_uses_per_user: offerForm.max_uses_per_user ? Number(offerForm.max_uses_per_user) : null,
-      show_on_homepage: !!offerForm.show_on_homepage
+      show_on_homepage: !!offerForm.show_on_homepage,
+      discount_value: Number(offerForm.discount_value || 0),
+      min_order_amount: Number(offerForm.min_order_amount || 0),
+      is_one_time: !!offerForm.is_one_time,
+      is_public: !!offerForm.is_public,
+      discount_type: offerForm.discount_type as 'percentage' | 'fixed',
+      coupon_type: offerForm.coupon_type as 'manual' | 'cotton_reward' | 'referral_reward' | 'referral_reward_thank_you',
+      expires_at: offerForm.expires_at ? new Date(offerForm.expires_at).toISOString() : null
     };
 
     if (editingItem) {
@@ -1054,7 +1068,14 @@ export default function AdminPage() {
                       title_en: '', title_ar: '', description_en: '', description_ar: '',
                       discount_text_en: '10% OFF', discount_text_ar: 'خصم ١٠٪', code: '', is_active: true,
                       discount_percent: 10, max_uses: '', max_uses_per_user: '',
-                      show_on_homepage: false
+                      show_on_homepage: false,
+                      discount_type: 'percentage',
+                      discount_value: 0,
+                      coupon_type: 'manual',
+                      min_order_amount: 0,
+                      is_one_time: false,
+                      is_public: true,
+                      expires_at: ''
                     });
                     setIsFormOpen(true);
                   }}
@@ -1162,6 +1183,87 @@ export default function AdminPage() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Coupon Type</label>
+                    <select
+                      value={offerForm.coupon_type}
+                      onChange={(e) => setOfferForm({ ...offerForm, coupon_type: e.target.value })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    >
+                      <option value="manual">Manual / Public Code</option>
+                      <option value="cotton_reward">Cotton Purchase Reward</option>
+                      <option value="referral_reward">Referral Trigger Code</option>
+                      <option value="referral_reward_thank_you">Referral Thank You Reward</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Discount Type</label>
+                    <select
+                      value={offerForm.discount_type}
+                      onChange={(e) => setOfferForm({ ...offerForm, discount_type: e.target.value })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    >
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="fixed">Fixed Value (EGP)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Discount Value</label>
+                    <input
+                      type="number" required min={0}
+                      value={offerForm.discount_value}
+                      onChange={(e) => setOfferForm({ ...offerForm, discount_value: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Min Order (EGP)</label>
+                    <input
+                      type="number" min={0}
+                      value={offerForm.min_order_amount}
+                      onChange={(e) => setOfferForm({ ...offerForm, min_order_amount: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Expiry Date</label>
+                    <input
+                      type="date"
+                      value={offerForm.expires_at}
+                      onChange={(e) => setOfferForm({ ...offerForm, expires_at: e.target.value })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none text-zinc-300"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 py-1">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="is_one_time"
+                      checked={offerForm.is_one_time}
+                      onChange={(e) => setOfferForm({ ...offerForm, is_one_time: e.target.checked })}
+                      className="accent-brand-accent" 
+                    />
+                    <label htmlFor="is_one_time" className="text-xs font-bold text-zinc-300 select-none">One-time Use Only</label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="is_public"
+                      checked={offerForm.is_public}
+                      onChange={(e) => setOfferForm({ ...offerForm, is_public: e.target.checked })}
+                      className="accent-brand-accent" 
+                    />
+                    <label htmlFor="is_public" className="text-xs font-bold text-zinc-300 select-none">Is Public Code</label>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <input 
                     type="checkbox" 
@@ -1197,7 +1299,8 @@ export default function AdminPage() {
                   <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
                     <tr>
                       <th className="p-4">Code</th>
-                      <th className="p-4">Title</th>
+                      <th className="p-4">Discount</th>
+                      <th className="p-4">Type</th>
                       <th className="p-4">Status</th>
                       <th className="p-4 text-right">Actions</th>
                     </tr>
@@ -1206,7 +1309,12 @@ export default function AdminPage() {
                     {offers.map((o) => (
                       <tr key={o.id} className="hover:bg-zinc-800/20 text-zinc-300">
                         <td className="p-4 font-bold text-white">{o.code}</td>
-                        <td className="p-4">{o.title_en}</td>
+                        <td className="p-4 font-semibold text-brand-accent">
+                          {o.discount_type === 'fixed' ? `${o.discount_value} EGP` : `${o.discount_percent}%`}
+                        </td>
+                        <td className="p-4 capitalize text-[10px] text-zinc-400 font-bold">
+                          {o.coupon_type ? o.coupon_type.replace(/_/g, ' ') : 'manual'}
+                        </td>
                         <td className="p-4">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                             o.is_active 
@@ -1225,7 +1333,14 @@ export default function AdminPage() {
                                 discount_percent: o.discount_percent || 10,
                                 max_uses: o.max_uses ?? '',
                                 max_uses_per_user: o.max_uses_per_user ?? '',
-                                show_on_homepage: o.show_on_homepage ?? false
+                                show_on_homepage: o.show_on_homepage ?? false,
+                                discount_type: o.discount_type || 'percentage',
+                                discount_value: o.discount_value ?? 0,
+                                coupon_type: o.coupon_type || 'manual',
+                                min_order_amount: o.min_order_amount ?? 0,
+                                is_one_time: o.is_one_time ?? false,
+                                is_public: o.is_public ?? true,
+                                expires_at: o.expires_at ? new Date(o.expires_at).toISOString().split('T')[0] : ''
                               });
                               setIsFormOpen(true);
                             }}
@@ -1709,7 +1824,38 @@ export default function AdminPage() {
                           <td className="p-4 max-w-xs font-semibold">{order.location}</td>
                           <td className="p-4 max-w-sm">
                             <div className="text-white font-bold">{order.product_name} ({order.price} EGP)</div>
-                            <div className="text-[10px] text-zinc-500 mt-0.5 whitespace-pre-wrap">{order.notes}</div>
+                            {order.items && Array.isArray(order.items) && (
+                              <div className="mt-1.5 space-y-1 bg-zinc-950 p-2 border border-zinc-800 rounded">
+                                {order.items.map((item: any, idx: number) => (
+                                  <div key={idx} className="text-[10px] flex items-center justify-between text-zinc-300">
+                                    <span>
+                                      • {item.product_name} ({item.size}) x{item.quantity}
+                                    </span>
+                                    <span className="text-[9px] text-zinc-500 font-bold">
+                                      ({item.fabric})
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="text-[10px] text-zinc-400 mt-1.5 font-bold space-y-0.5">
+                              {order.coupon_code && (
+                                <div className="text-green-500 text-[9px] uppercase">
+                                  🎟️ Coupon: {order.coupon_code}
+                                </div>
+                              )}
+                              {order.referral_code && (
+                                <div className="text-blue-400 text-[9px] uppercase">
+                                  🔗 Referred By: {order.referral_code}
+                                </div>
+                              )}
+                              {order.reward_coupon_code && (
+                                <div className="text-amber-500 text-[9px] uppercase font-black">
+                                  🎁 Reward Issued: {order.reward_coupon_code}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-zinc-500 mt-1 whitespace-pre-wrap">{order.notes}</div>
                           </td>
                         <td className="p-4 text-right">
                           {order.status === 'completed' ? (

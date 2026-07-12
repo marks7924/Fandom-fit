@@ -11,6 +11,7 @@ import { Link } from '@/i18n/routing';
 import { ArrowLeft, Share2, ClipboardCheck, Tag, Loader2 } from 'lucide-react';
 import InstagramIcon from '@/components/InstagramIcon';
 import CheckoutModal from '@/components/CheckoutModal';
+import CartDrawer from '@/components/CartDrawer';
 import LoadingScreen from '@/components/LoadingScreen';
 import TrackOrderModal from '@/components/TrackOrderModal';
 
@@ -334,6 +335,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
       <Footer />
       <CheckoutModal />
+      <CartDrawer />
       <TrackOrderModal />
     </>
   );

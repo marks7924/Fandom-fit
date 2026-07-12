@@ -15,6 +15,7 @@ import Shipping from '@/components/Shipping';
 import FAQ from '@/components/FAQ';
 import ProductQuickPreview from '@/components/ProductQuickPreview';
 import CheckoutModal from '@/components/CheckoutModal';
+import CartDrawer from '@/components/CartDrawer';
 import TrackOrderModal from '@/components/TrackOrderModal';
 import Footer from '@/components/Footer';
 import LoadingScreen from '@/components/LoadingScreen';
@@ -54,6 +55,8 @@ export default function Home() {
       <ProductQuickPreview />
       {/* Checkout form drawer overlay */}
       <CheckoutModal />
+      {/* Cart Drawer overlay */}
+      <CartDrawer />
       {/* Track Order modal overlay */}
       <TrackOrderModal />
     </>

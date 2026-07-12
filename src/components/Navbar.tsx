@@ -5,7 +5,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { useStore } from '@/lib/store';
 import Image from 'next/image';
-import { Menu, X, Globe } from 'lucide-react';
+import { Menu, X, Globe, ShoppingBag } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import TrackOrderModal from './TrackOrderModal';
 
@@ -47,7 +47,8 @@ export default function Navbar() {
     { name: t('contact'), href: '#contact' },
   ];
 
-  const announcement = useStore((state) => state.announcement);
+  const { announcement, cart, setIsCartOpen } = useStore();
+  const cartItemsCount = cart ? cart.reduce((sum, item) => sum + item.quantity, 0) : 0;
 
   return (
     <nav
@@ -113,6 +114,20 @@ export default function Navbar() {
               {t('switch_lang')}
             </button>
 
+            {/* Cart Button */}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="relative p-2 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer text-black"
+              aria-label="Open Cart"
+            >
+              <ShoppingBag size={16} />
+              {cartItemsCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-brand-accent text-white border-2 border-black text-[9px] font-black rounded-full flex items-center justify-center animate-bounce">
+                  {cartItemsCount}
+                </span>
+              )}
+            </button>
+
             {/* Shop Now CTA */}
             <a
               href="#showcase"
@@ -130,6 +145,20 @@ export default function Navbar() {
             >
               <Globe size={12} />
               {locale === 'en' ? 'AR' : 'EN'}
+            </button>
+
+            {/* Mobile Cart Button */}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="relative p-2 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer text-black animate-none"
+              aria-label="Open Cart"
+            >
+              <ShoppingBag size={14} />
+              {cartItemsCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 bg-brand-accent text-white border-2 border-black text-[8px] font-black rounded-full flex items-center justify-center">
+                  {cartItemsCount}
+                </span>
+              )}
             </button>
 
             <button

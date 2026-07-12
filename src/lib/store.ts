@@ -47,6 +47,16 @@ export interface Offer {
   max_uses_per_user?: number | null;
   is_active: boolean;
   show_on_homepage: boolean;
+  discount_type?: 'percentage' | 'fixed';
+  discount_value?: number;
+  coupon_type?: 'manual' | 'cotton_reward' | 'referral_reward' | 'referral_reward_thank_you';
+  min_order_amount?: number;
+  current_uses?: number;
+  is_one_time?: boolean;
+  is_public?: boolean;
+  expires_at?: string | null;
+  referred_phone?: string | null;
+  created_at?: string;
 }
 
 export interface CustomRequest {
@@ -70,7 +80,33 @@ export interface Order {
   location: string;
   notes: string;
   status: string; // 'pending' | 'completed'
+  items?: Array<{
+    id: string;
+    product_id: string;
+    product_name: string;
+    size: string;
+    fabric: string;
+    quantity: number;
+    price: number;
+    image?: string;
+  }> | null;
+  customer_email?: string;
+  governorate?: string;
+  city?: string;
+  address?: string;
+  coupon_code?: string;
+  referral_code?: string;
+  reward_coupon_code?: string;
   created_at: string;
+}
+
+export interface CartItem {
+  id: string; // product_id-size-fabric
+  product: Product;
+  size: string;
+  fabric: string;
+  quantity: number;
+  price: number;
 }
 
 interface StoreState {
@@ -88,6 +124,18 @@ interface StoreState {
   checkoutProduct: Product | null;
   isTrackOrderOpen: boolean;
   setIsTrackOrderOpen: (open: boolean) => void;
+  
+  // Cart State & Actions
+  cart: CartItem[];
+  isCartOpen: boolean;
+  setIsCartOpen: (open: boolean) => void;
+  addToCart: (product: Product, size: string, fabric: string, quantity?: number) => void;
+  removeFromCart: (cartItemId: string) => void;
+  updateCartQuantity: (cartItemId: string, quantity: number) => void;
+  clearCart: () => void;
+  
+  isCheckoutOpen: boolean;
+  setIsCheckoutOpen: (open: boolean) => void;
   fetchInitialData: () => Promise<void>;
   setActiveCategory: (slug: string) => void;
   setPreviewProduct: (product: Product | null) => void;
@@ -133,10 +181,12 @@ interface StoreState {
   addDiscountCampaign: (campaign: Omit<DiscountCampaign, 'id'>) => Promise<void>;
   updateDiscountCampaign: (id: string, campaign: Partial<DiscountCampaign>) => Promise<void>;
   deleteDiscountCampaign: (id: string) => Promise<void>;
-  validateCoupon: (code: string, phone: string) => Promise<{
+  validateCoupon: (code: string, phone: string, orderAmount: number) => Promise<{
     isValid: boolean;
     discountPercent?: number;
-    error?: 'invalid' | 'limit_reached' | 'user_limit_reached';
+    discountType?: 'percentage' | 'fixed';
+    discountValue?: number;
+    error?: string;
   }>;
 }
 
@@ -164,6 +214,70 @@ export const useStore = create<StoreState>((set, get) => ({
   previewProduct: null,
   checkoutProduct: null,
   isTrackOrderOpen: false,
+
+  cart: typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('ff_cart') || '[]') : [],
+  isCartOpen: false,
+  setIsCartOpen: (open) => set({ isCartOpen: open }),
+  isCheckoutOpen: false,
+  setIsCheckoutOpen: (open) => set({ isCheckoutOpen: open }),
+
+  addToCart: (product, size, fabric, quantity = 1) => {
+    const cart = get().cart;
+    const { getProductEffectivePrice } = get();
+    const { discountedPrice } = getProductEffectivePrice(product);
+    const premium = getFabricPremium(fabric);
+    const itemPrice = discountedPrice + premium;
+    
+    const cartItemId = `${product.id}-${size}-${fabric}`;
+    const existingIndex = cart.findIndex((item) => item.id === cartItemId);
+    
+    let updatedCart;
+    if (existingIndex >= 0) {
+      updatedCart = cart.map((item, idx) => 
+        idx === existingIndex 
+          ? { ...item, quantity: item.quantity + quantity } 
+          : item
+      );
+    } else {
+      updatedCart = [
+        ...cart,
+        {
+          id: cartItemId,
+          product,
+          size,
+          fabric,
+          quantity,
+          price: itemPrice
+        }
+      ];
+    }
+    
+    set({ cart: updatedCart });
+    localStorage.setItem('ff_cart', JSON.stringify(updatedCart));
+  },
+
+  removeFromCart: (cartItemId) => {
+    const updatedCart = get().cart.filter((item) => item.id !== cartItemId);
+    set({ cart: updatedCart });
+    localStorage.setItem('ff_cart', JSON.stringify(updatedCart));
+  },
+
+  updateCartQuantity: (cartItemId, quantity) => {
+    if (quantity <= 0) {
+      get().removeFromCart(cartItemId);
+      return;
+    }
+    const updatedCart = get().cart.map((item) => 
+      item.id === cartItemId ? { ...item, quantity } : item
+    );
+    set({ cart: updatedCart });
+    localStorage.setItem('ff_cart', JSON.stringify(updatedCart));
+  },
+
+  clearCart: () => {
+    set({ cart: [] });
+    localStorage.setItem('ff_cart', '[]');
+  },
 
   setIsTrackOrderOpen: (open) => set({ isTrackOrderOpen: open }),
 
@@ -233,9 +347,115 @@ export const useStore = create<StoreState>((set, get) => ({
 
   addOrder: async (order) => {
     try {
-      const { data, error } = await supabase.from('orders').insert([order]).select();
+      let rewardCouponCode = '';
+      
+      // 1. Check if Cotton collection drops apply
+      const hasCottonItem = 
+        order.product_name.toLowerCase().includes('cotton') || 
+        (order.notes && order.notes.toLowerCase().includes('cotton')) ||
+        (order.items && Array.isArray(order.items) && order.items.some((item: any) => 
+          item.product_name.toLowerCase().includes('cotton') || 
+          item.fabric.toLowerCase().includes('cotton')
+        ));
+
+      if (hasCottonItem) {
+        const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const code = `COTTON-${randomString}`;
+        rewardCouponCode = code;
+        
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 30);
+
+        const newOffer = {
+          title_en: 'Cotton Collection Reward (25% OFF)',
+          title_ar: 'مكافأة مجموعة القطن (خصم ٢٥٪)',
+          description_en: 'Get 25% off one future order! (Activates upon order delivery)',
+          description_ar: 'احصل على خصم ٢٥٪ على طلبك القادم! (يتم التفعيل فور الاستلام)',
+          discount_text_en: '25% OFF',
+          discount_text_ar: 'خصم ٢٥٪',
+          code: code,
+          discount_percent: 25,
+          max_uses: 1,
+          max_uses_per_user: 1,
+          is_active: false, // Inactive until completed!
+          show_on_homepage: false,
+          discount_type: 'percentage',
+          discount_value: 25,
+          coupon_type: 'cotton_reward',
+          is_one_time: true,
+          is_public: false,
+          expires_at: expiryDate.toISOString(),
+        };
+
+        await supabase.from('offers').insert([newOffer]);
+      }
+
+      // 2. Check if valid referral code is entered
+      if (order.referral_code) {
+        const cleanRefCode = order.referral_code.trim().toLowerCase();
+        
+        // Find if coupon code is a valid referral coupon in current store state
+        const refCoupon = get().offers.find(
+          o => o.code.trim().toLowerCase() === cleanRefCode && o.coupon_type === 'referral_reward'
+        );
+
+        if (refCoupon) {
+          const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const thankYouCode = `THANKS-${randomString}`;
+
+          if (!rewardCouponCode) {
+            rewardCouponCode = thankYouCode;
+          } else {
+            rewardCouponCode += `, ${thankYouCode}`;
+          }
+
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + 30);
+
+          const newOffer = {
+            title_en: 'Referral Reward (15% OFF)',
+            title_ar: 'مكافأة ترشيح (خصم ١٥٪)',
+            description_en: 'Thank you for referring a friend! Enjoy 15% off your next purchase. (Activates upon order delivery)',
+            description_ar: 'شكرًا لترشيح صديق! استمتع بخصم ١٥٪ على طلبك القادم. (يتم التفعيل فور الاستلام)',
+            discount_text_en: '15% OFF',
+            discount_text_ar: 'خصم ١٥٪',
+            code: thankYouCode,
+            discount_percent: 15,
+            max_uses: 1,
+            max_uses_per_user: 1,
+            is_active: false, // Inactive until completed!
+            show_on_homepage: false,
+            discount_type: 'percentage',
+            discount_value: 15,
+            coupon_type: 'referral_reward_thank_you',
+            is_one_time: true,
+            is_public: false,
+            expires_at: expiryDate.toISOString(),
+          };
+
+          await supabase.from('offers').insert([newOffer]);
+        }
+      }
+
+      // 3. Save order with pre-generated reward coupon code linked
+      const finalOrder = {
+        ...order,
+        reward_coupon_code: rewardCouponCode || undefined
+      };
+
+      const { data, error } = await supabase.from('orders').insert([finalOrder]).select();
       if (error) throw error;
-      return data?.[0] || null;
+      
+      const newOrder = data?.[0] || null;
+      if (newOrder) {
+        set({ orders: [newOrder, ...get().orders] });
+      }
+
+      // Sync local offers list to see the newly generated offers
+      const { data: allOffers } = await supabase.from('offers').select('*');
+      if (allOffers) set({ offers: allOffers });
+
+      return newOrder;
     } catch (error) {
       console.error('Error submitting order:', error);
       return null;
@@ -259,11 +479,136 @@ export const useStore = create<StoreState>((set, get) => ({
 
   completeOrder: async (id) => {
     try {
-      const { error } = await supabase.from('orders').update({ status: 'completed' }).eq('id', id);
-      if (error) throw error;
+      if (!isUsingMock) {
+        const res = await fetch('/api/orders/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: id })
+        });
+        if (res.ok) {
+          // Sync with database
+          const { data: orders } = await supabase.from('orders').select('*');
+          const { data: offers } = await supabase.from('offers').select('*');
+          if (orders) set({ orders });
+          if (offers) set({ offers });
+          return;
+        }
+      }
+
+      // Mock Local completion & reward generation
+      const order = get().orders.find(o => o.id === id);
+      if (!order || order.status === 'completed') return;
+
+      let rewardCouponCode = '';
       
-      const updated = get().orders.map(o => o.id === id ? { ...o, status: 'completed' } : o);
-      set({ orders: updated });
+      // 1. Cotton collection reward check
+      // Cotton Collection: Category/Product/Material names containing "cotton"
+      const hasCottonItem = 
+        order.product_name.toLowerCase().includes('cotton') || 
+        order.notes.toLowerCase().includes('cotton') ||
+        (order.items && order.items.some(item => 
+          item.product_name.toLowerCase().includes('cotton') || 
+          item.fabric.toLowerCase().includes('cotton')
+        ));
+
+      if (hasCottonItem) {
+        const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+        rewardCouponCode = `COTTON-${randomString}`;
+        
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 30);
+
+        const newOffer: Offer = {
+          id: Math.random().toString(36).substring(7),
+          title_en: 'Cotton Collection Reward (25% OFF)',
+          title_ar: 'مكافأة مجموعة القطن (خصم ٢٥٪)',
+          description_en: 'Thank you for purchasing from the Cotton Collection. Get 25% off one future order!',
+          description_ar: 'شكرًا لشرائك من مجموعة القطن. احصل على خصم ٢٥٪ على طلبك القادم!',
+          discount_text_en: '25% OFF',
+          discount_text_ar: 'خصم ٢٥٪',
+          code: rewardCouponCode,
+          discount_percent: 25,
+          max_uses: 1,
+          max_uses_per_user: 1,
+          is_active: true,
+          show_on_homepage: false,
+          discount_type: 'percentage',
+          discount_value: 25,
+          coupon_type: 'cotton_reward',
+          is_one_time: true,
+          is_public: false,
+          expires_at: expiryDate.toISOString(),
+          created_at: new Date().toISOString()
+        };
+
+        const updatedOffers = [...get().offers, newOffer];
+        set({ offers: updatedOffers });
+        localStorage.setItem('ff_offers', JSON.stringify(updatedOffers));
+      }
+
+      // 2. Referral code thank you check
+      if (order.referral_code) {
+        const cleanRefCode = order.referral_code.trim().toLowerCase();
+        
+        // Prevent duplicate rewards: check if any other COMPLETED orders used the same referral_code for the same customer phone
+        const alreadyRewarded = get().orders.some(o => 
+          o.id !== id &&
+          o.status === 'completed' &&
+          o.customer_phone.trim() === order.customer_phone.trim() &&
+          o.referral_code?.trim().toLowerCase() === cleanRefCode
+        );
+
+        if (!alreadyRewarded) {
+          const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const thankYouCode = `THANKS-${randomString}`;
+          
+          if (!rewardCouponCode) {
+            rewardCouponCode = thankYouCode;
+          } else {
+            rewardCouponCode += `, ${thankYouCode}`;
+          }
+
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + 30);
+
+          const newOffer: Offer = {
+            id: Math.random().toString(36).substring(7),
+            title_en: 'Referral Reward (15% OFF)',
+            title_ar: 'مكافأة ترشيح (خصم ١٥٪)',
+            description_en: 'Thank you for referring a friend! Enjoy 15% off your next purchase.',
+            description_ar: 'شكرًا لترشيح صديق! استمتع بخصم ١٥٪ على طلبك القادم.',
+            discount_text_en: '15% OFF',
+            discount_text_ar: 'خصم ١٥٪',
+            code: thankYouCode,
+            discount_percent: 15,
+            max_uses: 1,
+            max_uses_per_user: 1,
+            is_active: true,
+            show_on_homepage: false,
+            discount_type: 'percentage',
+            discount_value: 15,
+            coupon_type: 'referral_reward_thank_you',
+            is_one_time: true,
+            is_public: false,
+            expires_at: expiryDate.toISOString(),
+            created_at: new Date().toISOString()
+          };
+
+          const updatedOffers = [...get().offers, newOffer];
+          set({ offers: updatedOffers });
+          localStorage.setItem('ff_offers', JSON.stringify(updatedOffers));
+        }
+      }
+
+      // Update mock order state
+      const updatedOrders = get().orders.map(o => 
+        o.id === id 
+          ? { ...o, status: 'completed', reward_coupon_code: rewardCouponCode || undefined } 
+          : o
+      );
+      set({ orders: updatedOrders });
+      localStorage.setItem('ff_orders', JSON.stringify(updatedOrders));
+
     } catch (error) {
       console.error('Error completing order:', error);
     }
@@ -509,48 +854,78 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  validateCoupon: async (code, phone) => {
+  validateCoupon: async (code, phone, orderAmount) => {
     const cleanCode = code.trim().toLowerCase();
-    const offer = get().offers.find(o => o.code.trim().toLowerCase() === cleanCode && o.is_active);
+    
+    // Live Server validation fallback when using live database
+    if (!isUsingMock) {
+      try {
+        const res = await fetch('/api/coupons/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, phone, orderAmount })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          return data;
+        }
+      } catch (err) {
+        console.error('Server coupon validation failed, falling back to local validation:', err);
+      }
+    }
+
+    // Local validation for Mock Mode
+    const offer = get().offers.find(o => o.code.trim().toLowerCase() === cleanCode);
 
     if (!offer) {
       return { isValid: false, error: 'invalid' };
     }
-
-    if (isUsingMock) {
-      return { isValid: true, discountPercent: offer.discount_percent };
+    if (!offer.is_active) {
+      return { isValid: false, error: 'inactive' };
     }
 
-    // Check max_uses overall if specified
+    // Check expiration date
+    if (offer.expires_at) {
+      if (new Date(offer.expires_at).getTime() < Date.now()) {
+        return { isValid: false, error: 'expired' };
+      }
+    }
+
+    // Check minimum order amount
+    const minAmount = offer.min_order_amount ?? 0;
+    if (orderAmount < minAmount) {
+      return { isValid: false, error: 'min_order_not_met' };
+    }
+
+    // Check max uses overall
     if (offer.max_uses !== null && offer.max_uses !== undefined && offer.max_uses > 0) {
-      // Query database to count how many orders contain this coupon code
-      const { count, error } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .ilike('notes', `%Coupon Code: ${offer.code}%`);
-      
-      if (!error && count !== null && count >= offer.max_uses) {
+      const orders = get().orders;
+      const count = orders.filter(o => o.coupon_code?.trim().toLowerCase() === cleanCode).length;
+      if (count >= offer.max_uses) {
         return { isValid: false, error: 'limit_reached' };
       }
     }
 
-    // Check max_uses_per_user (by phone number) if specified
+    // Check max uses per user
     if (offer.max_uses_per_user !== null && offer.max_uses_per_user !== undefined && offer.max_uses_per_user > 0) {
       const cleanPhone = phone.trim();
       if (cleanPhone) {
-        const { count, error } = await supabase
-          .from('orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('customer_phone', cleanPhone)
-          .ilike('notes', `%Coupon Code: ${offer.code}%`);
-
-        if (!error && count !== null && count >= offer.max_uses_per_user) {
+        const orders = get().orders;
+        const count = orders.filter(
+          o => o.customer_phone.trim() === cleanPhone && o.coupon_code?.trim().toLowerCase() === cleanCode
+        ).length;
+        if (count >= offer.max_uses_per_user) {
           return { isValid: false, error: 'user_limit_reached' };
         }
       }
     }
 
-    return { isValid: true, discountPercent: offer.discount_percent };
+    return { 
+      isValid: true, 
+      discountPercent: offer.discount_percent,
+      discountType: offer.discount_type || 'percentage',
+      discountValue: offer.discount_value || 0
+    };
   }
 }));
 

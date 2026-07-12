@@ -172,7 +172,7 @@
       "dashboard": "Dashboard",
       "products": "Products",
       "categories": "Categories",
-      "offers": "Offers",
+      "offers": "Coupons",
       "custom_requests": "Custom Requests",
       "settings": "Settings",
       "homepage": "Homepage Content"
@@ -267,6 +267,25 @@
       "shipping_info_ar": "Shipping Info (AR)",
       "save_success": "Settings saved successfully!"
     }
+  },
+  "cart": {
+    "title": "Shopping Cart",
+    "empty": "Your Cart is Empty",
+    "empty_desc": "Add some premium drop items to get started!",
+    "browse": "Go Shopping",
+    "subtotal": "Subtotal",
+    "shipping": "Shipping",
+    "discount": "Discount",
+    "total": "Final Total",
+    "checkout": "Proceed to Checkout",
+    "remove": "Remove",
+    "apply_promo": "Apply Promo Code",
+    "checking": "Checking...",
+    "apply": "Apply",
+    "copied": "Copied!",
+    "reward_earned": "You earned a reward!",
+    "referral_reward": "Referral Reward",
+    "cotton_reward": "Cotton Reward"
   },
   "checkout": {
     "title": "Direct Web Checkout",

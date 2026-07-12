@@ -5,31 +5,47 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useStore, getFabricPremium } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import { X, Ticket, CheckCircle, MapPin, Phone, User, HelpCircle } from 'lucide-react';
+import { X, Ticket, CheckCircle, MapPin, Phone, User, HelpCircle, Mail, Copy, Check, Tag } from 'lucide-react';
 
 export default function CheckoutModal() {
   const t = useTranslations('checkout');
   const tp = useTranslations('products');
+  const tc = useTranslations('cart');
   const locale = useLocale();
 
-  const { checkoutProduct, setCheckoutProduct, offers, addOrder, validateCoupon, getProductEffectivePrice } = useStore();
+  const {
+    checkoutProduct,
+    setCheckoutProduct,
+    isCheckoutOpen,
+    setIsCheckoutOpen,
+    cart,
+    clearCart,
+    addOrder,
+    validateCoupon,
+    getProductEffectivePrice
+  } = useStore();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [governorate, setGovernorate] = useState('Cairo');
+  const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [couponCode, setCouponCode] = useState('');
+  const [referralCode, setReferralCode] = useState('');
 
-  // Discount details
-  const [appliedDiscount, setAppliedDiscount] = useState<number>(0); // as percentage (e.g. 15)
+  // Discount states
+  const [appliedDiscount, setAppliedDiscount] = useState<number>(0); // percentage (e.g. 25)
   const [discountMsg, setDiscountMsg] = useState('');
   const [discountErr, setDiscountErr] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [orderRef, setOrderRef] = useState('');
+  const [rewardCouponCode, setRewardCouponCode] = useState('');
+  const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
 
-  // Sizing choices (to put in notes automatically)
+  // Sizing choices (only for single product checkout)
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedFabric, setSelectedFabric] = useState('Standard Cotton');
 
@@ -48,36 +64,71 @@ export default function CheckoutModal() {
 
   const governorates = locale === 'ar' ? governoratesAr : governoratesEn;
 
+  const isSingle = !!checkoutProduct;
+  const isOpen = isSingle || isCheckoutOpen;
+
   useEffect(() => {
-    if (checkoutProduct) {
+    if (isOpen) {
       document.body.style.overflow = 'hidden';
       // Reset form on open
       setName('');
       setPhone('');
+      setEmail('');
+      setCity('');
       setAddress('');
       setNotes('');
-      setCouponCode('');
-      setAppliedDiscount(0);
-      setDiscountMsg('');
+      setReferralCode('');
+      setRewardCouponCode('');
+
+      // Load coupon from localStorage if applied in Cart drawer
+      const savedCoupon = localStorage.getItem('ff_applied_coupon') || '';
+      const savedDiscount = Number(localStorage.getItem('ff_coupon_discount') || '0');
+      
+      setCouponCode(savedCoupon);
+      setAppliedDiscount(savedDiscount);
+      setDiscountMsg(savedCoupon && savedDiscount > 0 ? (locale === 'ar' ? 'تم تحميل الكوبون المطبق من السلة!' : 'Coupon applied from your cart!') : '');
       setDiscountErr('');
       setShowSuccess(false);
-      setSelectedSize(checkoutProduct.available_sizes?.[0] || 'M');
-      setSelectedFabric(checkoutProduct.material_options?.[0] || 'Standard Cotton');
+
+      if (isSingle && checkoutProduct) {
+        setSelectedSize(checkoutProduct.available_sizes?.[0] || 'M');
+        setSelectedFabric(checkoutProduct.material_options?.[0] || 'Standard Cotton');
+      }
     } else {
       document.body.style.overflow = '';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [checkoutProduct]);
+  }, [isOpen, checkoutProduct, isSingle]);
 
-  if (!checkoutProduct) return null;
+  if (!isOpen) return null;
 
-  const productName = locale === 'ar' ? checkoutProduct.name_ar : checkoutProduct.name_en;
+  // Single Item Calculations
+  let singleItemPrice = 0;
+  let singleItemName = '';
+  let singleItemImage = '';
   
-  const { hasDiscount, originalPrice: basePrice, discountedPrice } = getProductEffectivePrice(checkoutProduct);
-  const fabricPremium = getFabricPremium(selectedFabric);
-  const originalPrice = discountedPrice + fabricPremium; 
+  if (isSingle && checkoutProduct) {
+    singleItemName = locale === 'ar' ? checkoutProduct.name_ar : checkoutProduct.name_en;
+    const { discountedPrice } = getProductEffectivePrice(checkoutProduct);
+    const premium = getFabricPremium(selectedFabric);
+    singleItemPrice = discountedPrice + premium;
+    singleItemImage = (checkoutProduct.images && checkoutProduct.images.length > 0) 
+      ? checkoutProduct.images[0] 
+      : (checkoutProduct.category_id === '4' ? '/placeholders/manga_front.jpg' : '/placeholders/arcade_front.jpg');
+  }
 
-  // Apply Coupon
+  // Subtotal Calculation
+  const subtotal = isSingle 
+    ? singleItemPrice 
+    : cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // Flat shipping fee (50 EGP Egypt)
+  const shippingFee = subtotal > 0 ? 50 : 0;
+
+  // Discount
+  const discountAmount = Number(((subtotal * appliedDiscount) / 100).toFixed(2));
+  const total = subtotal - discountAmount + shippingFee;
+
   const handleApplyCoupon = async () => {
     setDiscountErr('');
     setDiscountMsg('');
@@ -85,16 +136,20 @@ export default function CheckoutModal() {
 
     if (!code) return;
 
-    const res = await validateCoupon(code, phone);
+    const res = await validateCoupon(code, phone || 'guest', subtotal);
 
     if (!res.isValid) {
+      let errMsg = t('coupon_invalid');
       if (res.error === 'limit_reached') {
-        setDiscountErr(locale === 'ar' ? 'لقد انتهت صلاحية هذا الكوبون (وصل للحد الأقصى للاستخدام)' : 'This coupon has reached its maximum usage limit.');
+        errMsg = locale === 'ar' ? 'لقد انتهت صلاحية هذا الكوبون (وصل للحد الأقصى للاستخدام)' : 'This coupon has reached its maximum usage limit.';
       } else if (res.error === 'user_limit_reached') {
-        setDiscountErr(locale === 'ar' ? 'لقد استخدمت هذا الكوبون الحد الأقصى المسموح به' : 'You have already reached the maximum usage limit for this coupon.');
-      } else {
-        setDiscountErr(t('coupon_invalid'));
+        errMsg = locale === 'ar' ? 'لقد استخدمت هذا الكوبون الحد الأقصى المسموح به' : 'You have already reached the maximum usage limit for this coupon.';
+      } else if (res.error === 'min_order_not_met') {
+        errMsg = locale === 'ar' ? 'لم يتم الوصول للحد الأدنى المطلوب لتطبيق الكوبون' : 'Minimum order amount not met for this coupon.';
+      } else if (res.error === 'expired') {
+        errMsg = locale === 'ar' ? 'كود الخصم منتهي الصلاحية' : 'This coupon code has expired.';
       }
+      setDiscountErr(errMsg);
       setAppliedDiscount(0);
       return;
     }
@@ -104,17 +159,11 @@ export default function CheckoutModal() {
     setDiscountMsg(t('coupon_success', { discount: `${pct}%` }));
   };
 
-  // Prices calculation
-  const subtotal = originalPrice;
-  const discountAmount = Number(((subtotal * appliedDiscount) / 100).toFixed(2));
-  const shippingFee = 50; // Flat 50 EGP for Egypt
-  const total = subtotal - discountAmount + shippingFee;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !address) return;
+    if (!name || !phone || !governorate || !city || !address) return;
 
-    // Validate phone: Egyptian numbers have 11 digits starting with 01
+    // Phone format Egyptian check
     const cleanPhone = phone.trim();
     if (!/^01[0-25]\d{8}$/.test(cleanPhone)) {
       alert(locale === 'ar' ? 'الرجاء إدخال رقم موبايل مصري صحيح (مثال: 01012345678)' : 'Please enter a valid Egyptian mobile number (e.g. 01012345678)');
@@ -123,57 +172,102 @@ export default function CheckoutModal() {
 
     setIsSubmitting(true);
 
-    // Double-check coupon validity with the entered phone number
+    // Re-verify coupon limits
     if (couponCode.trim()) {
-      const res = await validateCoupon(couponCode, cleanPhone);
+      const res = await validateCoupon(couponCode, cleanPhone, subtotal);
       if (!res.isValid) {
-        let errMsg = locale === 'ar' ? 'الكوبون غير صالح' : 'Invalid coupon code';
-        if (res.error === 'limit_reached') {
-          errMsg = locale === 'ar' ? 'لقد انتهت صلاحية هذا الكوبون (وصل للحد الأقصى للاستخدام)' : 'This coupon has reached its maximum usage limit.';
-        } else if (res.error === 'user_limit_reached') {
-          errMsg = locale === 'ar' ? 'لقد استخدمت هذا الكوبون الحد الأقصى المسموح به' : 'You have already reached the maximum usage limit for this coupon.';
-        }
-        alert(errMsg);
+        alert(locale === 'ar' ? 'الكوبون المطبق غير صالح أو منتهي الصلاحية' : 'The applied coupon is invalid or expired.');
         setAppliedDiscount(0);
         setIsSubmitting(false);
         return;
       }
     }
 
-    const sizeNotes = `Size: ${selectedSize} | Fabric: ${selectedFabric}`;
-    const fullNotes = `${sizeNotes}${notes ? ` | Customer Note: ${notes}` : ''}${appliedDiscount > 0 ? ` | Coupon Code: ${couponCode} (${appliedDiscount}% Off)` : ''}`;
+    // Compile items array for database
+    const orderItems = isSingle && checkoutProduct ? [{
+      id: `${checkoutProduct.id}-${selectedSize}-${selectedFabric}`,
+      product_id: checkoutProduct.id,
+      product_name: singleItemName,
+      size: selectedSize,
+      fabric: selectedFabric,
+      quantity: 1,
+      price: singleItemPrice,
+      image: singleItemImage
+    }] : cart.map(item => ({
+      id: item.id,
+      product_id: item.product.id,
+      product_name: locale === 'ar' ? item.product.name_ar : item.product.name_en,
+      size: item.size,
+      fabric: item.fabric,
+      quantity: item.quantity,
+      price: item.price,
+      image: (item.product.images && item.product.images.length > 0) ? item.product.images[0] : (item.product.category_id === '4' ? '/placeholders/manga_front.jpg' : '/placeholders/arcade_front.jpg')
+    }));
+
+    const primaryProductName = isSingle && checkoutProduct
+      ? `${singleItemName} (${selectedSize})`
+      : cart.map(item => `${locale === 'ar' ? item.product.name_ar : item.product.name_en} (${item.size}) x${item.quantity}`).join(', ');
+
+    const fullNotes = `[Checkout Type: Web]${isSingle ? ` | Fabric: ${selectedFabric}` : ''}${notes ? ` | Customer Note: ${notes}` : ''}${appliedDiscount > 0 ? ` | Coupon Code: ${couponCode.trim()} (${appliedDiscount}% Off)` : ''}${referralCode.trim() ? ` | Referral: ${referralCode.trim()}` : ''}`;
 
     const result = await addOrder({
-      product_id: checkoutProduct.id,
-      product_name: `${productName} (${selectedSize})`,
+      product_id: isSingle && checkoutProduct ? checkoutProduct.id : null,
+      product_name: primaryProductName,
       price: total,
       customer_name: name,
       customer_phone: cleanPhone,
-      location: `${governorate} - ${address}`,
-      notes: fullNotes
+      location: `${governorate} - ${city} - ${address}`,
+      notes: fullNotes,
+      items: orderItems,
+      customer_email: email.trim() || undefined,
+      governorate,
+      city,
+      address,
+      coupon_code: couponCode.trim() || undefined,
+      referral_code: referralCode.trim() || undefined
     });
 
     setIsSubmitting(false);
 
     if (result) {
+      // Clear Cart and local coupon state on success
+      if (!isSingle) clearCart();
+      localStorage.removeItem('ff_applied_coupon');
+      localStorage.removeItem('ff_coupon_discount');
+
       const shortCode = result.id.split('-')[0].toUpperCase();
       setOrderRef(shortCode);
+      setRewardCouponCode(result.reward_coupon_code || '');
       setShowSuccess(true);
     } else {
       alert(locale === 'ar' ? 'فشل إتمام الطلب، الرجاء المحاولة مرة أخرى' : 'Failed to place order. Please try again.');
     }
   };
 
+  const handleClose = () => {
+    if (isSingle) {
+      setCheckoutProduct(null);
+    } else {
+      setIsCheckoutOpen(false);
+    }
+    setShowSuccess(false);
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCoupon(code);
+    setTimeout(() => setCopiedCoupon(null), 2000);
+  };
+
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-end select-none">
-        
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={() => setCheckoutProduct(null)}
+          onClick={handleClose}
           className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
         />
 
@@ -183,153 +277,212 @@ export default function CheckoutModal() {
           animate={{ x: 0 }}
           exit={{ x: locale === 'ar' ? '-100%' : '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="relative w-full max-w-lg h-full bg-[#EDE0D0] border-l-4 rtl:border-l-0 rtl:border-r-4 border-black shadow-2xl flex flex-col justify-between overflow-y-auto z-10"
+          className="relative w-full max-w-md h-full bg-[#EDE0D0] border-l-4 border-black flex flex-col shadow-[[-8px_0px_0px_0px_rgba(0,0,0,1)]] rtl:border-l-0 rtl:border-r-4 z-50"
         >
-          {/* Scrollable container */}
-          <div className="p-6 sm:p-8 flex-1">
-            
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-              <span className="font-handwriting text-2xl text-black/60 rotate-[-1deg] flex items-center gap-1.5">
-                <Ticket size={20} className="rotate-[-5deg]" />
-                {t('title')}
+          {/* Header */}
+          <div className="p-5 border-b-4 border-black bg-white flex justify-between items-center relative">
+            <div className="absolute bottom-[-1px] left-0 right-0 h-1 bg-[radial-gradient(circle,transparent_20%,#000_20%,#000_40%,transparent_40%,transparent_60%,#000_60%)] bg-[length:12px_10px] pointer-events-none"></div>
+            <div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-brand-accent block">
+                {t('ticket_header')}
               </span>
-              <button
-                onClick={() => setCheckoutProduct(null)}
-                className="p-1.5 border-2 border-black bg-white rounded-lg hover:bg-black hover:text-[#EDE0D0] transition-colors cursor-pointer"
-              >
-                <X size={18} />
-              </button>
+              <h3 className="text-xl font-black uppercase text-black">
+                {t('title')}
+              </h3>
             </div>
+            <button
+              onClick={handleClose}
+              className="p-1 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </div>
 
+          {/* Scrollable Form Content */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-6">
             {!showSuccess ? (
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 
                 {/* Product Summary Box */}
-                <div className="p-4 bg-white border-3 border-black rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-[#F2CC8F]/30 rounded-full blur-xl pointer-events-none"></div>
-                  
-                  <div className="flex gap-4 items-center">
-                    <div className="w-16 h-16 border-2 border-black rounded-lg overflow-hidden shrink-0 relative bg-[#EDE0D0]/30 flex items-center justify-center">
-                      <Image
-                        src={(checkoutProduct.images && checkoutProduct.images.length > 0) ? checkoutProduct.images[0] : (checkoutProduct.category_id === '4' ? '/placeholders/manga_front.jpg' : '/placeholders/arcade_front.jpg')}
-                        alt={productName}
-                        fill
-                        unoptimized
-                        className="object-contain p-1"
-                      />
-                    </div>
+                {isSingle && checkoutProduct ? (
+                  <div className="p-4 bg-white border-3 border-black rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-[#F2CC8F]/30 rounded-full blur-xl pointer-events-none"></div>
                     
-                    <div className="flex-1">
-                      <span className="text-[9px] font-black uppercase tracking-wider text-black/50 block mb-0.5">
-                        {tp('unisex')}
-                      </span>
-                      <h4 className="text-sm font-black text-black uppercase leading-tight">
-                        {productName}
-                      </h4>
-                      <div className="mt-1 text-xs font-black text-brand-accent">
-                        {tp('price_egp', { price: originalPrice })}
+                    <div className="flex gap-4 items-center">
+                      <div className="w-16 h-16 border-2 border-black rounded-lg overflow-hidden shrink-0 relative bg-[#EDE0D0]/30 flex items-center justify-center">
+                        <Image
+                          src={singleItemImage}
+                          alt={singleItemName}
+                          fill
+                          unoptimized
+                          className="object-contain p-1"
+                        />
+                      </div>
+                      
+                      <div className="flex-1">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-black/50 block mb-0.5">
+                          {tp('unisex')}
+                        </span>
+                        <h4 className="text-sm font-black text-black uppercase leading-tight">
+                          {singleItemName}
+                        </h4>
+                        <div className="mt-1 text-xs font-black text-brand-accent">
+                          {tp('price_egp', { price: singleItemPrice })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Sizing triggers directly in checkout */}
+                    <div className="mt-4 pt-3 border-t border-black/10 grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[9px] font-black uppercase text-black/40 block mb-1">
+                          {tp('sizes')}
+                        </label>
+                        <select
+                          value={selectedSize}
+                          onChange={(e) => setSelectedSize(e.target.value)}
+                          className="text-[10px] font-bold border-2 border-black rounded px-1.5 py-0.5 bg-white text-black w-full"
+                        >
+                          {checkoutProduct.available_sizes.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-black uppercase text-black/40 block mb-1">
+                          {tp('material')}
+                        </label>
+                        <select
+                          value={selectedFabric}
+                          onChange={(e) => setSelectedFabric(e.target.value)}
+                          className="text-[10px] font-bold border-2 border-black rounded px-1.5 py-0.5 bg-white text-black w-full"
+                        >
+                          {checkoutProduct.material_options.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>
-
-                  {/* Quick Sizing triggers directly in checkout */}
-                  <div className="mt-3.5 pt-3.5 border-t border-black/10 grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-[10px] font-black uppercase text-black/50 block mb-1">
-                        Size Selection
-                      </span>
-                      <div className="flex gap-1.5">
-                        {checkoutProduct.available_sizes.map((size) => (
-                          <button
-                            key={size}
-                            type="button"
-                            onClick={() => setSelectedSize(size)}
-                            className={`w-7 h-7 text-[10px] font-black rounded border-2 border-black flex items-center justify-center transition-all ${
-                              selectedSize === size
-                                ? 'bg-black text-[#EDE0D0] scale-95 shadow-sm'
-                                : 'bg-[#EDE0D0]/20 text-black hover:bg-black/5'
-                            }`}
-                          >
-                            {size}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-black uppercase text-black/50 block mb-1">
-                        Fabric Selection
-                      </span>
-                      <select
-                        value={selectedFabric}
-                        onChange={(e) => setSelectedFabric(e.target.value)}
-                        className="text-[10px] font-bold border-2 border-black rounded px-1.5 py-0.5 bg-white text-black w-full"
-                      >
-                        {checkoutProduct.material_options.map((m) => (
-                          <option key={m} value={m}>
-                            {m === 'Standard Cotton' ? 'Standard 100%' : 'Premium Heavy'}
-                          </option>
-                        ))}
-                      </select>
+                ) : (
+                  /* Cart Summary */
+                  <div className="p-4 bg-white border-3 border-black rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] space-y-2">
+                    <h4 className="text-xs font-black uppercase text-black/50 pb-2 border-b border-black/10">
+                      {locale === 'ar' ? 'ملخص المنتجات' : 'Cart Items Summary'}
+                    </h4>
+                    <div className="max-h-36 overflow-y-auto divide-y divide-black/10 pr-1 space-y-2 pt-1">
+                      {cart.map((item) => (
+                        <div key={item.id} className="flex justify-between items-center text-xs pt-1 pb-1">
+                          <div className="min-w-0">
+                            <span className="font-black text-black block truncate uppercase">{locale === 'ar' ? item.product.name_ar : item.product.name_en}</span>
+                            <span className="text-[9px] text-black/60 font-semibold block uppercase">
+                              {locale === 'ar' ? `مقاس ${item.size} • ${item.fabric === 'Standard Cotton' ? 'قطن قياسي' : 'قطن ثقيل'}` : `Size ${item.size} • ${item.fabric}`} x{item.quantity}
+                            </span>
+                          </div>
+                          <span className="font-black text-brand-accent shrink-0">
+                            {tp('price_egp', { price: item.price * item.quantity })}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Name */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5 flex items-center gap-1.5">
-                    <User size={14} className="text-black/55" />
-                    {t('name_label')}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder={t('name_placeholder')}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:ring-1 focus:ring-black"
-                  />
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5 flex items-center gap-1.5">
-                    <Phone size={14} className="text-black/55" />
-                    {t('phone_label')}
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    maxLength={11}
-                    placeholder={t('phone_placeholder')}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-4 py-2.5 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:ring-1 focus:ring-black"
-                  />
-                </div>
-
-                {/* Governorate & Address */}
+                {/* Delivery Fields Group */}
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-black uppercase text-black/60 block mb-1.5 flex items-center gap-1.5">
-                      <MapPin size={14} className="text-black/55" />
-                      {t('governorate_label')}
+                    <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                      {t('name_label')}
                     </label>
-                    <select
-                      value={governorate}
-                      onChange={(e) => setGovernorate(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
-                    >
-                      {governorates.map((gov) => (
-                        <option key={gov} value={gov}>
-                          {gov}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative flex items-center">
+                      <User className="absolute left-3 text-black/40" size={14} />
+                      <input
+                        type="text"
+                        required
+                        placeholder={t('name_placeholder')}
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                        {t('phone_label')}
+                      </label>
+                      <div className="relative flex items-center">
+                        <Phone className="absolute left-3 text-black/40" size={14} />
+                        <input
+                          type="tel"
+                          required
+                          placeholder={t('phone_placeholder')}
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className="w-full pl-9 pr-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                        {locale === 'ar' ? 'البريد الإلكتروني (اختياري)' : 'Email (Optional)'}
+                      </label>
+                      <div className="relative flex items-center">
+                        <Mail className="absolute left-3 text-black/40" size={14} />
+                        <input
+                          type="email"
+                          placeholder="e.g. mail@domain.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="w-full pl-9 pr-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                        {t('governorate_label')}
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={governorate}
+                          onChange={(e) => setGovernorate(e.target.value)}
+                          className="w-full px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none appearance-none"
+                        >
+                          {governorates.map((gov) => (
+                            <option key={gov} value={gov}>
+                              {gov}
+                            </option>
+                          ))}
+                        </select>
+                        <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none" size={14} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                        {locale === 'ar' ? 'المدينة / المنطقة' : 'City / District'}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Heliopolis"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        className="w-full px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
+                    <label className="text-xs font-black uppercase text-black/60 block mb-1">
                       {t('address_label')}
                     </label>
                     <textarea
@@ -338,43 +491,60 @@ export default function CheckoutModal() {
                       placeholder={t('address_placeholder')}
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none resize-none"
+                      className="w-full px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none resize-none"
                     />
                   </div>
                 </div>
 
-                {/* Discount Code Section */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
-                    {t('coupon_label')}
-                  </label>
-                  <div className="flex gap-2">
+                {/* Promo Code & Referral Group */}
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-black/10">
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-black/60 block mb-1 flex items-center gap-1">
+                      <Ticket size={11} className="text-brand-accent" />
+                      {t('coupon_label')}
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        placeholder={t('coupon_placeholder')}
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                        className="flex-1 min-w-0 px-2 py-1 bg-white text-black font-semibold border-2 border-black rounded-lg text-xs focus:outline-none uppercase"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyCoupon}
+                        className="px-2 py-1 bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white border-2 border-black rounded-lg font-black uppercase text-[10px] cursor-pointer shrink-0 transition-colors"
+                      >
+                        {t('coupon_apply')}
+                      </button>
+                    </div>
+                    {discountMsg && (
+                      <p className="text-[9px] font-black text-green-600 mt-0.5">{discountMsg}</p>
+                    )}
+                    {discountErr && (
+                      <p className="text-[9px] font-black text-red-500 mt-0.5">⚠️ {discountErr}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-black/60 block mb-1 flex items-center gap-1">
+                      <HelpCircle size={11} className="text-brand-accent" />
+                      {locale === 'ar' ? 'كود الإحالة (اختياري)' : 'Referral Code (Optional)'}
+                    </label>
                     <input
                       type="text"
-                      placeholder={t('coupon_placeholder')}
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      className="flex-1 px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
+                      placeholder="e.g. REFER-MARK82"
+                      value={referralCode}
+                      onChange={(e) => setReferralCode(e.target.value)}
+                      className="w-full px-3 py-1 bg-white text-black font-semibold border-2 border-black rounded-lg text-xs focus:outline-none uppercase"
                     />
-                    <button
-                      type="button"
-                      onClick={handleApplyCoupon}
-                      className="px-4 py-2 bg-black text-[#EDE0D0] hover:bg-[#E07A5F] hover:text-white border-2 border-black rounded-xl font-black uppercase text-xs transition-colors cursor-pointer"
-                    >
-                      {t('coupon_apply')}
-                    </button>
                   </div>
-                  {discountMsg && (
-                    <p className="text-[10px] font-black text-green-600 mt-1">{discountMsg}</p>
-                  )}
-                  {discountErr && (
-                    <p className="text-[10px] font-black text-red-500 mt-1">⚠️ {discountErr}</p>
-                  )}
                 </div>
 
                 {/* Additional notes */}
                 <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
+                  <label className="text-xs font-black uppercase text-black/60 block mb-1">
                     {t('notes_label')}
                   </label>
                   <textarea
@@ -388,9 +558,9 @@ export default function CheckoutModal() {
 
                 {/* Price Breakdown */}
                 <div className="p-4 border-2 border-dashed border-black/45 bg-white/40 rounded-xl space-y-2 text-xs">
-                  <div className="flex justify-between items-center text-black/60">
-                    <span className="font-bold">{t('price_subtotal')}</span>
-                    <span className="font-black">{tp('price_egp', { price: subtotal })}</span>
+                  <div className="flex justify-between items-center text-black/60 font-semibold">
+                    <span>{t('price_subtotal')}</span>
+                    <span>{tp('price_egp', { price: subtotal })}</span>
                   </div>
                   {appliedDiscount > 0 && (
                     <div className="flex justify-between items-center text-green-600 font-bold">
@@ -398,9 +568,9 @@ export default function CheckoutModal() {
                       <span>-{tp('price_egp', { price: discountAmount })}</span>
                     </div>
                   )}
-                  <div className="flex justify-between items-center text-black/60">
-                    <span className="font-bold">{t('price_shipping')}</span>
-                    <span className="font-black">{tp('price_egp', { price: shippingFee })}</span>
+                  <div className="flex justify-between items-center text-black/60 font-semibold">
+                    <span>{t('price_shipping')}</span>
+                    <span>{tp('price_egp', { price: shippingFee })}</span>
                   </div>
                   <div className="flex justify-between items-center text-black border-t border-black/10 pt-2 text-sm font-black">
                     <span>{t('price_total')}</span>
@@ -420,26 +590,25 @@ export default function CheckoutModal() {
               </form>
             ) : (
               /* Success Screen */
-              <div className="text-center py-10 space-y-6">
+              <div className="text-center py-6 space-y-6">
                 
                 {/* Floating Success Ticket */}
-                <div className="bg-white border-4 border-black p-6 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative max-w-sm mx-auto overflow-hidden rotate-[1deg]">
-                  {/* Decorative Ticket Edges */}
-                  <div className="absolute top-1/2 left-[-10px] w-6 h-6 bg-[#EDE0D0] border-2 border-black rounded-full transform -translate-y-1/2"></div>
-                  <div className="absolute top-1/2 right-[-10px] w-6 h-6 bg-[#EDE0D0] border-2 border-black rounded-full transform -translate-y-1/2"></div>
+                <div className="bg-white border-4 border-black p-5 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative max-w-sm mx-auto overflow-hidden rotate-[1deg]">
+                  <div className="absolute top-1/2 left-[-12px] w-6 h-6 bg-[#EDE0D0] border-2 border-black rounded-full transform -translate-y-1/2"></div>
+                  <div className="absolute top-1/2 right-[-12px] w-6 h-6 bg-[#EDE0D0] border-2 border-black rounded-full transform -translate-y-1/2"></div>
                   
-                  <CheckCircle size={56} className="mx-auto text-green-600 mb-4 animate-bounce" />
+                  <CheckCircle size={48} className="mx-auto text-green-600 mb-3 animate-bounce" />
                   
-                  <h4 className="text-2xl font-black uppercase text-black">
+                  <h4 className="text-xl font-black uppercase text-black">
                     {t('success_title')}
                   </h4>
                   
-                  <p className="text-xs font-semibold text-black/70 leading-relaxed font-handwriting mt-3 mb-5 px-3">
+                  <p className="text-xs font-semibold text-black/70 leading-relaxed font-handwriting mt-2 mb-4 px-2">
                     {t('success_desc')}
                   </p>
 
-                  <div className="p-3 bg-[#EDE0D0]/30 border-2 border-dashed border-black/40 rounded-xl">
-                    <span className="text-[10px] uppercase font-black text-black/45 block mb-1">
+                  <div className="p-2.5 bg-[#EDE0D0]/30 border-2 border-dashed border-black/40 rounded-xl">
+                    <span className="text-[9px] uppercase font-black text-black/45 block mb-0.5">
                       {t('order_ref')}
                     </span>
                     <span className="text-lg font-black tracking-widest text-brand-accent block">
@@ -448,16 +617,69 @@ export default function CheckoutModal() {
                   </div>
                 </div>
 
+                {/* EARNED REWARDS TICKET SECTION */}
+                {rewardCouponCode && (
+                  <div className="bg-white border-4 border-black p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] max-w-sm mx-auto relative overflow-hidden -rotate-[1deg] space-y-3">
+                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#E07A5F]"></div>
+                    <div className="flex justify-center items-center gap-1.5 text-brand-accent">
+                      <Tag size={16} className="animate-pulse" />
+                      <span className="text-xs font-black uppercase tracking-wider">
+                        {tc('reward_earned')}
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-black/10 space-y-3">
+                      {rewardCouponCode.split(',').map((codeSegment, index) => {
+                        const code = codeSegment.trim();
+                        const isCotton = code.startsWith('COTTON-');
+                        const rewardText = isCotton 
+                          ? (locale === 'ar' ? 'خصم ٢٥٪ على طلبك القادم!' : '25% OFF next purchase!')
+                          : (locale === 'ar' ? 'خصم ١٥٪ على طلبك القادم!' : '15% OFF next purchase!');
+                        const rewardTitle = isCotton 
+                          ? tc('cotton_reward') 
+                          : tc('referral_reward');
+
+                        return (
+                          <div key={index} className="pt-2">
+                            <span className="text-[10px] font-black uppercase text-black/50 block">
+                              {rewardTitle}
+                            </span>
+                            <span className="text-sm font-black text-brand-accent block mt-0.5">
+                              {rewardText}
+                            </span>
+                            
+                            <div className="mt-2 flex items-center justify-between bg-[#EDE0D0] border-2 border-black rounded-lg px-3 py-1.5 font-mono text-xs font-black text-black">
+                              <span>{code}</span>
+                              <button
+                                onClick={() => handleCopyCode(code)}
+                                className="p-1 border border-black/15 hover:bg-black/5 rounded cursor-pointer transition-colors"
+                              >
+                                {copiedCoupon === code ? (
+                                  <Check size={14} className="text-green-600" />
+                                ) : (
+                                  <Copy size={14} />
+                                )}
+                              </button>
+                            </div>
+                            <span className="text-[9px] font-bold text-black/40 block mt-1 leading-none">
+                              {locale === 'ar' ? '* الكود سيتفعل تلقائياً بعد استلام طلبك الحالي' : '* Activates automatically once your order is Completed'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <button
-                  onClick={() => setCheckoutProduct(null)}
-                  className="px-8 py-3 bg-black text-[#EDE0D0] hover:bg-black/90 border-3 border-black rounded-xl font-black uppercase text-xs tracking-wider sticker cursor-pointer transition-colors"
+                  onClick={handleClose}
+                  className="px-8 py-3 bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white border-3 border-black rounded-xl font-black uppercase text-xs tracking-wider sticker cursor-pointer transition-all duration-300"
                 >
                   {t('close_btn')}
                 </button>
 
               </div>
             )}
-
           </div>
         </motion.div>
       </div>

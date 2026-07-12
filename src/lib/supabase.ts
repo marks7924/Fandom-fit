@@ -274,8 +274,8 @@ const getMockDb = () => {
 
   if (offers.length === 0) {
     offers = [
-      { id: 'o1', title_en: '25% OFF Premium Cotton Material', title_ar: 'خصم 25% على خامة القطن الفاخر', description_en: 'Get 25% off the premium heavy cotton upgrade for your second item.', description_ar: 'احصل على خصم 25% عند الترقية إلى خامة القطن الثقيل الفاخر للقطعة الثانية.', discount_text_en: '25% OFF', discount_text_ar: 'خصم 25%', code: 'PREMIUM25', is_active: true },
-      { id: 'o2', title_en: 'Refer a Friend — Get 15% OFF', title_ar: 'رشح صديقاً — واحصل على 15% خصم', description_en: 'Tag a friend in our DMs. You both get 15% off your next fandom print.', description_ar: 'منشن صديقاً في رسائلنا. ستحصلان كلاهما على خصم 15% على طباعة الفاندوم التالية.', discount_text_en: '15% OFF', discount_text_ar: 'خصم 15%', code: 'FRIENDS15', is_active: true }
+      { id: 'o1', title_en: '25% OFF Premium Cotton Material', title_ar: 'خصم 25% على خامة القطن الفاخر', description_en: 'Get 25% off the premium heavy cotton upgrade for your second item.', description_ar: 'احصل على خصم 25% عند الترقية إلى خامة القطن الثقيل الفاخر للقطعة الثانية.', discount_text_en: '25% OFF', discount_text_ar: 'خصم 25%', code: 'PREMIUM25', is_active: true, discount_type: 'percentage', discount_value: 25, coupon_type: 'manual', is_one_time: false, is_public: true },
+      { id: 'o2', title_en: 'Refer a Friend — Get 15% OFF', title_ar: 'رشح صديقاً — واحصل على 15% خصم', description_en: 'Tag a friend in our DMs. You both get 15% off your next fandom print.', description_ar: 'منشن صديقاً في رسائلنا. ستحصلان كلاهما على خصم 15% على طباعة الفاندوم التالية.', discount_text_en: '15% OFF', discount_text_ar: 'خصم 15%', code: 'FRIENDS15', is_active: true, discount_type: 'percentage', discount_value: 15, coupon_type: 'manual', is_one_time: false, is_public: true }
     ];
     localStorage.setItem(offersKey, JSON.stringify(offers));
   }

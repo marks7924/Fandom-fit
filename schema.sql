@@ -62,6 +62,15 @@ CREATE TABLE IF NOT EXISTS offers (
     max_uses_per_user INT,
     is_active BOOLEAN DEFAULT TRUE,
     show_on_homepage BOOLEAN DEFAULT FALSE,
+    discount_type VARCHAR(50) DEFAULT 'percentage',
+    discount_value DECIMAL(10, 2) DEFAULT 0.00,
+    coupon_type VARCHAR(50) DEFAULT 'manual',
+    min_order_amount DECIMAL(10, 2) DEFAULT 0.00,
+    current_uses INT DEFAULT 0,
+    is_one_time BOOLEAN DEFAULT FALSE,
+    is_public BOOLEAN DEFAULT TRUE,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    referred_phone VARCHAR(50),
     start_date TIMESTAMP WITH TIME ZONE,
     end_date TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -111,6 +120,14 @@ CREATE TABLE IF NOT EXISTS orders (
     location VARCHAR(255) NOT NULL,
     notes TEXT,
     status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'completed'
+    items JSONB,
+    customer_email VARCHAR(255),
+    governorate VARCHAR(100),
+    city VARCHAR(100),
+    address TEXT,
+    coupon_code VARCHAR(100),
+    referral_code VARCHAR(100),
+    reward_coupon_code VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
