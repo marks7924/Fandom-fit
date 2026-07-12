@@ -17,7 +17,7 @@ export default function Navbar() {
   
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [logoError, setLogoError] = useState(false);
+
 
   const setIsTrackOrderOpen = useStore((state) => state.setIsTrackOrderOpen);
 
@@ -63,24 +63,10 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-12">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <a href="#home" className="flex items-center gap-2">
-              {!logoError ? (
-                <div className="relative h-10 w-32">
-                  <Image
-                    src="/logo/logo.jpg"
-                    alt="Fandom Fit"
-                    fill
-                    unoptimized
-                    onError={() => setLogoError(true)}
-                    className="object-contain"
-                    priority
-                  />
-                </div>
-              ) : (
-                <span className="font-handwriting text-3xl font-bold tracking-tight text-black">
-                  Fandom Fit
-                </span>
-              )}
+             <a href="#home" className="flex items-center gap-2">
+               <span className="font-handwriting text-3xl font-bold tracking-tight text-black select-none">
+                 Fandom Fit
+               </span>
             </a>
           </div>
 
