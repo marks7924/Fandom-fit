@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { useStore } from '@/lib/store';
-import Image from 'next/image';
 import { Menu, X, Globe, ShoppingBag } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import TrackOrderModal from './TrackOrderModal';
+import BrandLogo from './BrandLogo';
 
 export default function Navbar() {
   const t = useTranslations('nav');
@@ -63,10 +63,8 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-12">
           {/* Logo */}
           <div className="flex-shrink-0">
-             <a href="#home" className="flex items-center gap-2">
-               <span className="font-handwriting text-3xl font-bold tracking-tight text-black select-none">
-                 Fandom Fit
-               </span>
+            <a href="#home">
+              <BrandLogo color="black" scale={0.55} />
             </a>
           </div>
 

@@ -1,10 +1,9 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useState } from 'react';
-import Image from 'next/image';
 import { Globe } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
+import BrandLogo from './BrandLogo';
 
 function FacebookIcon({ size = 20, className = '' }: { size?: number; className?: string }) {
   return (
@@ -46,9 +45,7 @@ export default function Footer() {
           {/* Logo & Info column */}
           <div className="flex flex-col gap-4">
             <a href="#home" className="inline-block select-none">
-              <span className="font-handwriting text-3xl font-bold tracking-tight text-white">
-                Fandom Fit
-              </span>
+              <BrandLogo color="#EDE0D0" scale={0.6} />
             </a>
             <p className="text-xs font-semibold uppercase tracking-wider text-[#EDE0D0]/60 font-handwriting leading-relaxed max-w-xs">
               {locale === 'ar' 

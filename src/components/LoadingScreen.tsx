@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import BrandLogo from './BrandLogo';
 
 export default function LoadingScreen() {
   return (
@@ -8,38 +9,18 @@ export default function LoadingScreen() {
       {/* Dot grid background */}
       <div className="absolute inset-0 notebook-grid opacity-40" />
 
-      <div className="relative flex flex-col items-center gap-4">
-        {/* Brand name — same handwriting mark as navbar */}
+      <div className="relative flex flex-col items-center gap-6">
+        {/* Brand mark — animated crown + handwriting text */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
-          className="flex flex-col items-center leading-none"
+          transition={{ duration: 0.45, ease: 'easeOut' }}
         >
-          <span className="text-[clamp(2.5rem,10vw,4.5rem)] font-black uppercase tracking-tight text-black">
-            FANDOM
-          </span>
-          <motion.span
-            className="font-handwriting text-[clamp(2rem,8vw,3.5rem)] text-black -mt-2"
-            animate={{ rotate: [-1.5, 1.5, -1.5] }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            Fit
-          </motion.span>
+          <BrandLogo color="black" scale={1.35} />
         </motion.div>
 
-        {/* Tagline */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="font-handwriting text-sm text-black/50 tracking-wide"
-        >
-          Wear What You Love.
-        </motion.p>
-
         {/* Bouncing dots */}
-        <div className="flex gap-3 mt-2">
+        <div className="flex gap-3">
           {[0, 1, 2].map((i) => (
             <motion.div
               key={i}
