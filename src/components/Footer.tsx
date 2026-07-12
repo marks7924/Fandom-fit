@@ -47,15 +47,16 @@ export default function Footer() {
           <div className="flex flex-col gap-4">
             <a href="#home" className="inline-block select-none">
               {!logoError ? (
-                <Image
-                  src="/logo/logo.jpg"
-                  alt="Fandom Fit"
-                  width={140}
-                  height={45}
-                  unoptimized
-                  onError={() => setLogoError(true)}
-                  className="h-10 w-auto object-contain invert"
-                />
+                <div className="relative w-12 h-12 border-2 border-[#EDE0D0] bg-white rounded-xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(237,224,208,1)] flex items-center justify-center p-0.5 transition-all">
+                  <Image
+                    src="/logo/logo.jpg"
+                    alt="Fandom Fit"
+                    fill
+                    unoptimized
+                    onError={() => setLogoError(true)}
+                    className="object-contain p-0.5"
+                  />
+                </div>
               ) : (
                 <span className="font-handwriting text-3xl font-bold tracking-tight text-white">
                   Fandom Fit

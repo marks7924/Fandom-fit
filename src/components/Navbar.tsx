@@ -65,16 +65,17 @@ export default function Navbar() {
           <div className="flex-shrink-0">
             <a href="#home" className="flex items-center gap-2">
               {!logoError ? (
-                <Image
-                  src="/logo/logo.jpg"
-                  alt="Fandom Fit"
-                  width={140}
-                  height={45}
-                  unoptimized
-                  onError={() => setLogoError(true)}
-                  className="h-10 w-auto object-contain"
-                  priority
-                />
+                <div className="relative w-10 h-10 border-2 border-black bg-white rounded-xl overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center p-0.5 hover:translate-y-[-1px] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-[1px] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all">
+                  <Image
+                    src="/logo/logo.jpg"
+                    alt="Fandom Fit"
+                    fill
+                    unoptimized
+                    onError={() => setLogoError(true)}
+                    className="object-contain p-0.5"
+                    priority
+                  />
+                </div>
               ) : (
                 <span className="font-handwriting text-3xl font-bold tracking-tight text-black">
                   Fandom Fit
