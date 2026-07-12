@@ -28,7 +28,7 @@ export default function Footer() {
   const t = useTranslations('footer');
   const tn = useTranslations('nav');
   const locale = useLocale();
-  const [logoError, setLogoError] = useState(false);
+
 
   const currentYear = new Date().getFullYear();
 
@@ -46,22 +46,9 @@ export default function Footer() {
           {/* Logo & Info column */}
           <div className="flex flex-col gap-4">
             <a href="#home" className="inline-block select-none">
-              {!logoError ? (
-                <div className="relative h-12 w-36">
-                  <Image
-                    src="/logo/logo.jpg"
-                    alt="Fandom Fit"
-                    fill
-                    unoptimized
-                    onError={() => setLogoError(true)}
-                    className="object-contain"
-                  />
-                </div>
-              ) : (
-                <span className="font-handwriting text-3xl font-bold tracking-tight text-white">
-                  Fandom Fit
-                </span>
-              )}
+              <span className="font-handwriting text-3xl font-bold tracking-tight text-white">
+                Fandom Fit
+              </span>
             </a>
             <p className="text-xs font-semibold uppercase tracking-wider text-[#EDE0D0]/60 font-handwriting leading-relaxed max-w-xs">
               {locale === 'ar' 
