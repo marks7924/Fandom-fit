@@ -14,6 +14,7 @@ import CheckoutModal from '@/components/CheckoutModal';
 import CartDrawer from '@/components/CartDrawer';
 import LoadingScreen from '@/components/LoadingScreen';
 import TrackOrderModal from '@/components/TrackOrderModal';
+import InviteFriendsModal from '@/components/InviteFriendsModal';
 
 export default function ProductDetailPage({ params }: { params: Promise<{ slug: string, locale: string }> }) {
   const t = useTranslations('product_detail');
@@ -337,6 +338,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
       <CheckoutModal />
       <CartDrawer />
       <TrackOrderModal />
+      <InviteFriendsModal />
     </>
   );
 }

@@ -83,7 +83,9 @@ export default function AdminPage() {
     announcement_ar: '',
     fabric_premium_premium: 50,
     fabric_premium_heavy: 100,
-    fabric_premium_oversized: 150
+    fabric_premium_oversized: 150,
+    cotton_reward_system_enabled: true,
+    referral_reward_system_enabled: true
   });
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
@@ -137,7 +139,9 @@ export default function AdminPage() {
         announcement_ar: settings.announcement_ar || '',
         fabric_premium_premium: Number(premiums.premium ?? 50),
         fabric_premium_heavy: Number(premiums.heavy ?? 100),
-        fabric_premium_oversized: Number(premiums.oversized ?? 150)
+        fabric_premium_oversized: Number(premiums.oversized ?? 150),
+        cotton_reward_system_enabled: settings.cotton_reward_system_enabled !== false,
+        referral_reward_system_enabled: settings.referral_reward_system_enabled !== false
       });
     }
   }, [isAuthenticated, settings]);
@@ -1719,6 +1723,36 @@ export default function AdminPage() {
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
                     />
                   </div>
+                </div>
+              </div>
+
+              <div className="border-t border-zinc-800 pt-4 space-y-3">
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">System Reward Engine Controls</label>
+                
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="cotton_reward_system_enabled"
+                    checked={settingsForm.cotton_reward_system_enabled}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, cotton_reward_system_enabled: e.target.checked })}
+                    className="accent-brand-accent animate-none" 
+                  />
+                  <label htmlFor="cotton_reward_system_enabled" className="text-xs font-bold text-zinc-300 select-none">
+                    🧶 Enable Cotton Reward System & Cart Discounts (25% OFF 2nd Item)
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="referral_reward_system_enabled"
+                    checked={settingsForm.referral_reward_system_enabled}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, referral_reward_system_enabled: e.target.checked })}
+                    className="accent-brand-accent animate-none" 
+                  />
+                  <label htmlFor="referral_reward_system_enabled" className="text-xs font-bold text-zinc-300 select-none">
+                    🎁 Enable Referral Reward Sharing System (15% OFF)
+                  </label>
                 </div>
               </div>
 

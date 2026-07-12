@@ -126,6 +126,8 @@ interface StoreState {
   checkoutProduct: Product | null;
   isTrackOrderOpen: boolean;
   setIsTrackOrderOpen: (open: boolean) => void;
+  isInviteOpen: boolean;
+  setIsInviteOpen: (open: boolean) => void;
   
   // Cart State & Actions
   cart: CartItem[];
@@ -216,6 +218,9 @@ export const useStore = create<StoreState>((set, get) => ({
   previewProduct: null,
   checkoutProduct: null,
   isTrackOrderOpen: false,
+  setIsTrackOrderOpen: (open) => set({ isTrackOrderOpen: open }),
+  isInviteOpen: false,
+  setIsInviteOpen: (open) => set({ isInviteOpen: open }),
 
   cart: typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('ff_cart') || '[]') : [],
   isCartOpen: false,
@@ -281,8 +286,6 @@ export const useStore = create<StoreState>((set, get) => ({
     localStorage.setItem('ff_cart', '[]');
   },
 
-  setIsTrackOrderOpen: (open) => set({ isTrackOrderOpen: open }),
-
   fetchInitialData: async () => {
     set({ isLoading: true });
     try {
@@ -297,6 +300,14 @@ export const useStore = create<StoreState>((set, get) => ({
         settingsData.forEach((row: any) => {
           settingsMap[row.key] = row.value;
         });
+      }
+
+      // Default system settings
+      if (settingsMap.cotton_reward_system_enabled === undefined) {
+        settingsMap.cotton_reward_system_enabled = true;
+      }
+      if (settingsMap.referral_reward_system_enabled === undefined) {
+        settingsMap.referral_reward_system_enabled = true;
       }
 
       set({
@@ -362,7 +373,8 @@ export const useStore = create<StoreState>((set, get) => ({
                  item.fabric.toLowerCase().includes('cotton');
         }));
 
-      if (hasCottonItem) {
+      const isCottonEnabled = get().settings.cotton_reward_system_enabled !== false;
+      if (hasCottonItem && isCottonEnabled) {
         const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
         const code = `COTTON-${randomString}`;
         rewardCouponCode = code;
@@ -408,8 +420,9 @@ export const useStore = create<StoreState>((set, get) => ({
         }
       }
 
-      // Ensure referrer isn't referring themselves
-      if (referrerPhone && referrerPhone.trim() && referrerPhone.trim() !== order.customer_phone.trim()) {
+      // Ensure referrer isn't referring themselves and referral system is enabled
+      const isReferralEnabled = get().settings.referral_reward_system_enabled !== false;
+      if (referrerPhone && referrerPhone.trim() && referrerPhone.trim() !== order.customer_phone.trim() && isReferralEnabled) {
         const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
         const thankYouCode = `THANKS-${randomString}`;
 
@@ -864,11 +877,11 @@ export interface CartTotals {
   finalTotal: number;
 }
 
-export const getCartTotals = (cart: CartItem[]): CartTotals => {
+export const getCartTotals = (cart: CartItem[], cottonEnabled: boolean = true): CartTotals => {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
   let cottonDiscount = 0;
-  const hasCotton = cart.some(item => item.product.gives_cotton_reward === true);
+  const hasCotton = cottonEnabled && cart.some(item => item.product.gives_cotton_reward === true);
   const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
   
   if (hasCotton && totalQty >= 2) {

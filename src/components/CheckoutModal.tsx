@@ -22,7 +22,8 @@ export default function CheckoutModal() {
     clearCart,
     addOrder,
     validateCoupon,
-    getProductEffectivePrice
+    getProductEffectivePrice,
+    settings
   } = useStore();
 
   const [name, setName] = useState('');
@@ -126,7 +127,8 @@ export default function CheckoutModal() {
     subtotal = singleItemPrice;
     shippingFee = subtotal > 0 ? 50 : 0;
   } else {
-    const totals = getCartTotals(cart);
+    const cottonEnabled = settings.cotton_reward_system_enabled !== false;
+    const totals = getCartTotals(cart, cottonEnabled);
     subtotal = totals.subtotal;
     cottonDiscount = totals.cottonDiscount;
     shippingFee = totals.shipping;
@@ -537,8 +539,8 @@ export default function CheckoutModal() {
                 </div>
 
                 {/* Promo Code & Referral Group */}
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-black/10">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-black/10">
+                  <div className={settings.referral_reward_system_enabled !== false ? "" : "sm:col-span-2"}>
                     <label className="text-[10px] font-black uppercase text-black/60 block mb-1 flex items-center gap-1">
                       <Ticket size={11} className="text-brand-accent" />
                       {t('coupon_label')}
@@ -567,19 +569,21 @@ export default function CheckoutModal() {
                     )}
                   </div>
 
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-black/60 block mb-1 flex items-center gap-1">
-                      <HelpCircle size={11} className="text-brand-accent" />
-                      {locale === 'ar' ? 'كود الإحالة (اختياري)' : 'Referral Code (Optional)'}
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. REFER-MARK82"
-                      value={referralCode}
-                      onChange={(e) => setReferralCode(e.target.value)}
-                      className="w-full px-3 py-1 bg-white text-black font-semibold border-2 border-black rounded-lg text-xs focus:outline-none uppercase"
-                    />
-                  </div>
+                  {settings.referral_reward_system_enabled !== false && (
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-black/60 block mb-1 flex items-center gap-1">
+                        <HelpCircle size={11} className="text-brand-accent" />
+                        {locale === 'ar' ? 'كود الإحالة (اختياري)' : 'Referral Code (Optional)'}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. REFER-MARK82"
+                        value={referralCode}
+                        onChange={(e) => setReferralCode(e.target.value)}
+                        className="w-full px-3 py-1 bg-white text-black font-semibold border-2 border-black rounded-lg text-xs focus:outline-none uppercase"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Additional notes */}

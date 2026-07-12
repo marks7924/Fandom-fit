@@ -9,6 +9,7 @@ import Collections from '@/components/Collections';
 import Showcase from '@/components/Showcase';
 import CustomDesignForm from '@/components/CustomDesignForm';
 import Offers from '@/components/Offers';
+import ReferralBanner from '@/components/ReferralBanner';
 import WhyChooseUs from '@/components/WhyChooseUs';
 import AboutUs from '@/components/AboutUs';
 import Shipping from '@/components/Shipping';
@@ -17,6 +18,7 @@ import ProductQuickPreview from '@/components/ProductQuickPreview';
 import CheckoutModal from '@/components/CheckoutModal';
 import CartDrawer from '@/components/CartDrawer';
 import TrackOrderModal from '@/components/TrackOrderModal';
+import InviteFriendsModal from '@/components/InviteFriendsModal';
 import Footer from '@/components/Footer';
 import LoadingScreen from '@/components/LoadingScreen';
 
@@ -54,6 +56,7 @@ export default function Home() {
         <Showcase />
         <CustomDesignForm />
         <Offers />
+        <ReferralBanner />
         <WhyChooseUs />
         <AboutUs />
         <Shipping />
@@ -69,6 +72,8 @@ export default function Home() {
       <CartDrawer />
       {/* Track Order modal overlay */}
       <TrackOrderModal />
+      {/* Invite Friends modal overlay */}
+      <InviteFriendsModal />
     </>
   );
 }

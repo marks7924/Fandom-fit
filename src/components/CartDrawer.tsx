@@ -21,6 +21,7 @@ export default function CartDrawer() {
     removeFromCart,
     setIsCheckoutOpen,
     validateCoupon,
+    settings,
   } = useStore();
 
   const [promoCode, setPromoCode] = useState('');
@@ -33,7 +34,8 @@ export default function CartDrawer() {
   if (!isCartOpen) return null;
 
   // Subtotal & Cotton Promotion Calculations
-  const { subtotal, cottonDiscount, shipping, finalTotal } = getCartTotals(cart);
+  const cottonEnabled = settings.cotton_reward_system_enabled !== false;
+  const { subtotal, cottonDiscount, shipping, finalTotal } = getCartTotals(cart, cottonEnabled);
   const shippingFee = shipping;
 
   // Discount Calculation
