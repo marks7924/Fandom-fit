@@ -48,7 +48,7 @@ export default function Footer() {
             <a href="#home" className="inline-block select-none">
               {!logoError ? (
                 <Image
-                  src="/logo/logo.png"
+                  src="/logo/logo.jpg"
                   alt="Fandom Fit"
                   width={140}
                   height={45}

@@ -32,6 +32,7 @@ export interface Product {
   images: string[];
   is_pinned?: boolean;
   gives_cotton_reward?: boolean;
+  tags?: string[];
 }
 
 export interface Offer {

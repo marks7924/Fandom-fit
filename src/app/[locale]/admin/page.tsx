@@ -95,6 +95,7 @@ export default function AdminPage() {
   const [fabricOptions, setFabricOptions] = useState(['Standard Cotton', 'Premium Cotton', 'Heavy Cotton', 'Over-sized Heavy']);
   const [newCustomSize, setNewCustomSize] = useState('');
   const [newCustomFabric, setNewCustomFabric] = useState('');
+  const [tagsText, setTagsText] = useState('');
 
   useEffect(() => {
     if (prodForm.available_sizes) {
@@ -186,7 +187,8 @@ export default function AdminPage() {
       slug,
       price: Number(prodForm.price),
       sale_price: prodForm.sale_price ? Number(prodForm.sale_price) : null,
-      display_order: Number(prodForm.display_order)
+      display_order: Number(prodForm.display_order),
+      tags: tagsText.split(',').map(t => t.trim()).filter(t => t !== '')
     };
 
     if (editingItem) {
@@ -514,6 +516,7 @@ export default function AdminPage() {
                 <button
                   onClick={() => {
                     setEditingItem(null);
+                    setTagsText('');
                     setProdForm({
                       name_en: '', name_ar: '', description_en: '', description_ar: '',
                       category_id: categories[0]?.id || '', price: 0, sale_price: '',
@@ -812,6 +815,17 @@ export default function AdminPage() {
                   </label>
                 </div>
 
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Custom Tags (Comma Separated)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Vintage, Oversized, Special Edition"
+                    value={tagsText}
+                    onChange={(e) => setTagsText(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent placeholder-zinc-600"
+                  />
+                </div>
+
                 {/* Images Upload Mock */}
                 <div>
                   <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('products.fields.images')}</label>
@@ -905,6 +919,7 @@ export default function AdminPage() {
                           <button
                             onClick={() => {
                               setEditingItem(p);
+                              setTagsText((p.tags || []).join(', '));
                               setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false, gives_cotton_reward: p.gives_cotton_reward || false });
                               setIsFormOpen(true);
                             }}

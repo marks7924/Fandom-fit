@@ -66,7 +66,7 @@ export default function Navbar() {
             <a href="#home" className="flex items-center gap-2">
               {!logoError ? (
                 <Image
-                  src="/logo/logo.png"
+                  src="/logo/logo.jpg"
                   alt="Fandom Fit"
                   width={140}
                   height={45}
@@ -98,15 +98,7 @@ export default function Navbar() {
 
           {/* Right Action Buttons */}
           <div className="hidden md:flex items-center gap-4">
-            {/* Invite & Earn */}
-            {isReferralEnabled && (
-              <button
-                onClick={() => setIsInviteOpen(true)}
-                className="text-xs font-black uppercase tracking-wide text-brand-accent hover:text-brand-accent/80 transition-colors cursor-pointer flex items-center gap-1 bg-white border-2 border-black px-2.5 py-1.5 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-1px] active:translate-y-[1px]"
-              >
-                <span>🎁 {locale === 'ar' ? 'ادعو صديقاً واكسب' : 'Invite & Earn'}</span>
-              </button>
-            )}
+
 
             {/* Track Order */}
             <button
@@ -198,17 +190,7 @@ export default function Navbar() {
             ))}
           </div>
           <div className="pt-4 flex flex-col gap-3">
-            {isReferralEnabled && (
-              <button
-                onClick={() => {
-                  setIsInviteOpen(true);
-                  setIsOpen(false);
-                }}
-                className="flex items-center justify-center gap-2 py-3 text-sm font-black uppercase bg-brand-accent text-white hover:bg-brand-accent/90 border-3 border-black rounded-xl transition-all duration-300 cursor-pointer mb-1"
-              >
-                <span>🎁 {locale === 'ar' ? 'ادعو صديقاً واكسب ١٥٪' : 'Invite Friends (15% OFF)'}</span>
-              </button>
-            )}
+
 
             <button
               onClick={() => {

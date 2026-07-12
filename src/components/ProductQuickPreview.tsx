@@ -172,6 +172,17 @@ export default function ProductQuickPreview() {
                     {name}
                   </h3>
 
+                  {/* Custom Tags */}
+                  {previewProduct.tags && previewProduct.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2 pointer-events-none">
+                      {previewProduct.tags.map((tag, i) => (
+                        <span key={i} className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-black/5 border border-black/15 text-black/60 rounded">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Prices */}
                   <div className="mt-3 flex items-baseline gap-2.5">
                     {hasDiscount ? (

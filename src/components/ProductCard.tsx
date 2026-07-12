@@ -126,6 +126,16 @@ export default function ProductCard({ product }: ProductCardProps) {
       {/* Info Area */}
       <div className="p-4 flex flex-col justify-between flex-1 bg-white">
         <div>
+          {/* Custom Tags List */}
+          {product.tags && product.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-1.5 pointer-events-none">
+              {product.tags.map((tag, i) => (
+                <span key={i} className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-black/5 border border-black/15 text-black/60 rounded">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
           {/* Name & Prices */}
           <div className="flex justify-between items-start gap-2">
             <h4 
