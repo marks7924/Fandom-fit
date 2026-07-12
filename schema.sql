@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS products (
     available_sizes TEXT[] DEFAULT ARRAY['S', 'M', 'L', 'XL', 'XXL'],
     material_options TEXT[] DEFAULT ARRAY['Standard Cotton', 'Premium Cotton'],
     is_pinned BOOLEAN DEFAULT FALSE,
+    gives_cotton_reward BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -71,6 +72,7 @@ CREATE TABLE IF NOT EXISTS offers (
     is_public BOOLEAN DEFAULT TRUE,
     expires_at TIMESTAMP WITH TIME ZONE,
     referred_phone VARCHAR(50),
+    bound_phone VARCHAR(50),
     start_date TIMESTAMP WITH TIME ZONE,
     end_date TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL

@@ -29,6 +29,16 @@ export default function Home() {
     fetchInitialData();
   }, [fetchInitialData]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const ref = urlParams.get('ref');
+      if (ref && /^01[0-25]\d{8}$/.test(ref.trim())) {
+        localStorage.setItem('ff_referrer_phone', ref.trim());
+      }
+    }
+  }, []);
+
   // Show branded loading screen on first load
   if (isLoading && products.length === 0) {
     return <LoadingScreen />;

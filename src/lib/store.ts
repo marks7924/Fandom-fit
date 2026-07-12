@@ -31,6 +31,7 @@ export interface Product {
   material_options: string[];
   images: string[];
   is_pinned?: boolean;
+  gives_cotton_reward?: boolean;
 }
 
 export interface Offer {
@@ -56,6 +57,7 @@ export interface Offer {
   is_public?: boolean;
   expires_at?: string | null;
   referred_phone?: string | null;
+  bound_phone?: string | null;
   created_at?: string;
 }
 
@@ -349,14 +351,16 @@ export const useStore = create<StoreState>((set, get) => ({
     try {
       let rewardCouponCode = '';
       
-      // 1. Check if Cotton collection drops apply
+      // 1. Check if Cotton collection drops apply (via product.gives_cotton_reward check)
       const hasCottonItem = 
         order.product_name.toLowerCase().includes('cotton') || 
         (order.notes && order.notes.toLowerCase().includes('cotton')) ||
-        (order.items && Array.isArray(order.items) && order.items.some((item: any) => 
-          item.product_name.toLowerCase().includes('cotton') || 
-          item.fabric.toLowerCase().includes('cotton')
-        ));
+        (order.items && Array.isArray(order.items) && order.items.some((item: any) => {
+          const prod = get().products.find(p => p.id === item.product_id);
+          return prod?.gives_cotton_reward === true || 
+                 item.product_name.toLowerCase().includes('cotton') || 
+                 item.fabric.toLowerCase().includes('cotton');
+        }));
 
       if (hasCottonItem) {
         const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -369,72 +373,78 @@ export const useStore = create<StoreState>((set, get) => ({
         const newOffer = {
           title_en: 'Cotton Collection Reward (25% OFF)',
           title_ar: 'مكافأة مجموعة القطن (خصم ٢٥٪)',
-          description_en: 'Get 25% off one future order! (Activates upon order delivery)',
-          description_ar: 'احصل على خصم ٢٥٪ على طلبك القادم! (يتم التفعيل فور الاستلام)',
+          description_en: 'Get 25% off one future order! (Bound to phone: ' + order.customer_phone + ')',
+          description_ar: 'احصل على خصم ٢٥٪ على طلبك القادم! (مرتبط برقم هاتف: ' + order.customer_phone + ')',
           discount_text_en: '25% OFF',
           discount_text_ar: 'خصم ٢٥٪',
           code: code,
           discount_percent: 25,
           max_uses: 1,
           max_uses_per_user: 1,
-          is_active: false, // Inactive until completed!
+          is_active: true, // Instantly Active!
           show_on_homepage: false,
           discount_type: 'percentage',
           discount_value: 25,
           coupon_type: 'cotton_reward',
           is_one_time: true,
           is_public: false,
+          bound_phone: order.customer_phone, // Bound to phone!
           expires_at: expiryDate.toISOString(),
         };
 
         await supabase.from('offers').insert([newOffer]);
       }
 
-      // 2. Check if valid referral code is entered
+      // 2. Check if there is an invited referrer phone (from URL ref= or manual referral coupon)
+      let referrerPhone = typeof window !== 'undefined' ? localStorage.getItem('ff_referrer_phone') : null;
+      
       if (order.referral_code) {
         const cleanRefCode = order.referral_code.trim().toLowerCase();
-        
-        // Find if coupon code is a valid referral coupon in current store state
         const refCoupon = get().offers.find(
           o => o.code.trim().toLowerCase() === cleanRefCode && o.coupon_type === 'referral_reward'
         );
-
-        if (refCoupon) {
-          const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
-          const thankYouCode = `THANKS-${randomString}`;
-
-          if (!rewardCouponCode) {
-            rewardCouponCode = thankYouCode;
-          } else {
-            rewardCouponCode += `, ${thankYouCode}`;
-          }
-
-          const expiryDate = new Date();
-          expiryDate.setDate(expiryDate.getDate() + 30);
-
-          const newOffer = {
-            title_en: 'Referral Reward (15% OFF)',
-            title_ar: 'مكافأة ترشيح (خصم ١٥٪)',
-            description_en: 'Thank you for referring a friend! Enjoy 15% off your next purchase. (Activates upon order delivery)',
-            description_ar: 'شكرًا لترشيح صديق! استمتع بخصم ١٥٪ على طلبك القادم. (يتم التفعيل فور الاستلام)',
-            discount_text_en: '15% OFF',
-            discount_text_ar: 'خصم ١٥٪',
-            code: thankYouCode,
-            discount_percent: 15,
-            max_uses: 1,
-            max_uses_per_user: 1,
-            is_active: false, // Inactive until completed!
-            show_on_homepage: false,
-            discount_type: 'percentage',
-            discount_value: 15,
-            coupon_type: 'referral_reward_thank_you',
-            is_one_time: true,
-            is_public: false,
-            expires_at: expiryDate.toISOString(),
-          };
-
-          await supabase.from('offers').insert([newOffer]);
+        if (refCoupon && refCoupon.referred_phone) {
+          referrerPhone = refCoupon.referred_phone;
         }
+      }
+
+      // Ensure referrer isn't referring themselves
+      if (referrerPhone && referrerPhone.trim() && referrerPhone.trim() !== order.customer_phone.trim()) {
+        const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const thankYouCode = `THANKS-${randomString}`;
+
+        if (!rewardCouponCode) {
+          rewardCouponCode = thankYouCode;
+        } else {
+          rewardCouponCode += `, ${thankYouCode}`;
+        }
+
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 30);
+
+        const newOffer = {
+          title_en: 'Referral Reward (15% OFF)',
+          title_ar: 'مكافأة ترشيح (خصم ١٥٪)',
+          description_en: 'Friend purchase reward! (Bound to phone: ' + referrerPhone + ')',
+          description_ar: 'مكافأة شراء صديق! (مرتبطة برقم هاتف: ' + referrerPhone + ')',
+          discount_text_en: '15% OFF',
+          discount_text_ar: 'خصم ١٥٪',
+          code: thankYouCode,
+          discount_percent: 15,
+          max_uses: 1,
+          max_uses_per_user: 1,
+          is_active: true, // Instantly Active!
+          show_on_homepage: false,
+          discount_type: 'percentage',
+          discount_value: 15,
+          coupon_type: 'referral_reward_thank_you',
+          is_one_time: true,
+          is_public: false,
+          bound_phone: referrerPhone, // Bound to referrer phone!
+          expires_at: expiryDate.toISOString(),
+        };
+
+        await supabase.from('offers').insert([newOffer]);
       }
 
       // 3. Save order with pre-generated reward coupon code linked
@@ -449,6 +459,11 @@ export const useStore = create<StoreState>((set, get) => ({
       const newOrder = data?.[0] || null;
       if (newOrder) {
         set({ orders: [newOrder, ...get().orders] });
+      }
+
+      // Clear referral cookie/storage after it is successfully redeemed
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ff_referrer_phone');
       }
 
       // Sync local offers list to see the newly generated offers
@@ -495,116 +510,12 @@ export const useStore = create<StoreState>((set, get) => ({
         }
       }
 
-      // Mock Local completion & reward generation
+      // Mock Local completion
       const order = get().orders.find(o => o.id === id);
       if (!order || order.status === 'completed') return;
 
-      let rewardCouponCode = '';
-      
-      // 1. Cotton collection reward check
-      // Cotton Collection: Category/Product/Material names containing "cotton"
-      const hasCottonItem = 
-        order.product_name.toLowerCase().includes('cotton') || 
-        order.notes.toLowerCase().includes('cotton') ||
-        (order.items && order.items.some(item => 
-          item.product_name.toLowerCase().includes('cotton') || 
-          item.fabric.toLowerCase().includes('cotton')
-        ));
-
-      if (hasCottonItem) {
-        const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
-        rewardCouponCode = `COTTON-${randomString}`;
-        
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 30);
-
-        const newOffer: Offer = {
-          id: Math.random().toString(36).substring(7),
-          title_en: 'Cotton Collection Reward (25% OFF)',
-          title_ar: 'مكافأة مجموعة القطن (خصم ٢٥٪)',
-          description_en: 'Thank you for purchasing from the Cotton Collection. Get 25% off one future order!',
-          description_ar: 'شكرًا لشرائك من مجموعة القطن. احصل على خصم ٢٥٪ على طلبك القادم!',
-          discount_text_en: '25% OFF',
-          discount_text_ar: 'خصم ٢٥٪',
-          code: rewardCouponCode,
-          discount_percent: 25,
-          max_uses: 1,
-          max_uses_per_user: 1,
-          is_active: true,
-          show_on_homepage: false,
-          discount_type: 'percentage',
-          discount_value: 25,
-          coupon_type: 'cotton_reward',
-          is_one_time: true,
-          is_public: false,
-          expires_at: expiryDate.toISOString(),
-          created_at: new Date().toISOString()
-        };
-
-        const updatedOffers = [...get().offers, newOffer];
-        set({ offers: updatedOffers });
-        localStorage.setItem('ff_offers', JSON.stringify(updatedOffers));
-      }
-
-      // 2. Referral code thank you check
-      if (order.referral_code) {
-        const cleanRefCode = order.referral_code.trim().toLowerCase();
-        
-        // Prevent duplicate rewards: check if any other COMPLETED orders used the same referral_code for the same customer phone
-        const alreadyRewarded = get().orders.some(o => 
-          o.id !== id &&
-          o.status === 'completed' &&
-          o.customer_phone.trim() === order.customer_phone.trim() &&
-          o.referral_code?.trim().toLowerCase() === cleanRefCode
-        );
-
-        if (!alreadyRewarded) {
-          const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
-          const thankYouCode = `THANKS-${randomString}`;
-          
-          if (!rewardCouponCode) {
-            rewardCouponCode = thankYouCode;
-          } else {
-            rewardCouponCode += `, ${thankYouCode}`;
-          }
-
-          const expiryDate = new Date();
-          expiryDate.setDate(expiryDate.getDate() + 30);
-
-          const newOffer: Offer = {
-            id: Math.random().toString(36).substring(7),
-            title_en: 'Referral Reward (15% OFF)',
-            title_ar: 'مكافأة ترشيح (خصم ١٥٪)',
-            description_en: 'Thank you for referring a friend! Enjoy 15% off your next purchase.',
-            description_ar: 'شكرًا لترشيح صديق! استمتع بخصم ١٥٪ على طلبك القادم.',
-            discount_text_en: '15% OFF',
-            discount_text_ar: 'خصم ١٥٪',
-            code: thankYouCode,
-            discount_percent: 15,
-            max_uses: 1,
-            max_uses_per_user: 1,
-            is_active: true,
-            show_on_homepage: false,
-            discount_type: 'percentage',
-            discount_value: 15,
-            coupon_type: 'referral_reward_thank_you',
-            is_one_time: true,
-            is_public: false,
-            expires_at: expiryDate.toISOString(),
-            created_at: new Date().toISOString()
-          };
-
-          const updatedOffers = [...get().offers, newOffer];
-          set({ offers: updatedOffers });
-          localStorage.setItem('ff_offers', JSON.stringify(updatedOffers));
-        }
-      }
-
-      // Update mock order state
       const updatedOrders = get().orders.map(o => 
-        o.id === id 
-          ? { ...o, status: 'completed', reward_coupon_code: rewardCouponCode || undefined } 
-          : o
+        o.id === id ? { ...o, status: 'completed' } : o
       );
       set({ orders: updatedOrders });
       localStorage.setItem('ff_orders', JSON.stringify(updatedOrders));
@@ -884,6 +795,14 @@ export const useStore = create<StoreState>((set, get) => ({
       return { isValid: false, error: 'inactive' };
     }
 
+    // Check bound phone number
+    if (offer.bound_phone) {
+      const cleanPhone = phone?.trim();
+      if (!cleanPhone || cleanPhone !== offer.bound_phone.trim()) {
+        return { isValid: false, error: 'phone_mismatch' };
+      }
+    }
+
     // Check expiration date
     if (offer.expires_at) {
       if (new Date(offer.expires_at).getTime() < Date.now()) {
@@ -936,4 +855,35 @@ export const getFabricPremium = (fabric: string): number => {
   if (f.includes('heavy')) return 100;
   if (f.includes('premium')) return 50;
   return 0; // default/fallback
+};
+
+export interface CartTotals {
+  subtotal: number;
+  cottonDiscount: number;
+  shipping: number;
+  finalTotal: number;
+}
+
+export const getCartTotals = (cart: CartItem[]): CartTotals => {
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  
+  let cottonDiscount = 0;
+  const hasCotton = cart.some(item => item.product.gives_cotton_reward === true);
+  const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+  
+  if (hasCotton && totalQty >= 2) {
+    const flatItems = cart.flatMap(item => Array(item.quantity).fill(item));
+    flatItems.sort((a, b) => b.price - a.price);
+    // flatItems[1] is the next highest priced item in the cart
+    cottonDiscount = Math.round(flatItems[1].price * 0.25);
+  }
+  
+  const shipping = subtotal > 0 ? 50 : 0;
+  
+  return {
+    subtotal,
+    cottonDiscount,
+    shipping,
+    finalTotal: subtotal - cottonDiscount + shipping
+  };
 };

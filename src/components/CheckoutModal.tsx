@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useStore, getFabricPremium } from '@/lib/store';
+import { useStore, getFabricPremium, getCartTotals } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import { X, Ticket, CheckCircle, MapPin, Phone, User, HelpCircle, Mail, Copy, Check, Tag } from 'lucide-react';
+import { X, Ticket, CheckCircle, MapPin, Phone, User, HelpCircle, Mail, Copy, Check, Tag, Share2 } from 'lucide-react';
 
 export default function CheckoutModal() {
   const t = useTranslations('checkout');
@@ -117,17 +117,23 @@ export default function CheckoutModal() {
       : (checkoutProduct.category_id === '4' ? '/placeholders/manga_front.jpg' : '/placeholders/arcade_front.jpg');
   }
 
-  // Subtotal Calculation
-  const subtotal = isSingle 
-    ? singleItemPrice 
-    : cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  // Pricing Calculations using getCartTotals for cart promotion
+  let subtotal = 0;
+  let cottonDiscount = 0;
+  let shippingFee = 0;
 
-  // Flat shipping fee (50 EGP Egypt)
-  const shippingFee = subtotal > 0 ? 50 : 0;
+  if (isSingle) {
+    subtotal = singleItemPrice;
+    shippingFee = subtotal > 0 ? 50 : 0;
+  } else {
+    const totals = getCartTotals(cart);
+    subtotal = totals.subtotal;
+    cottonDiscount = totals.cottonDiscount;
+    shippingFee = totals.shipping;
+  }
 
-  // Discount
   const discountAmount = Number(((subtotal * appliedDiscount) / 100).toFixed(2));
-  const total = subtotal - discountAmount + shippingFee;
+  const total = subtotal - cottonDiscount - discountAmount + shippingFee;
 
   const handleApplyCoupon = async () => {
     setDiscountErr('');
@@ -148,6 +154,8 @@ export default function CheckoutModal() {
         errMsg = locale === 'ar' ? 'لم يتم الوصول للحد الأدنى المطلوب لتطبيق الكوبون' : 'Minimum order amount not met for this coupon.';
       } else if (res.error === 'expired') {
         errMsg = locale === 'ar' ? 'كود الخصم منتهي الصلاحية' : 'This coupon code has expired.';
+      } else if (res.error === 'phone_mismatch') {
+        errMsg = locale === 'ar' ? 'عذراً، هذا الكوبون مرتبط برقم هاتف آخر ولا يمكن استخدامه برقمك الحالي.' : 'Sorry, this coupon is bound to a different phone number and cannot be used with your current phone.';
       }
       setDiscountErr(errMsg);
       setAppliedDiscount(0);
@@ -176,7 +184,11 @@ export default function CheckoutModal() {
     if (couponCode.trim()) {
       const res = await validateCoupon(couponCode, cleanPhone, subtotal);
       if (!res.isValid) {
-        alert(locale === 'ar' ? 'الكوبون المطبق غير صالح أو منتهي الصلاحية' : 'The applied coupon is invalid or expired.');
+        let errMsg = locale === 'ar' ? 'الكوبون المطبق غير صالح أو منتهي الصلاحية' : 'The applied coupon is invalid or expired.';
+        if (res.error === 'phone_mismatch') {
+          errMsg = locale === 'ar' ? 'عذراً، هذا الكوبون مرتبط برقم هاتف آخر ولا يمكن استخدامه برقمك الحالي.' : 'Sorry, this coupon is bound to a different phone number and cannot be used with your current phone.';
+        }
+        alert(errMsg);
         setAppliedDiscount(0);
         setIsSubmitting(false);
         return;
@@ -426,6 +438,34 @@ export default function CheckoutModal() {
                           className="w-full pl-9 pr-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
                         />
                       </div>
+                      <p className="text-[9px] text-[#D84A2A] font-bold mt-1">
+                        {locale === 'ar' ? '⚠️ هام: كوبونات المكافآت ترتبط برقم الهاتف هذا. لا تغير رقمك لاحقاً للاستفادة منها.' : '⚠️ Note: Reward coupons are bound to this phone number. Do not change it later.'}
+                      </p>
+                      {phone.trim().length >= 10 && (() => {
+                        const userCoupons = useStore.getState().offers.filter(o => o.bound_phone && o.bound_phone.trim() === phone.trim() && o.is_active);
+                        if (userCoupons.length === 0) return null;
+                        return (
+                          <div className="mt-2 p-2 bg-green-50 border border-green-500 rounded-lg text-[10px] flex justify-between items-center animate-pulse">
+                            <div className="font-bold text-green-800">
+                              {locale === 'ar' 
+                                ? `لديك كوبون مكافأة غير مستخدم: ${userCoupons[0].code} (${userCoupons[0].discount_percent}%)` 
+                                : `Unused reward coupon found: ${userCoupons[0].code} (${userCoupons[0].discount_percent}%)`}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCouponCode(userCoupons[0].code);
+                                setAppliedDiscount(userCoupons[0].discount_percent);
+                                setDiscountMsg(locale === 'ar' ? 'تم تطبيق كوبون المكافأة!' : 'Reward coupon applied!');
+                                setDiscountErr('');
+                              }}
+                              className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded font-black text-[9px] cursor-pointer"
+                            >
+                              {locale === 'ar' ? 'تطبيق' : 'Apply'}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div>
@@ -562,6 +602,12 @@ export default function CheckoutModal() {
                     <span>{t('price_subtotal')}</span>
                     <span>{tp('price_egp', { price: subtotal })}</span>
                   </div>
+                  {cottonDiscount > 0 && (
+                    <div className="flex justify-between items-center text-green-600 font-bold">
+                      <span>{locale === 'ar' ? 'عرض القطن (خصم ٢٥٪ على القطعة الثانية)' : 'Cotton Promo (25% off 2nd Item)'}</span>
+                      <span>-{tp('price_egp', { price: cottonDiscount })}</span>
+                    </div>
+                  )}
                   {appliedDiscount > 0 && (
                     <div className="flex justify-between items-center text-green-600 font-bold">
                       <span>{t('price_discount')} ({appliedDiscount}%)</span>
@@ -667,6 +713,42 @@ export default function CheckoutModal() {
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {/* REFERRAL LINK SHARING TICKET */}
+                {phone.trim() && (
+                  <div className="bg-white border-4 border-black p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] max-w-sm mx-auto relative overflow-hidden rotate-[1deg] space-y-2">
+                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#457B9D]"></div>
+                    <div className="flex justify-center items-center gap-1.5 text-[#457B9D]">
+                      <Share2 size={14} className="animate-pulse" />
+                      <span className="text-xs font-black uppercase tracking-wider">
+                        {locale === 'ar' ? 'شارك الموقع مع أصدقائك واكسب!' : 'Invite Friends & Earn!'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-semibold text-black/60 leading-tight">
+                      {locale === 'ar' 
+                        ? 'انسخ رابط الإحالة الخاص بك وأرسله لأصدقائك. عندما يطلبون، ستحصل تلقائياً على كود خصم ١٥٪!' 
+                        : 'Share your referral link. When they place an order, you will instantly earn a 15% OFF coupon!'}
+                    </p>
+                    <div className="flex items-center justify-between bg-[#EDE0D0] border-2 border-black rounded-lg px-3 py-1.5 font-mono text-[9px] font-black text-black">
+                      <span className="truncate flex-1 text-left">{`fandom-fit.vercel.app/?ref=${phone.trim()}`}</span>
+                      <button
+                        onClick={() => {
+                          const link = `${window.location.origin}/?ref=${phone.trim()}`;
+                          navigator.clipboard.writeText(link);
+                          setCopiedCoupon(`link-${phone}`);
+                          setTimeout(() => setCopiedCoupon(''), 2000);
+                        }}
+                        className="p-1 border border-black/15 hover:bg-black/5 rounded cursor-pointer transition-colors shrink-0 ml-1.5"
+                      >
+                        {copiedCoupon === `link-${phone}` ? (
+                          <Check size={12} className="text-green-600" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                      </button>
                     </div>
                   </div>
                 )}

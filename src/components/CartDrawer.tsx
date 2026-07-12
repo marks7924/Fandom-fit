@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useStore, getFabricPremium } from '@/lib/store';
+import { useStore, getFabricPremium, getCartTotals } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { X, Plus, Minus, Trash2, ShoppingBag, Ticket, Tag } from 'lucide-react';
@@ -32,15 +32,13 @@ export default function CartDrawer() {
 
   if (!isCartOpen) return null;
 
-  // Subtotal Calculation
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-  // Flat 50 EGP Egypt Shipping
-  const shippingFee = subtotal > 0 ? 50 : 0;
+  // Subtotal & Cotton Promotion Calculations
+  const { subtotal, cottonDiscount, shipping, finalTotal } = getCartTotals(cart);
+  const shippingFee = shipping;
 
   // Discount Calculation
   const discountAmount = Number(((subtotal * discountPercent) / 100).toFixed(2));
-  const finalTotal = subtotal - discountAmount + shippingFee;
+  const finalTotalWithPromo = subtotal - cottonDiscount - discountAmount + shippingFee;
 
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) return;
@@ -288,6 +286,12 @@ export default function CartDrawer() {
                   <span>{locale === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span>
                   <span>{tp('price_egp', { price: subtotal })}</span>
                 </div>
+                {cottonDiscount > 0 && (
+                  <div className="flex justify-between items-center text-green-600 font-bold">
+                    <span>{locale === 'ar' ? 'عرض القطن (خصم ٢٥٪ على القطعة الثانية)' : 'Cotton Promo (25% off 2nd Item)'}</span>
+                    <span>-{tp('price_egp', { price: cottonDiscount })}</span>
+                  </div>
+                )}
                 {discountPercent > 0 && (
                   <div className="flex justify-between items-center text-green-600 font-bold">
                     <span>{locale === 'ar' ? `الخصم (${discountPercent}%)` : `Discount (${discountPercent}%)`}</span>
@@ -300,7 +304,7 @@ export default function CartDrawer() {
                 </div>
                 <div className="flex justify-between items-center text-black border-t border-black/10 pt-1.5 font-black text-sm">
                   <span>{locale === 'ar' ? 'المجموع النهائي' : 'Final Total'}</span>
-                  <span className="text-brand-accent">{tp('price_egp', { price: finalTotal })}</span>
+                  <span className="text-brand-accent">{tp('price_egp', { price: finalTotalWithPromo })}</span>
                 </div>
               </div>
 

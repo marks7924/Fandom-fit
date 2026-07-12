@@ -47,6 +47,7 @@ export default function AdminPage() {
     is_in_stock: true, is_featured: false, is_trending: false,
     is_new_arrival: false, is_best_seller: false, is_limited_edition: false,
     is_pinned: false,
+    gives_cotton_reward: false,
     available_sizes: ['S', 'M', 'L', 'XL'], material_options: ['Standard Cotton', 'Premium Cotton'],
     images: [] as string[], display_order: 0
   });
@@ -515,6 +516,7 @@ export default function AdminPage() {
                       is_in_stock: true, is_featured: false, is_trending: false,
                       is_new_arrival: true, is_best_seller: false, is_limited_edition: false,
                       is_pinned: false,
+                      gives_cotton_reward: false,
                       available_sizes: ['S', 'M', 'L', 'XL'], material_options: ['Standard Cotton', 'Premium Cotton'],
                       images: [], display_order: 0
                     });
@@ -795,6 +797,15 @@ export default function AdminPage() {
                     />
                     📌 {locale === 'ar' ? 'تثبيت المنتج' : 'Pin Drop'}
                   </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-[#E07A5F]">
+                    <input 
+                      type="checkbox" 
+                      checked={prodForm.gives_cotton_reward || false}
+                      onChange={(e) => setProdForm({ ...prodForm, gives_cotton_reward: e.target.checked })}
+                      className="accent-[#E07A5F]" 
+                    />
+                    🧶 {locale === 'ar' ? 'يعطي مكافأة قطن' : 'Gives Cotton Reward'}
+                  </label>
                 </div>
 
                 {/* Images Upload Mock */}
@@ -865,6 +876,11 @@ export default function AdminPage() {
                             />
                           </div>
                           {p.name_en}
+                          {p.gives_cotton_reward && (
+                            <span className="ml-2 px-1.5 py-0.5 bg-[#E07A5F]/20 text-[#E07A5F] border border-[#E07A5F]/40 rounded text-[9px] font-black uppercase tracking-wide shrink-0">
+                              🧶 Cotton
+                            </span>
+                          )}
                         </td>
                         <td className="p-4">
                           {categories.find(c => c.id === p.category_id)?.name_en || 'Uncategorized'}
@@ -885,7 +901,7 @@ export default function AdminPage() {
                           <button
                             onClick={() => {
                               setEditingItem(p);
-                              setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false });
+                              setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false, gives_cotton_reward: p.gives_cotton_reward || false });
                               setIsFormOpen(true);
                             }}
                             className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white"
@@ -1295,12 +1311,13 @@ export default function AdminPage() {
             ) : (
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm max-w-2xl">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[550px] text-left font-mono">
+                  <table className="w-full min-w-[650px] text-left font-mono">
                   <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
                     <tr>
                       <th className="p-4">Code</th>
                       <th className="p-4">Discount</th>
                       <th className="p-4">Type</th>
+                      <th className="p-4">Bound Phone</th>
                       <th className="p-4">Status</th>
                       <th className="p-4 text-right">Actions</th>
                     </tr>
@@ -1314,6 +1331,9 @@ export default function AdminPage() {
                         </td>
                         <td className="p-4 capitalize text-[10px] text-zinc-400 font-bold">
                           {o.coupon_type ? o.coupon_type.replace(/_/g, ' ') : 'manual'}
+                        </td>
+                        <td className="p-4 text-[10px] font-bold text-zinc-300">
+                          {o.bound_phone || <span className="text-zinc-600">-</span>}
                         </td>
                         <td className="p-4">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${

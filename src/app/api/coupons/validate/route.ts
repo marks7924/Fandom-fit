@@ -34,6 +34,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ isValid: false, error: 'inactive' });
     }
 
+    // Bound phone check
+    if (offer.bound_phone) {
+      const cleanPhone = phone?.trim();
+      if (!cleanPhone || cleanPhone !== offer.bound_phone.trim()) {
+        return NextResponse.json({ isValid: false, error: 'phone_mismatch' });
+      }
+    }
+
     // Expiry Check
     if (offer.expires_at) {
       if (new Date(offer.expires_at).getTime() < Date.now()) {
