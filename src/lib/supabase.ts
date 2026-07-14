@@ -499,8 +499,10 @@ export const mockSupabase = {
   auth: {
     getUser: async () => {
       if (typeof window === 'undefined') return { data: { user: null } };
-      const adminUser = JSON.parse(sessionStorage.getItem('ff_admin_user') || 'null');
-      if (adminUser) return { data: { user: adminUser } };
+      if (window.location.pathname.includes('/admin')) {
+        const adminUser = JSON.parse(sessionStorage.getItem('ff_admin_user') || 'null');
+        if (adminUser) return { data: { user: adminUser } };
+      }
       const regularUser = JSON.parse(sessionStorage.getItem('ff_current_user') || 'null');
       return { data: { user: regularUser } };
     },

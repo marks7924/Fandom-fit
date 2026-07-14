@@ -23,6 +23,7 @@ import Footer from '@/components/Footer';
 import LoadingScreen from '@/components/LoadingScreen';
 import AuthModal from '@/components/AuthModal';
 import UserProfileModal from '@/components/UserProfileModal';
+import SizeChartModal from '@/components/SizeChartModal';
 
 export default function Home({
   params,
@@ -32,6 +33,8 @@ export default function Home({
   const fetchInitialData = useStore((state) => state.fetchInitialData);
   const isLoading = useStore((state) => state.isLoading);
   const products = useStore((state) => state.products);
+  const isSizeChartOpen = useStore((state) => state.isSizeChartOpen);
+  const setIsSizeChartOpen = useStore((state) => state.setIsSizeChartOpen);
 
   useEffect(() => {
     fetchInitialData();
@@ -84,7 +87,8 @@ export default function Home({
       <AuthModal />
       {/* Profile Modal overlay */}
       <UserProfileModal />
+      {/* Size Chart Modal overlay */}
+      <SizeChartModal isOpen={isSizeChartOpen} onClose={() => setIsSizeChartOpen(false)} />
     </>
   );
 }
-

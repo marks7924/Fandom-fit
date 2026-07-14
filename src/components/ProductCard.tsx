@@ -148,7 +148,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         {/* Favorites Heart Button (Bottom Left of Photo) */}
         <button
           onClick={handleFavoriteClick}
-          className="absolute bottom-3 left-3 z-30 p-1.5 bg-white border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 pointer-events-auto"
+          className="absolute bottom-3 left-3 z-45 p-1.5 bg-white border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 pointer-events-auto"
           title={isFav ? (locale === 'ar' ? 'حذف من المفضلة' : 'Remove from Favorites') : (locale === 'ar' ? 'إضافة للمفضلة' : 'Add to Favorites')}
         >
           <Heart size={12} className={isFav ? 'text-red-500 fill-red-500' : 'text-black'} />

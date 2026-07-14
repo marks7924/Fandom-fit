@@ -23,7 +23,9 @@ export default function CheckoutModal() {
     addOrder,
     validateCoupon,
     getProductEffectivePrice,
-    settings
+    settings,
+    user,
+    profile
   } = useStore();
 
   const [name, setName] = useState('');
@@ -45,6 +47,23 @@ export default function CheckoutModal() {
   const [orderRef, setOrderRef] = useState('');
   const [rewardCouponCode, setRewardCouponCode] = useState('');
   const [copiedCoupon, setCopiedCoupon] = useState<string | null>(null);
+
+  // Auto-fill address details from profile if logged in
+  useEffect(() => {
+    if (profile) {
+      if (profile.address_data) {
+        setName(profile.address_data.customer_name || '');
+        setPhone(profile.address_data.customer_phone || '');
+        setEmail(profile.address_data.customer_email || '');
+        setGovernorate(profile.address_data.governorate || 'Cairo');
+        setCity(profile.address_data.city || '');
+        setAddress(profile.address_data.address || '');
+      } else {
+        if (profile.email) setEmail(profile.email);
+        if (profile.phone) setPhone(profile.phone);
+      }
+    }
+  }, [profile]);
 
   // Sizing choices (only for single product checkout)
   const [selectedSize, setSelectedSize] = useState('M');
@@ -153,7 +172,15 @@ export default function CheckoutModal() {
   }
 
   const discountAmount = Number(((subtotal * appliedDiscount) / 100).toFixed(2));
-  const total = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - discountAmount + shippingFee);
+  
+  const threshold = Number(settings.loyalty_orders_threshold || 5);
+  const loyaltyDiscountPercent = Number(settings.loyalty_discount_percent || 20);
+  const isLoyaltyEligible = profile && (profile.loyalty_points || 0) >= threshold;
+  const loyaltyDiscount = isLoyaltyEligible
+    ? Math.round((subtotal * loyaltyDiscountPercent) / 100)
+    : 0;
+
+  const total = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - discountAmount - loyaltyDiscount + shippingFee);
 
   const handleApplyCoupon = async () => {
     setDiscountErr('');
@@ -644,6 +671,16 @@ export default function CheckoutModal() {
                     <div className="flex justify-between items-center text-green-600 font-bold">
                       <span>{t('price_discount')} ({appliedDiscount}%)</span>
                       <span>-{tp('price_egp', { price: discountAmount })}</span>
+                    </div>
+                  )}
+                  {loyaltyDiscount > 0 && (
+                    <div className="flex justify-between items-center text-green-600 font-bold">
+                      <span>
+                        {locale === 'ar' 
+                          ? `خصم الولاء (${loyaltyDiscountPercent}٪)` 
+                          : `Loyalty Reward (${loyaltyDiscountPercent}%)`}
+                      </span>
+                      <span>-{tp('price_egp', { price: loyaltyDiscount })}</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center text-black/60 font-semibold">

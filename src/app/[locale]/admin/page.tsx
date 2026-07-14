@@ -53,7 +53,8 @@ export default function AdminPage() {
   });
 
   const [catForm, setCatForm] = useState({
-    name_en: '', name_ar: '', slug: '', display_order: 0, is_hidden: false, show_in_browse: true
+    name_en: '', name_ar: '', slug: '', display_order: 0, is_hidden: false, show_in_browse: true,
+    default_sizes: '', default_fabrics: '', default_tags: ''
   });
 
   const [offerForm, setOfferForm] = useState({
@@ -92,7 +93,9 @@ export default function AdminPage() {
     auto_applied_offers: '',
     default_sizes: 'S, M, L, XL, XXL',
     default_fabrics: 'Standard Cotton, Premium Cotton',
-    default_tags: 'New Drop'
+    default_tags: 'New Drop',
+    loyalty_orders_threshold: 5,
+    loyalty_discount_percent: 20
   });
 
   const [sizeTable, setSizeTable] = useState<{ headers: string[]; rows: string[][] }>({
@@ -105,6 +108,8 @@ export default function AdminPage() {
   });
 
   const [autoOffers, setAutoOffers] = useState<any[]>([]);
+  const [isAutoOffersOpen, setIsAutoOffersOpen] = useState(false);
+  const [newTagInput, setNewTagInput] = useState('');
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
@@ -194,7 +199,9 @@ export default function AdminPage() {
         auto_applied_offers: typeof settings.auto_applied_offers === 'string' ? settings.auto_applied_offers : JSON.stringify(settings.auto_applied_offers || ''),
         default_sizes: settings.default_sizes || 'S, M, L, XL, XXL',
         default_fabrics: settings.default_fabrics || 'Standard Cotton, Premium Cotton',
-        default_tags: settings.default_tags || 'New Drop'
+        default_tags: settings.default_tags || 'New Drop',
+        loyalty_orders_threshold: settings.loyalty_orders_threshold ?? 5,
+        loyalty_discount_percent: settings.loyalty_discount_percent ?? 20
       });
     }
   }, [isAuthenticated, settings]);
@@ -739,13 +746,65 @@ export default function AdminPage() {
                     <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('products.fields.category')}</label>
                     <select
                       value={prodForm.category_id}
-                      onChange={(e) => setProdForm({ ...prodForm, category_id: e.target.value })}
+                      onChange={(e) => {
+                        const newCatId = e.target.value;
+                        const cat = categories.find(c => c.id === newCatId);
+                        let sizes = prodForm.available_sizes;
+                        let fabrics = prodForm.material_options;
+                        let tags = tagsText;
+
+                        if (cat) {
+                          if ((cat as any).default_sizes) {
+                            sizes = (cat as any).default_sizes.split(',').map((s: string) => s.trim());
+                          }
+                          if ((cat as any).default_fabrics) {
+                            fabrics = (cat as any).default_fabrics.split(',').map((f: string) => f.trim());
+                          }
+                          if ((cat as any).default_tags) {
+                            tags = (cat as any).default_tags;
+                          }
+                        }
+
+                        setTagsText(tags);
+                        setProdForm({
+                          ...prodForm,
+                          category_id: newCatId,
+                          available_sizes: sizes,
+                          material_options: fabrics
+                        });
+                      }}
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
                     >
                       {categories.map((c) => (
                         <option key={c.id} value={c.id}>{c.name_en}</option>
                       ))}
                     </select>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cat = categories.find(c => c.id === prodForm.category_id);
+                        let sizesStr = settingsForm.default_sizes || 'S, M, L, XL, XXL';
+                        let fabricsStr = settingsForm.default_fabrics || 'Standard Cotton, Premium Cotton';
+                        let tagsStr = settingsForm.default_tags || 'New Drop';
+
+                        if (cat) {
+                          if ((cat as any).default_sizes) sizesStr = (cat as any).default_sizes;
+                          if ((cat as any).default_fabrics) fabricsStr = (cat as any).default_fabrics;
+                          if ((cat as any).default_tags) tagsStr = (cat as any).default_tags;
+                        }
+
+                        setTagsText(tagsStr);
+                        setProdForm({
+                          ...prodForm,
+                          available_sizes: sizesStr.split(',').map(s => s.trim()),
+                          material_options: fabricsStr.split(',').map(f => f.trim())
+                        });
+                      }}
+                      className="text-[9px] font-black uppercase text-brand-accent hover:underline mt-1.5 block cursor-pointer"
+                    >
+                      Reset options to Category/Global Defaults
+                    </button>
                   </div>
                 </div>
 
@@ -961,13 +1020,67 @@ export default function AdminPage() {
                       </button>
                     )}
                   </div>
-                  <input
-                    type="text"
-                    placeholder="e.g. Vintage, Oversized, Special Edition"
-                    value={tagsText}
-                    onChange={(e) => setTagsText(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent placeholder-zinc-600"
-                  />
+                  <div className="space-y-2">
+                    {/* Modern Badge Tag List */}
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-zinc-950 border border-zinc-850 rounded-lg min-h-[40px] items-center">
+                      {splitTagsText(tagsText).map((tagVal, i) => {
+                        let displayName = tagVal;
+                        let isCustomPos = false;
+                        try {
+                          if (tagVal.startsWith('{')) {
+                            const parsed = JSON.parse(tagVal);
+                            displayName = parsed.name;
+                            isCustomPos = parsed.posX !== null;
+                          }
+                        } catch(e) {}
+                        if (!displayName) return null;
+                        return (
+                          <span key={i} className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                            isCustomPos 
+                              ? 'bg-amber-950/40 text-amber-400 border-amber-900'
+                              : 'bg-zinc-900 text-zinc-300 border-zinc-800'
+                          }`}>
+                            {displayName} {isCustomPos && '📍'}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = splitTagsText(tagsText).filter(t => t !== tagVal);
+                                setTagsText(updated.join(', '));
+                              }}
+                              className="text-zinc-500 hover:text-red-400 font-extrabold cursor-pointer text-xs"
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        );
+                      })}
+                      
+                      <input
+                        type="text"
+                        placeholder="Add new tag & press Enter/Comma..."
+                        onKeyDown={(e) => {
+                          if (e.key === ',' || e.key === 'Enter') {
+                            e.preventDefault();
+                            const val = e.currentTarget.value.trim();
+                            if (!val) return;
+                            const existing = splitTagsText(tagsText);
+                            // Avoid duplicate names (even if position is set)
+                            const names = existing.map(t => {
+                              try {
+                                if (t.startsWith('{')) return JSON.parse(t).name;
+                              } catch(err) {}
+                              return t;
+                            });
+                            if (!names.includes(val)) {
+                              setTagsText([...existing, val].join(', '));
+                            }
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                        className="bg-transparent border-none outline-none text-white text-xs flex-1 min-w-[120px]"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Images Upload Mock */}
@@ -1099,7 +1212,8 @@ export default function AdminPage() {
                   onClick={() => {
                     setEditingItem(null);
                     setCatForm({
-                      name_en: '', name_ar: '', slug: '', display_order: categories.length + 1, is_hidden: false, show_in_browse: true
+                      name_en: '', name_ar: '', slug: '', display_order: categories.length + 1, is_hidden: false, show_in_browse: true,
+                      default_sizes: '', default_fabrics: '', default_tags: ''
                     });
                     setIsFormOpen(true);
                   }}
@@ -1188,6 +1302,42 @@ export default function AdminPage() {
                   </div>
                 </div>
 
+                {/* Category-level Defaults (Request 9) */}
+                <div className="border-t border-zinc-800 pt-3 mt-3 space-y-3">
+                  <h4 className="text-[10px] font-black uppercase text-zinc-400">Category Defaults</h4>
+                  
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Sizes (e.g. S, M, L)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. S, M, L, XL"
+                      value={catForm.default_sizes || ''}
+                      onChange={(e) => setCatForm({ ...catForm, default_sizes: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Fabrics (e.g. Standard Cotton)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Standard Cotton, Premium Cotton"
+                      value={catForm.default_fabrics || ''}
+                      onChange={(e) => setCatForm({ ...catForm, default_fabrics: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Tags (e.g. New Drop)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. New Drop, anime"
+                      value={catForm.default_tags || ''}
+                      onChange={(e) => setCatForm({ ...catForm, default_tags: e.target.value })}
+                      className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+
                 <button
                   type="submit"
                   className="w-full py-2.5 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-xs cursor-pointer"
@@ -1224,7 +1374,10 @@ export default function AdminPage() {
                                 slug: c.slug,
                                 display_order: c.display_order,
                                 is_hidden: c.is_hidden,
-                                show_in_browse: c.show_in_browse !== false
+                                show_in_browse: c.show_in_browse !== false,
+                                default_sizes: (c as any).default_sizes || '',
+                                default_fabrics: (c as any).default_fabrics || '',
+                                default_tags: (c as any).default_tags || ''
                               });
                               setIsFormOpen(true);
                             }}
@@ -1724,6 +1877,185 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+
+            {/* Expandable Auto-Applied campaigns & special conditions panel (Request 10) */}
+            <div className="mt-8 border border-zinc-800 bg-zinc-900 rounded-2xl overflow-hidden max-w-2xl">
+              <button
+                type="button"
+                onClick={() => setIsAutoOffersOpen(!isAutoOffersOpen)}
+                className="w-full flex justify-between items-center p-4 text-sm font-black uppercase text-white bg-zinc-850 hover:bg-zinc-800 cursor-pointer select-none transition-colors border-b border-zinc-800"
+              >
+                <span className="flex items-center gap-2">
+                  🏷️ Auto-Applied Campaigns & Special Offers ({autoOffers.length})
+                </span>
+                <span>{isAutoOffersOpen ? '▲ Collapse' : '▼ Expand & Edit'}</span>
+              </button>
+
+              {isAutoOffersOpen && (
+                <div className="p-4 sm:p-6 space-y-6">
+                  <div className="flex justify-between items-start">
+                    <p className="text-[10px] text-zinc-400 uppercase leading-relaxed max-w-md">
+                      Setup automated multi-buy, tag-based, or conditional order discounts that apply instantly during shopping cart and checkout flows.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newOffer = {
+                          id: `ao-${Date.now()}`,
+                          name_en: 'New Promo Offer',
+                          name_ar: 'عرض ترويجي جديد',
+                          type: 'quantity', // 'quantity' | 'tag' | 'both'
+                          min_quantity: 2,
+                          required_tag: '',
+                          discount_percent: 10,
+                          is_active: true
+                        };
+                        const nextList = [...autoOffers, newOffer];
+                        setAutoOffers(nextList);
+                        setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+                      }}
+                      className="px-3 py-1.5 bg-brand-accent hover:bg-brand-accent/90 text-white rounded text-[10px] font-bold uppercase cursor-pointer transition-colors"
+                    >
+                      + Add Campaign
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {autoOffers.map((offer, idx) => (
+                      <div key={offer.id} className="p-4 bg-zinc-950 border border-zinc-850 rounded-xl space-y-3 relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextList = autoOffers.filter(o => o.id !== offer.id);
+                            setAutoOffers(nextList);
+                            setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+                          }}
+                          className="absolute top-3 right-3 text-zinc-500 hover:text-red-400 cursor-pointer transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Campaign Name (English)</label>
+                            <input
+                              type="text"
+                              value={offer.name_en || ''}
+                              onChange={(e) => {
+                                const nextList = autoOffers.map((o, i) => i === idx ? { ...o, name_en: e.target.value } : o);
+                                setAutoOffers(nextList);
+                                setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+                              }}
+                              className="w-full px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Campaign Name (Arabic)</label>
+                            <input
+                              type="text"
+                              dir="rtl"
+                              value={offer.name_ar || ''}
+                              onChange={(e) => {
+                                const nextList = autoOffers.map((o, i) => i === idx ? { ...o, name_ar: e.target.value } : o);
+                                setAutoOffers(nextList);
+                                setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+                              }}
+                              className="w-full px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] text-right font-arabic"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Discount Type</label>
+                            <select
+                              value={offer.type || 'quantity'}
+                              onChange={(e) => {
+                                const nextList = autoOffers.map((o, i) => i === idx ? { ...o, type: e.target.value } : o);
+                                setAutoOffers(nextList);
+                                setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+                              }}
+                              className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                            >
+                              <option value="quantity">Min Quantity</option>
+                              <option value="tag">Required Tag</option>
+                              <option value="both">Both</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Min Qty</label>
+                            <input
+                              type="number"
+                              value={offer.min_quantity ?? 1}
+                              onChange={(e) => {
+                                const nextList = autoOffers.map((o, i) => i === idx ? { ...o, min_quantity: Number(e.target.value) } : o);
+                                setAutoOffers(nextList);
+                                setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+                              }}
+                              className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Required Tag</label>
+                            <input
+                              type="text"
+                              value={offer.required_tag || ''}
+                              onChange={(e) => {
+                                const nextList = autoOffers.map((o, i) => i === idx ? { ...o, required_tag: e.target.value } : o);
+                                setAutoOffers(nextList);
+                                setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+                              }}
+                              placeholder="e.g. anime"
+                              className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Discount %</label>
+                            <input
+                              type="number"
+                              value={offer.discount_percent ?? 10}
+                              onChange={(e) => {
+                                const nextList = autoOffers.map((o, i) => i === idx ? { ...o, discount_percent: Number(e.target.value) } : o);
+                                setAutoOffers(nextList);
+                                setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+                              }}
+                              className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5 h-7">
+                            <input
+                              type="checkbox"
+                              checked={!!offer.is_active}
+                              onChange={(e) => {
+                                const nextList = autoOffers.map((o, i) => i === idx ? { ...o, is_active: e.target.checked } : o);
+                                setAutoOffers(nextList);
+                                setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+                              }}
+                              className="accent-brand-accent cursor-pointer"
+                            />
+                            <span className="text-[9px] uppercase font-bold text-zinc-400">Active</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end pt-3 border-t border-zinc-850">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const finalSettings = { ...settings, auto_applied_offers: JSON.stringify(autoOffers) };
+                        await saveSettings(finalSettings);
+                        alert('Auto-applied Campaigns Saved successfully!');
+                      }}
+                      className="px-6 py-2.5 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-xs cursor-pointer transition-colors"
+                    >
+                      Save Auto-Applied Campaigns
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1964,24 +2296,64 @@ export default function AdminPage() {
 
               <div className="border-t border-zinc-800 pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">English Size Chart Image URL</label>
-                  <input
-                    type="text"
-                    value={settingsForm.size_chart_img_en || ''}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_img_en: e.target.value })}
-                    placeholder="e.g. /images/size-chart-en.jpg"
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                  />
+                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">English Size Chart Image</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={settingsForm.size_chart_img_en || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_img_en: e.target.value })}
+                      placeholder="e.g. /images/size-chart-en.jpg"
+                      className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                    <label className="px-3 py-2 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-white rounded-lg text-[10px] font-bold uppercase cursor-pointer flex items-center justify-center shrink-0">
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            try {
+                              const base64 = await fileToBase64(e.target.files[0]);
+                              setSettingsForm({ ...settingsForm, size_chart_img_en: base64 });
+                            } catch(err) {
+                              console.error(err);
+                            }
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
                 <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Arabic Size Chart Image URL</label>
-                  <input
-                    type="text"
-                    value={settingsForm.size_chart_img_ar || ''}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_img_ar: e.target.value })}
-                    placeholder="e.g. /images/size-chart-ar.jpg"
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent text-right"
-                  />
+                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Arabic Size Chart Image</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={settingsForm.size_chart_img_ar || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_img_ar: e.target.value })}
+                      placeholder="e.g. /images/size-chart-ar.jpg"
+                      className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent text-right"
+                    />
+                    <label className="px-3 py-2 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-white rounded-lg text-[10px] font-bold uppercase cursor-pointer flex items-center justify-center shrink-0">
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            try {
+                              const base64 = await fileToBase64(e.target.files[0]);
+                              setSettingsForm({ ...settingsForm, size_chart_img_ar: base64 });
+                            } catch(err) {
+                              console.error(err);
+                            }
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -2018,6 +2390,35 @@ export default function AdminPage() {
                       value={settingsForm.default_tags || ''}
                       onChange={(e) => setSettingsForm({ ...settingsForm, default_tags: e.target.value })}
                       placeholder="e.g. New Drop, anime"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Loyalty Reward System Configuration (Request 2) */}
+              <div className="border-t border-zinc-800 pt-4 space-y-3 col-span-2">
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block">
+                  🏆 Per-Order Loyalty Reward Configurations
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Loyalty Order Interval (e.g. every 5 orders)</label>
+                    <input
+                      type="number"
+                      value={settingsForm.loyalty_orders_threshold || 5}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, loyalty_orders_threshold: Number(e.target.value) })}
+                      placeholder="e.g. 5"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Loyalty Discount Percentage (%)</label>
+                    <input
+                      type="number"
+                      value={settingsForm.loyalty_discount_percent || 20}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, loyalty_discount_percent: Number(e.target.value) })}
+                      placeholder="e.g. 20"
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
                     />
                   </div>
@@ -2137,147 +2538,6 @@ export default function AdminPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              </div>
-
-              {/* Visual Auto-Applied Campaigns Builder */}
-              <div className="border-t border-zinc-800 pt-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block">
-                    🏷️ Auto-Applied Campaigns
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newOffer = {
-                        id: `ao-${Date.now()}`,
-                        name_en: 'New Promo Offer',
-                        name_ar: 'عرض ترويجي جديد',
-                        type: 'quantity', // 'quantity' | 'tag' | 'both'
-                        min_quantity: 2,
-                        required_tag: '',
-                        discount_percent: 10,
-                        is_active: true
-                      };
-                      const nextList = [...autoOffers, newOffer];
-                      updateOffersList(nextList);
-                    }}
-                    className="px-2 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white rounded text-[10px] font-bold uppercase cursor-pointer"
-                  >
-                    + Add Campaign
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {autoOffers.map((offer, idx) => (
-                    <div key={offer.id} className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl space-y-2 relative">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextList = autoOffers.filter(o => o.id !== offer.id);
-                          updateOffersList(nextList);
-                        }}
-                        className="absolute top-2 right-2 text-zinc-500 hover:text-red-500 cursor-pointer"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Campaign Name (English)</label>
-                          <input
-                            type="text"
-                            value={offer.name_en || ''}
-                            onChange={(e) => {
-                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, name_en: e.target.value } : o);
-                              updateOffersList(nextList);
-                            }}
-                            className="w-full px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Campaign Name (Arabic)</label>
-                          <input
-                            type="text"
-                            dir="rtl"
-                            value={offer.name_ar || ''}
-                            onChange={(e) => {
-                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, name_ar: e.target.value } : o);
-                              updateOffersList(nextList);
-                            }}
-                            className="w-full px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px] text-right font-arabic"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 items-end">
-                        <div>
-                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Discount Type</label>
-                          <select
-                            value={offer.type || 'quantity'}
-                            onChange={(e) => {
-                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, type: e.target.value } : o);
-                              updateOffersList(nextList);
-                            }}
-                            className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
-                          >
-                            <option value="quantity">Min Quantity</option>
-                            <option value="tag">Required Tag</option>
-                            <option value="both">Both</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Min Qty</label>
-                          <input
-                            type="number"
-                            value={offer.min_quantity ?? 1}
-                            onChange={(e) => {
-                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, min_quantity: Number(e.target.value) } : o);
-                              updateOffersList(nextList);
-                            }}
-                            className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Required Tag</label>
-                          <input
-                            type="text"
-                            value={offer.required_tag || ''}
-                            onChange={(e) => {
-                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, required_tag: e.target.value } : o);
-                              updateOffersList(nextList);
-                            }}
-                            placeholder="e.g. anime"
-                            className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Discount %</label>
-                          <input
-                            type="number"
-                            value={offer.discount_percent ?? 10}
-                            onChange={(e) => {
-                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, discount_percent: Number(e.target.value) } : o);
-                              updateOffersList(nextList);
-                            }}
-                            className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
-                          />
-                        </div>
-                        <div className="flex items-center gap-1.5 h-7">
-                          <input
-                            type="checkbox"
-                            checked={!!offer.is_active}
-                            onChange={(e) => {
-                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, is_active: e.target.checked } : o);
-                              updateOffersList(nextList);
-                            }}
-                            className="accent-brand-accent cursor-pointer"
-                          />
-                          <span className="text-[9px] uppercase font-bold text-zinc-400">Active</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
 
@@ -2514,6 +2774,45 @@ export default function AdminPage() {
                         );
                       })}
                   </select>
+                </div>
+
+                {/* Inline Quick Add Tag Controller (Request 8) */}
+                <div className="flex gap-2 items-end bg-zinc-950 p-2.5 border border-zinc-850 rounded-xl">
+                  <div className="flex-1">
+                    <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-1">Quick Create New Tag</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Hot, Sale, Limited"
+                      value={newTagInput}
+                      onChange={(e) => setNewTagInput(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = newTagInput.trim();
+                      if (!trimmed) return;
+                      const existing = splitTagsText(tagsText);
+                      const names = existing.map(t => {
+                        try {
+                          if (t.startsWith('{')) return JSON.parse(t).name;
+                        } catch(err) {}
+                        return t;
+                      });
+                      if (names.includes(trimmed)) {
+                        alert('Tag already exists!');
+                        return;
+                      }
+                      const updated = [...existing, trimmed];
+                      setTagsText(updated.join(', '));
+                      setSelectedTagToPosition(trimmed);
+                      setNewTagInput('');
+                    }}
+                    className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-[10px] uppercase font-bold cursor-pointer transition-colors border border-zinc-700"
+                  >
+                    Add Tag
+                  </button>
                 </div>
 
                 {/* Badge Color Customization */}

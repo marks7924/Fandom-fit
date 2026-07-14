@@ -20,7 +20,8 @@ export default function UserProfileModal() {
     orders,
     products,
     signOutUser,
-    setPreviewProduct
+    setPreviewProduct,
+    settings
   } = useStore();
 
   const [copiedLink, setCopiedLink] = useState(false);
@@ -134,13 +135,28 @@ export default function UserProfileModal() {
                 </div>
                 <div>
                   <h4 className="text-[10px] font-black uppercase text-black/45">
-                    {locale === 'ar' ? 'نقاط الولاء المتراكمة' : 'Loyalty Points'}
+                    {locale === 'ar' ? 'برنامج المكافآت (خصم دوري)' : 'Loyalty Reward Progress'}
                   </h4>
-                  <span className="text-2xl font-black text-black">
-                    {activeProfile.loyalty_points || 0} pts
+                  <span className="text-xl font-black text-black block mt-0.5">
+                    {activeProfile.loyalty_points || 0} {locale === 'ar' ? 'طلبات مسجلة' : 'Orders Placed'}
                   </span>
                   <p className="text-[9px] font-extrabold text-[#E07A5F] uppercase mt-0.5">
-                    {locale === 'ar' ? 'احصل على نقطة مقابل كل ١٠ جنيهات تدفعها' : '1 point for every 10 EGP spent'}
+                    {(() => {
+                      const threshold = Number(settings.loyalty_orders_threshold || 5);
+                      const discountPct = Number(settings.loyalty_discount_percent || 20);
+                      const current = (activeProfile.loyalty_points || 0);
+                      if (current >= threshold) {
+                        return locale === 'ar'
+                          ? `🎉 مكافأة متاحة: خصم ${discountPct}٪ على طلبك القادم!`
+                          : `🎉 Reward Unlocked: ${discountPct}% OFF your next order!`;
+                      } else {
+                        const remaining = threshold - (current % threshold);
+                        const progress = current % threshold;
+                        return locale === 'ar'
+                          ? `اطلب ${remaining} قطع إضافية للحصول على خصم ${discountPct}٪ (${progress}/${threshold})`
+                          : `Place ${remaining} more orders for ${discountPct}% discount! (${progress}/${threshold})`;
+                      }
+                    })()}
                   </p>
                 </div>
               </div>

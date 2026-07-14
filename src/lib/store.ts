@@ -202,6 +202,8 @@ interface StoreState {
   setIsAuthModalOpen: (open: boolean) => void;
   isProfileModalOpen: boolean;
   setIsProfileModalOpen: (open: boolean) => void;
+  isSizeChartOpen: boolean;
+  setIsSizeChartOpen: (open: boolean) => void;
   signUpUser: (email: string, password: string, phone: string) => Promise<{ success: boolean; error?: string }>;
   signInUser: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signInUserWithGoogle: () => Promise<{ success: boolean; error?: string }>;
@@ -246,6 +248,8 @@ export const useStore = create<StoreState>((set, get) => ({
   setIsAuthModalOpen: (open) => set({ isAuthModalOpen: open }),
   isProfileModalOpen: false,
   setIsProfileModalOpen: (open) => set({ isProfileModalOpen: open }),
+  isSizeChartOpen: false,
+  setIsSizeChartOpen: (open) => set({ isSizeChartOpen: open }),
 
   signUpUser: async (email, password, phone) => {
     try {
@@ -677,10 +681,18 @@ export const useStore = create<StoreState>((set, get) => ({
         }
 
         // If user is logged in, reward loyalty points & save profile address data
-        const { user, profile } = get();
+        const { user, profile, settings } = get();
         if (user && profile) {
-          const awardedPoints = Math.floor(Number(order.price) / 10);
-          const newPoints = (profile.loyalty_points || 0) + awardedPoints;
+          const threshold = Number(settings.loyalty_orders_threshold || 5);
+          const hasLoyaltyDiscount = (profile.loyalty_points || 0) >= threshold;
+
+          let nextPoints = (profile.loyalty_points || 0);
+          if (hasLoyaltyDiscount) {
+            nextPoints = Math.max(0, nextPoints - threshold);
+          }
+          // Increment by 1 point per completed order
+          nextPoints = nextPoints + 1;
+
           const addressData = {
             customer_name: order.customer_name,
             customer_phone: order.customer_phone,
@@ -689,9 +701,9 @@ export const useStore = create<StoreState>((set, get) => ({
             city: order.city || '',
             address: order.address || ''
           };
-          const updatedProfile = { ...profile, loyalty_points: newPoints, address_data: addressData };
+          const updatedProfile = { ...profile, loyalty_points: nextPoints, address_data: addressData };
           set({ profile: updatedProfile });
-          await supabase.from('profiles').update({ loyalty_points: newPoints, address_data: addressData }).eq('id', user.id);
+          await supabase.from('profiles').update({ loyalty_points: nextPoints, address_data: addressData }).eq('id', user.id);
         }
       }
 

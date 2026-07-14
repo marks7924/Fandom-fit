@@ -23,6 +23,7 @@ export default function CartDrawer() {
     validateCoupon,
     settings,
     updateCartItemSpecs,
+    setIsSizeChartOpen,
   } = useStore();
 
   const [promoCode, setPromoCode] = useState('');
@@ -141,6 +142,20 @@ export default function CartDrawer() {
 
           {/* Cart Items List */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {cart.length > 0 && (
+              <div className="flex justify-between items-center bg-white border-2 border-black p-2.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                <span className="text-[10px] font-black uppercase text-black/55">
+                  {locale === 'ar' ? 'هل تحتاج إلى مساعدة في المقاسات؟' : 'Need help with sizes?'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsSizeChartOpen(true)}
+                  className="px-3 py-1 bg-amber-100 hover:bg-amber-200 border-2 border-black text-black rounded-lg text-[9px] font-black uppercase tracking-wider cursor-pointer transition-all shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5"
+                >
+                  📐 {locale === 'ar' ? 'دليل المقاسات' : 'Size Guide'}
+                </button>
+              </div>
+            )}
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
                 <div className="w-24 h-24 border-3 border-dashed border-black/30 rounded-full flex items-center justify-center text-black/30 animate-pulse">
