@@ -8,6 +8,7 @@ export interface Category {
   name_ar: string;
   display_order: number;
   is_hidden: boolean;
+  show_in_browse?: boolean;
 }
 
 export interface Product {
@@ -193,6 +194,21 @@ interface StoreState {
     discountValue?: number;
     error?: string;
   }>;
+
+  // Auth & Profile State
+  user: any | null;
+  profile: any | null;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  isProfileModalOpen: boolean;
+  setIsProfileModalOpen: (open: boolean) => void;
+  signUpUser: (email: string, password: string, phone: string) => Promise<{ success: boolean; error?: string }>;
+  signInUser: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signInUserWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  signOutUser: () => Promise<void>;
+  toggleFavorite: (productId: string) => Promise<void>;
+  syncUserProfile: () => Promise<void>;
+  updateCartItemSpecs: (cartItemId: string, newSize: string, newFabric: string) => void;
 }
 
 export interface DiscountCampaign {
@@ -222,6 +238,145 @@ export const useStore = create<StoreState>((set, get) => ({
   setIsTrackOrderOpen: (open) => set({ isTrackOrderOpen: open }),
   isInviteOpen: false,
   setIsInviteOpen: (open) => set({ isInviteOpen: open }),
+
+  // User Auth & Profiles initialization
+  user: null,
+  profile: null,
+  isAuthModalOpen: false,
+  setIsAuthModalOpen: (open) => set({ isAuthModalOpen: open }),
+  isProfileModalOpen: false,
+  setIsProfileModalOpen: (open) => set({ isProfileModalOpen: open }),
+
+  signUpUser: async (email, password, phone) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { phone } }
+      });
+      if (error) return { success: false, error: error.message };
+      
+      const user = data?.user || null;
+      if (user) {
+        set({ user });
+        await get().syncUserProfile();
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Signup failed' };
+    }
+  },
+
+  signInUser: async (email, password) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { success: false, error: error.message };
+      
+      set({ user: data?.user || null });
+      await get().syncUserProfile();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Login failed' };
+    }
+  },
+
+  signInUserWithGoogle: async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+      if (error) return { success: false, error: error.message };
+      
+      if (data?.user) {
+        set({ user: data.user });
+        await get().syncUserProfile();
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Google login failed' };
+    }
+  },
+
+  signOutUser: async () => {
+    await supabase.auth.signOut();
+    set({ user: null, profile: null });
+  },
+
+  syncUserProfile: async () => {
+    const user = get().user;
+    if (!user) return;
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      if (data) {
+        set({ profile: data });
+      } else {
+        // Create profile if missing
+        const referralCode = `REF-${user.id.replace('u-', '').substring(0, 5).toUpperCase()}`;
+        const newProfile = {
+          id: user.id,
+          email: user.email || '',
+          phone: '',
+          loyalty_points: 0,
+          favorites: [],
+          referral_code: referralCode,
+          address_data: {}
+        };
+        await supabase.from('profiles').insert([newProfile]);
+        set({ profile: newProfile });
+      }
+    } catch (err) {
+      console.error('Error syncing profile:', err);
+    }
+  },
+
+  toggleFavorite: async (productId) => {
+    const { user, profile } = get();
+    if (!user || !profile) return;
+    const favorites = profile.favorites || [];
+    let updatedFavs;
+    if (favorites.includes(productId)) {
+      updatedFavs = favorites.filter((id: string) => id !== productId);
+    } else {
+      updatedFavs = [...favorites, productId];
+    }
+    
+    const updatedProfile = { ...profile, favorites: updatedFavs };
+    set({ profile: updatedProfile });
+    
+    try {
+      await supabase.from('profiles').update({ favorites: updatedFavs }).eq('id', user.id);
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+    }
+  },
+
+  updateCartItemSpecs: (cartItemId, newSize, newFabric) => {
+    const cart = get().cart;
+    const { getProductEffectivePrice } = get();
+    const item = cart.find(i => i.id === cartItemId);
+    if (!item) return;
+    
+    const newId = `${item.product.id}-${newSize}-${newFabric}`;
+    
+    // Calculate new price
+    const { discountedPrice } = getProductEffectivePrice(item.product);
+    const premium = getFabricPremium(newFabric);
+    const newItemPrice = discountedPrice + premium;
+
+    const updatedCart = cart.map(i => {
+      if (i.id === cartItemId) {
+        return {
+          ...i,
+          id: newId,
+          size: newSize,
+          fabric: newFabric,
+          price: newItemPrice
+        };
+      }
+      return i;
+    });
+    
+    set({ cart: updatedCart });
+    localStorage.setItem('ff_cart', JSON.stringify(updatedCart));
+  },
 
   cart: typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('ff_cart') || '[]') : [],
   isCartOpen: false,
@@ -260,7 +415,7 @@ export const useStore = create<StoreState>((set, get) => ({
       ];
     }
     
-    set({ cart: updatedCart });
+    set({ cart: updatedCart, isCartOpen: true });
     localStorage.setItem('ff_cart', JSON.stringify(updatedCart));
   },
 
@@ -311,6 +466,22 @@ export const useStore = create<StoreState>((set, get) => ({
         settingsMap.referral_reward_system_enabled = true;
       }
 
+      // Fetch authenticated user
+      let currentUser = null;
+      let currentProfile = null;
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user) {
+          currentUser = userData.user;
+          const { data: profData } = await supabase.from('profiles').select('*').eq('id', userData.user.id).maybeSingle();
+          if (profData) {
+            currentProfile = profData;
+          }
+        }
+      } catch (authErr) {
+        console.error('Error fetching initial user auth:', authErr);
+      }
+
       set({
         categories: categories || [],
         products: products || [],
@@ -319,6 +490,8 @@ export const useStore = create<StoreState>((set, get) => ({
         settings: settingsMap,
         announcement: settingsMap.announcement || '',
         announcement_ar: settingsMap.announcement_ar || '',
+        user: currentUser,
+        profile: currentProfile,
         isLoading: false,
       });
     } catch (error) {
@@ -473,6 +646,37 @@ export const useStore = create<StoreState>((set, get) => ({
       const newOrder = data?.[0] || null;
       if (newOrder) {
         set({ orders: [newOrder, ...get().orders] });
+
+        // Save order address details locally
+        if (typeof window !== 'undefined') {
+          const savedData = {
+            customer_name: order.customer_name,
+            customer_phone: order.customer_phone,
+            customer_email: order.customer_email || '',
+            governorate: order.governorate || '',
+            city: order.city || '',
+            address: order.address || ''
+          };
+          localStorage.setItem('ff_saved_customer_data', JSON.stringify(savedData));
+        }
+
+        // If user is logged in, reward loyalty points & save profile address data
+        const { user, profile } = get();
+        if (user && profile) {
+          const awardedPoints = Math.floor(Number(order.price) / 10);
+          const newPoints = (profile.loyalty_points || 0) + awardedPoints;
+          const addressData = {
+            customer_name: order.customer_name,
+            customer_phone: order.customer_phone,
+            customer_email: order.customer_email || '',
+            governorate: order.governorate || '',
+            city: order.city || '',
+            address: order.address || ''
+          };
+          const updatedProfile = { ...profile, loyalty_points: newPoints, address_data: addressData };
+          set({ profile: updatedProfile });
+          await supabase.from('profiles').update({ loyalty_points: newPoints, address_data: addressData }).eq('id', user.id);
+        }
       }
 
       // Clear referral cookie/storage after it is successfully redeemed
@@ -874,11 +1078,17 @@ export const getFabricPremium = (fabric: string): number => {
 export interface CartTotals {
   subtotal: number;
   cottonDiscount: number;
+  autoAppliedDiscount: number;
+  autoAppliedOfferName: string;
   shipping: number;
   finalTotal: number;
 }
 
-export const getCartTotals = (cart: CartItem[], cottonEnabled: boolean = true): CartTotals => {
+export const getCartTotals = (
+  cart: CartItem[], 
+  cottonEnabled: boolean = true, 
+  autoOffers: any[] = []
+): CartTotals => {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
   let cottonDiscount = 0;
@@ -892,12 +1102,46 @@ export const getCartTotals = (cart: CartItem[], cottonEnabled: boolean = true): 
     cottonDiscount = Math.round(flatItems[1].price * 0.25);
   }
   
+  // Calculate Auto-applied Offers
+  let autoAppliedDiscount = 0;
+  let autoAppliedOfferName = '';
+  
+  if (autoOffers && autoOffers.length > 0) {
+    for (const offer of autoOffers) {
+      if (!offer.is_active) continue;
+      
+      let qualifies = false;
+      const hasRequiredTag = offer.required_tag
+        ? cart.some(item => item.product.tags && item.product.tags.map((t: string) => t.toLowerCase()).includes(offer.required_tag.toLowerCase()))
+        : false;
+        
+      if (offer.type === 'quantity' && totalQty >= (offer.min_quantity || 0)) {
+        qualifies = true;
+      } else if (offer.type === 'tag' && hasRequiredTag) {
+        qualifies = true;
+      } else if (offer.type === 'both' && totalQty >= (offer.min_quantity || 0) && hasRequiredTag) {
+        qualifies = true;
+      }
+      
+      if (qualifies) {
+        const discount = Math.round((subtotal * offer.discount_percent) / 100);
+        if (discount > autoAppliedDiscount) {
+          autoAppliedDiscount = discount;
+          autoAppliedOfferName = offer.name_en;
+        }
+      }
+    }
+  }
+  
   const shipping = subtotal > 0 ? 50 : 0;
+  const finalTotal = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount + shipping);
   
   return {
     subtotal,
     cottonDiscount,
+    autoAppliedDiscount,
+    autoAppliedOfferName,
     shipping,
-    finalTotal: subtotal - cottonDiscount + shipping
+    finalTotal
   };
 };

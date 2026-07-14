@@ -22,6 +22,7 @@ export default function CartDrawer() {
     setIsCheckoutOpen,
     validateCoupon,
     settings,
+    updateCartItemSpecs,
   } = useStore();
 
   const [promoCode, setPromoCode] = useState('');
@@ -35,12 +36,20 @@ export default function CartDrawer() {
 
   // Subtotal & Cotton Promotion Calculations
   const cottonEnabled = settings.cotton_reward_system_enabled !== false;
-  const { subtotal, cottonDiscount, shipping, finalTotal } = getCartTotals(cart, cottonEnabled);
+  const autoOffers = settings.auto_applied_offers || [];
+  const { 
+    subtotal, 
+    cottonDiscount, 
+    autoAppliedDiscount, 
+    autoAppliedOfferName, 
+    shipping, 
+    finalTotal 
+  } = getCartTotals(cart, cottonEnabled, autoOffers);
   const shippingFee = shipping;
 
   // Discount Calculation
   const discountAmount = Number(((subtotal * discountPercent) / 100).toFixed(2));
-  const finalTotalWithPromo = subtotal - cottonDiscount - discountAmount + shippingFee;
+  const finalTotalWithPromo = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - discountAmount + shippingFee);
 
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) return;
@@ -194,16 +203,33 @@ export default function CartDrawer() {
                             <Trash2 size={14} />
                           </button>
                         </div>
-                        {/* Size & Fabric Tagging */}
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          <span className="text-[9px] font-black uppercase tracking-wider bg-[#EDE0D0] px-1.5 py-0.5 rounded border border-black/10">
-                            {locale === 'ar' ? `مقاس: ${item.size}` : `Size: ${item.size}`}
-                          </span>
-                          <span className="text-[9px] font-black uppercase tracking-wider bg-[#EDE0D0] px-1.5 py-0.5 rounded border border-black/10">
-                            {locale === 'ar'
-                              ? (item.fabric === 'Standard Cotton' ? 'قطن قياسي' : 'قطن ثقيل فاخر')
-                              : item.fabric}
-                          </span>
+                        {/* Size & Fabric Tagging Dropdowns */}
+                        <div className="flex flex-wrap gap-2 mt-1.5 select-none">
+                          {/* Size selector dropdown */}
+                          <select
+                            value={item.size}
+                            onChange={(e) => updateCartItemSpecs(item.id, e.target.value, item.fabric)}
+                            className="text-[9px] font-black uppercase bg-[#EDE0D0] px-1 py-0.5 rounded border border-black focus:outline-none cursor-pointer"
+                          >
+                            {(item.product.available_sizes || ['S', 'M', 'L', 'XL', 'XXL']).map((s) => (
+                              <option key={s} value={s}>
+                                {locale === 'ar' ? `مقاس ${s}` : `Size ${s}`}
+                              </option>
+                            ))}
+                          </select>
+
+                          {/* Fabric selector dropdown */}
+                          <select
+                            value={item.fabric}
+                            onChange={(e) => updateCartItemSpecs(item.id, item.size, e.target.value)}
+                            className="text-[9px] font-black uppercase bg-[#EDE0D0] px-1 py-0.5 rounded border border-black focus:outline-none cursor-pointer"
+                          >
+                            {(item.product.material_options || ['Standard Cotton', 'Premium Cotton']).map((f) => (
+                              <option key={f} value={f}>
+                                {f === 'Standard Cotton' ? (locale === 'ar' ? 'قطن قياسي' : 'Standard Cotton') : (locale === 'ar' ? 'قطن مميز' : f)}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
 
@@ -292,6 +318,16 @@ export default function CartDrawer() {
                   <div className="flex justify-between items-center text-green-600 font-bold">
                     <span>{locale === 'ar' ? 'عرض القطن (خصم ٢٥٪ على القطعة الثانية)' : 'Cotton Promo (25% off 2nd Item)'}</span>
                     <span>-{tp('price_egp', { price: cottonDiscount })}</span>
+                  </div>
+                )}
+                {autoAppliedDiscount > 0 && (
+                  <div className="flex justify-between items-center text-green-600 font-bold">
+                    <span>
+                      {locale === 'ar' 
+                        ? `خصم تلقائي: ${autoAppliedOfferName}` 
+                        : `Auto Offer: ${autoAppliedOfferName}`}
+                    </span>
+                    <span>-{tp('price_egp', { price: autoAppliedDiscount })}</span>
                   </div>
                 )}
                 {discountPercent > 0 && (

@@ -53,7 +53,7 @@ export default function AdminPage() {
   });
 
   const [catForm, setCatForm] = useState({
-    name_en: '', name_ar: '', slug: '', display_order: 0, is_hidden: false
+    name_en: '', name_ar: '', slug: '', display_order: 0, is_hidden: false, show_in_browse: true
   });
 
   const [offerForm, setOfferForm] = useState({
@@ -85,7 +85,11 @@ export default function AdminPage() {
     fabric_premium_heavy: 100,
     fabric_premium_oversized: 150,
     cotton_reward_system_enabled: true,
-    referral_reward_system_enabled: true
+    referral_reward_system_enabled: true,
+    size_chart_img_en: '',
+    size_chart_img_ar: '',
+    size_chart_table: '',
+    auto_applied_offers: ''
   });
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
@@ -96,6 +100,12 @@ export default function AdminPage() {
   const [newCustomSize, setNewCustomSize] = useState('');
   const [newCustomFabric, setNewCustomFabric] = useState('');
   const [tagsText, setTagsText] = useState('');
+
+  // Visual Tag Positioner Modal States
+  const [isTagPositionerOpen, setIsTagPositionerOpen] = useState(false);
+  const [selectedTagToPosition, setSelectedTagToPosition] = useState('');
+  const [tagBgColor, setTagBgColor] = useState('#F2CC8F');
+  const [tagTextColor, setTagTextColor] = useState('#000000');
 
   useEffect(() => {
     if (prodForm.available_sizes) {
@@ -142,7 +152,11 @@ export default function AdminPage() {
         fabric_premium_heavy: Number(premiums.heavy ?? 100),
         fabric_premium_oversized: Number(premiums.oversized ?? 150),
         cotton_reward_system_enabled: settings.cotton_reward_system_enabled !== false,
-        referral_reward_system_enabled: settings.referral_reward_system_enabled !== false
+        referral_reward_system_enabled: settings.referral_reward_system_enabled !== false,
+        size_chart_img_en: settings.size_chart_img_en || '',
+        size_chart_img_ar: settings.size_chart_img_ar || '',
+        size_chart_table: settings.size_chart_table || '',
+        auto_applied_offers: settings.auto_applied_offers || ''
       });
     }
   }, [isAuthenticated, settings]);
@@ -172,6 +186,28 @@ export default function AdminPage() {
     setIsAuthenticated(false);
   };
 
+  // Helper to split tags text while ignoring commas inside JSON objects
+  const splitTagsText = (text: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inBraces = 0;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '{') inBraces++;
+      if (char === '}') inBraces--;
+      if (char === ',' && inBraces === 0) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    if (current.trim()) {
+      result.push(current.trim());
+    }
+    return result;
+  };
+
   // CRUD handlers
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,7 +224,7 @@ export default function AdminPage() {
       price: Number(prodForm.price),
       sale_price: prodForm.sale_price ? Number(prodForm.sale_price) : null,
       display_order: Number(prodForm.display_order),
-      tags: tagsText.split(',').map(t => t.trim()).filter(t => t !== '')
+      tags: splitTagsText(tagsText)
     };
 
     if (editingItem) {
@@ -261,12 +297,35 @@ export default function AdminPage() {
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    await saveSettings(settingsForm);
-    if (settingsForm.announcement !== undefined) {
-      await updateAnnouncement(settingsForm.announcement);
+    
+    const finalSettings = { ...settingsForm } as any;
+
+    // Parse size chart table if custom JSON
+    if (typeof finalSettings.size_chart_table === 'string' && finalSettings.size_chart_table.trim()) {
+      try {
+        finalSettings.size_chart_table = JSON.parse(finalSettings.size_chart_table);
+      } catch (err) {
+        alert('Invalid Fallback Size Chart Table JSON syntax! Please check formatting.');
+        return;
+      }
     }
-    if (settingsForm.announcement_ar !== undefined) {
-      await updateAnnouncementAr(settingsForm.announcement_ar);
+    
+    // Parse auto-applied promo campaigns if custom JSON
+    if (typeof finalSettings.auto_applied_offers === 'string' && finalSettings.auto_applied_offers.trim()) {
+      try {
+        finalSettings.auto_applied_offers = JSON.parse(finalSettings.auto_applied_offers);
+      } catch (err) {
+        alert('Invalid Auto-applied Promo Campaigns JSON syntax! Please check formatting.');
+        return;
+      }
+    }
+
+    await saveSettings(finalSettings);
+    if (finalSettings.announcement !== undefined) {
+      await updateAnnouncement(finalSettings.announcement);
+    }
+    if (finalSettings.announcement_ar !== undefined) {
+      await updateAnnouncementAr(finalSettings.announcement_ar);
     }
     alert(t('settings.save_success'));
   };
@@ -816,7 +875,30 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Custom Tags (Comma Separated)</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[10px] uppercase font-bold text-zinc-400">Custom Tags (Comma Separated)</label>
+                    {prodForm.images && prodForm.images.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tagsList = tagsText.split(',').map(s => s.trim()).filter(Boolean);
+                          if (tagsList.length > 0) {
+                            let firstTag = tagsList[0];
+                            try {
+                              if (firstTag.startsWith('{')) {
+                                firstTag = JSON.parse(firstTag).name;
+                              }
+                            } catch(err) {}
+                            setSelectedTagToPosition(firstTag);
+                          }
+                          setIsTagPositionerOpen(true);
+                        }}
+                        className="px-2 py-0.5 bg-brand-accent text-white hover:bg-brand-accent/90 rounded text-[9px] font-black uppercase transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        📐 Position Tags Visually
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     placeholder="e.g. Vintage, Oversized, Special Edition"
@@ -955,7 +1037,7 @@ export default function AdminPage() {
                   onClick={() => {
                     setEditingItem(null);
                     setCatForm({
-                      name_en: '', name_ar: '', slug: '', display_order: categories.length + 1, is_hidden: false
+                      name_en: '', name_ar: '', slug: '', display_order: categories.length + 1, is_hidden: false, show_in_browse: true
                     });
                     setIsFormOpen(true);
                   }}
@@ -1022,15 +1104,24 @@ export default function AdminPage() {
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
                     />
                   </div>
-                  <div className="flex items-end pb-2">
+                  <div className="flex items-end pb-2 flex-col gap-2 justify-center">
                     <label className="flex items-center gap-2 text-xs font-bold text-zinc-300">
                       <input 
                         type="checkbox" 
                         checked={catForm.is_hidden}
                         onChange={(e) => setCatForm({ ...catForm, is_hidden: e.target.checked })}
-                        className="accent-brand-accent" 
+                        className="accent-brand-accent animate-none" 
                       />
                       {t('categories.is_hidden')}
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-bold text-zinc-300">
+                      <input 
+                        type="checkbox" 
+                        checked={catForm.show_in_browse || false}
+                        onChange={(e) => setCatForm({ ...catForm, show_in_browse: e.target.checked })}
+                        className="accent-brand-accent animate-none" 
+                      />
+                      Show in Browse by Fandom
                     </label>
                   </div>
                 </div>
@@ -1065,7 +1156,14 @@ export default function AdminPage() {
                           <button
                             onClick={() => {
                               setEditingItem(c);
-                              setCatForm(c);
+                              setCatForm({
+                                name_en: c.name_en,
+                                name_ar: c.name_ar,
+                                slug: c.slug,
+                                display_order: c.display_order,
+                                is_hidden: c.is_hidden,
+                                show_in_browse: c.show_in_browse !== false
+                              });
                               setIsFormOpen(true);
                             }}
                             className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white"
@@ -1802,6 +1900,51 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              <div className="border-t border-zinc-800 pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">English Size Chart Image URL</label>
+                  <input
+                    type="text"
+                    value={settingsForm.size_chart_img_en || ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_img_en: e.target.value })}
+                    placeholder="e.g. /images/size-chart-en.jpg"
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Arabic Size Chart Image URL</label>
+                  <input
+                    type="text"
+                    value={settingsForm.size_chart_img_ar || ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_img_ar: e.target.value })}
+                    placeholder="e.g. /images/size-chart-ar.jpg"
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent text-right"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-zinc-800 pt-4">
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Fallback Size Chart Table JSON (Customizable Headers & Rows)</label>
+                <textarea
+                  rows={3}
+                  value={settingsForm.size_chart_table ? (typeof settingsForm.size_chart_table === 'string' ? settingsForm.size_chart_table : JSON.stringify(settingsForm.size_chart_table, null, 2)) : ''}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_table: e.target.value })}
+                  placeholder={`{\n  "headers": ["Size", "Chest (cm)", "Length (cm)"],\n  "rows": [\n    ["S", "52", "70"],\n    ["M", "55", "72"]\n  ]\n}`}
+                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono text-[10px]"
+                />
+              </div>
+
+              <div className="border-t border-zinc-800 pt-4">
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Auto-applied Promo Campaigns JSON</label>
+                <textarea
+                  rows={4}
+                  value={settingsForm.auto_applied_offers ? (typeof settingsForm.auto_applied_offers === 'string' ? settingsForm.auto_applied_offers : JSON.stringify(settingsForm.auto_applied_offers, null, 2)) : ''}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, auto_applied_offers: e.target.value })}
+                  placeholder={`[\n  {\n    "id": "ao-1",\n    "name_en": "Buy 3 Promo",\n    "type": "quantity",\n    "min_quantity": 3,\n    "discount_percent": 10,\n    "is_active": true\n  }\n]`}
+                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono text-[10px]"
+                />
+              </div>
+
               <button
                 type="submit"
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-xs cursor-pointer transition-colors"
@@ -1990,7 +2133,202 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      {/* VISUAL TAG POSITIONER MODAL */}
+      {isTagPositionerOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 font-mono select-none">
+          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl max-w-2xl w-full flex flex-col gap-4 text-white">
+            <div className="flex justify-between items-center border-b border-zinc-850 pb-2">
+              <h4 className="text-sm font-black uppercase text-brand-accent">📐 Interactive Tag Positioner</h4>
+              <button 
+                onClick={() => setIsTagPositionerOpen(false)}
+                className="text-zinc-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            
+            <p className="text-[10px] text-zinc-400 uppercase leading-relaxed">
+              Instructions: Select a tag, choose its badge colors, and click/tap anywhere on the product photo on the right to position it. Placed coordinates will be saved.
+            </p>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Controls */}
+              <div className="space-y-4">
+                {/* Select Tag Dropdown */}
+                <div>
+                  <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Select Tag to Place</label>
+                  <select
+                    value={selectedTagToPosition}
+                    onChange={(e) => setSelectedTagToPosition(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none"
+                  >
+                    <option value="">-- Choose Tag --</option>
+                    {splitTagsText(tagsText)
+                      .map(t => {
+                        let displayName = t;
+                        try {
+                          if (t.startsWith('{')) {
+                            displayName = JSON.parse(t).name;
+                          }
+                        } catch (err) {}
+                        return (
+                          <option key={t} value={displayName}>
+                            {displayName}
+                          </option>
+                        );
+                      })}
+                  </select>
+                </div>
+
+                {/* Badge Color Customization */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Background Color</label>
+                    <input
+                      type="color"
+                      value={tagBgColor}
+                      onChange={(e) => setTagBgColor(e.target.value)}
+                      className="w-full h-8 bg-zinc-950 border border-zinc-800 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Text Color</label>
+                    <input
+                      type="color"
+                      value={tagTextColor}
+                      onChange={(e) => setTagTextColor(e.target.value)}
+                      className="w-full h-8 bg-zinc-950 border border-zinc-800 rounded cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Placed Tags Check List */}
+                <div className="border-t border-zinc-850 pt-3 space-y-2">
+                  <label className="text-[9px] uppercase font-bold text-zinc-500 block">Placed Badges</label>
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1.5">
+                    {splitTagsText(tagsText)
+                      .map((t, idx) => {
+                        let parsed: any = null;
+                        try {
+                          if (t.startsWith('{')) parsed = JSON.parse(t);
+                        } catch(e) {}
+                        
+                        if (parsed && parsed.posX !== null) {
+                          return (
+                            <div key={idx} className="flex justify-between items-center bg-zinc-950 p-2 border border-zinc-850 rounded-lg text-[10px]">
+                              <div>
+                                <span className="font-bold text-white uppercase">{parsed.name}</span>
+                                <span className="text-zinc-500 ml-2">({parsed.posX}%, {parsed.posY}%)</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const existing = splitTagsText(tagsText);
+                                  const updated = existing.map((val) => {
+                                    if (val === t) return parsed.name; // Strip JSON wrapper
+                                    return val;
+                                  });
+                                  setTagsText(updated.join(', '));
+                                }}
+                                className="px-2 py-0.5 bg-red-950/40 border border-red-900/60 hover:bg-red-900 text-red-400 text-[8px] font-bold uppercase rounded cursor-pointer transition-colors"
+                              >
+                                Revert
+                              </button>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Visual Canvas Panel */}
+              <div className="flex flex-col items-center">
+                <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Click on Image to Position tag</label>
+                <div 
+                  onClick={(e) => {
+                    if (!selectedTagToPosition) {
+                      alert('Please select a tag first!');
+                      return;
+                    }
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+                    const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+
+                    const newTagObj = {
+                      name: selectedTagToPosition,
+                      color: tagBgColor,
+                      textColor: tagTextColor,
+                      posX: x,
+                      posY: y
+                    };
+
+                    const existing = splitTagsText(tagsText);
+                    const filtered = existing.filter(t => {
+                      try {
+                        if (t.startsWith('{')) {
+                          return JSON.parse(t).name.toLowerCase() !== selectedTagToPosition.toLowerCase();
+                        }
+                      } catch (err) {}
+                      return t.toLowerCase() !== selectedTagToPosition.toLowerCase();
+                    });
+
+                    const updated = [...filtered, JSON.stringify(newTagObj)];
+                    setTagsText(updated.join(', '));
+                  }}
+                  className="relative aspect-square w-full max-w-[280px] bg-zinc-950 border-2 border-zinc-800 rounded-lg overflow-hidden cursor-crosshair flex items-center justify-center"
+                >
+                  <Image
+                    src={prodForm.images?.[0] || '/placeholders/arcade_front.jpg'}
+                    alt="Visual Canvas"
+                    fill
+                    className="object-contain p-2"
+                  />
+
+                  {/* Render Placed Badges Overlay */}
+                  {splitTagsText(tagsText)
+                    .map((t, i) => {
+                      try {
+                        if (t.startsWith('{')) {
+                          const parsed = JSON.parse(t);
+                          if (parsed.posX !== null && parsed.posY !== null) {
+                            return (
+                              <span
+                                key={i}
+                                className="absolute z-10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] pointer-events-none"
+                                style={{
+                                  left: `${parsed.posX}%`,
+                                  top: `${parsed.posY}%`,
+                                  backgroundColor: parsed.color || '#F2CC8F',
+                                  color: parsed.textColor || '#000000',
+                                  transform: 'translate(-50%, -50%)'
+                                }}
+                              >
+                                {parsed.name}
+                              </span>
+                            );
+                          }
+                        }
+                      } catch (err) {}
+                      return null;
+                    })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-zinc-850 mt-2">
+              <button
+                type="button"
+                onClick={() => setIsTagPositionerOpen(false)}
+                className="px-5 py-2 bg-brand-accent text-white hover:bg-brand-accent/90 text-xs font-bold uppercase rounded-lg cursor-pointer"
+              >
+                Close & Save Placements
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

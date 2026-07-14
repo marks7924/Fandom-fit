@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { usePathname, useRouter } from '@/i18n/routing';
 import { useStore } from '@/lib/store';
-import { Menu, X, Globe, ShoppingBag } from 'lucide-react';
+import { Menu, X, Globe, ShoppingBag, User } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import TrackOrderModal from './TrackOrderModal';
 import BrandLogo from './BrandLogo';
@@ -47,7 +47,16 @@ export default function Navbar() {
     { name: t('contact'), href: '#contact' },
   ];
 
-  const { announcement, cart, setIsCartOpen, settings, setIsInviteOpen } = useStore();
+  const { 
+    announcement, 
+    cart, 
+    setIsCartOpen, 
+    settings, 
+    setIsInviteOpen,
+    user,
+    setIsAuthModalOpen,
+    setIsProfileModalOpen
+  } = useStore();
   const cartItemsCount = cart ? cart.reduce((sum, item) => sum + item.quantity, 0) : 0;
   const isReferralEnabled = settings.referral_reward_system_enabled !== false;
 
@@ -102,6 +111,16 @@ export default function Navbar() {
               {t('switch_lang')}
             </button>
 
+            {/* Profile Button */}
+            <button
+              onClick={() => user ? setIsProfileModalOpen(true) : setIsAuthModalOpen(true)}
+              className="p-2 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer text-black"
+              aria-label="Profile"
+              title={user ? (locale === 'ar' ? 'الملف الشخصي' : 'My Profile') : (locale === 'ar' ? 'تسجيل الدخول / إنشاء حساب' : 'Login / Sign Up')}
+            >
+              <User size={16} className={user ? 'text-brand-accent' : 'text-black'} />
+            </button>
+
             {/* Cart Button */}
             <button
               onClick={() => setIsCartOpen(true)}
@@ -133,6 +152,15 @@ export default function Navbar() {
             >
               <Globe size={12} />
               {locale === 'en' ? 'AR' : 'EN'}
+            </button>
+
+            {/* Mobile Profile Button */}
+            <button
+              onClick={() => user ? setIsProfileModalOpen(true) : setIsAuthModalOpen(true)}
+              className="p-2 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer text-black"
+              aria-label="Profile"
+            >
+              <User size={14} className={user ? 'text-brand-accent' : 'text-black'} />
             </button>
 
             {/* Mobile Cart Button */}

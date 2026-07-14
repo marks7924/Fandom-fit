@@ -260,4 +260,43 @@ DROP POLICY IF EXISTS "Allow admin all on discount_campaigns" ON discount_campai
 CREATE POLICY "Allow admin all on discount_campaigns" ON discount_campaigns 
     FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
+-- 13. Profiles and User Metadata
+CREATE TABLE IF NOT EXISTS profiles (
+    id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+    email VARCHAR(255),
+    phone VARCHAR(50),
+    loyalty_points INT DEFAULT 0,
+    favorites UUID[] DEFAULT ARRAY[]::UUID[],
+    referral_code VARCHAR(50) UNIQUE,
+    address_data JSONB DEFAULT '{}'::JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow users to read own profile" ON profiles;
+CREATE POLICY "Allow users to read own profile" ON profiles
+    FOR SELECT USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Allow users to update own profile" ON profiles;
+CREATE POLICY "Allow users to update own profile" ON profiles
+    FOR UPDATE USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Allow admin all on profiles" ON profiles;
+CREATE POLICY "Allow admin all on profiles" ON profiles
+    FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
+-- 14. Add structural attributes to categories and orders tables
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS show_in_browse BOOLEAN DEFAULT TRUE;
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS governorate VARCHAR(100);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(50);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS referral_code VARCHAR(50);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS reward_coupon_code VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS items JSONB;
+
+
 

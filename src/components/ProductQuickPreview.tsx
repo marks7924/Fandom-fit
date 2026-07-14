@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { X, Share2, ClipboardCheck, Tag } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
+import SizeChartModal from './SizeChartModal';
 
 export default function ProductQuickPreview() {
   const t = useTranslations('product_detail');
@@ -18,6 +19,7 @@ export default function ProductQuickPreview() {
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedFabric, setSelectedFabric] = useState('Standard Cotton');
   const [shareCopied, setShareCopied] = useState(false);
+  const [isSizeChartOpen, setIsSizeChartOpen] = useState(false);
 
   // Esc key closes modal
   useEffect(() => {
@@ -207,9 +209,17 @@ export default function ProductQuickPreview() {
 
                   {/* Size Selector */}
                   <div className="mt-6">
-                    <label className="text-xs font-black uppercase tracking-wider text-black/60 block mb-2">
-                      {t('select_size')}
-                    </label>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs font-black uppercase tracking-wider text-black/60 block">
+                        {t('select_size')}
+                      </label>
+                      <button
+                        onClick={() => setIsSizeChartOpen(true)}
+                        className="text-[10px] font-black uppercase tracking-wide text-brand-accent hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        📏 {locale === 'ar' ? 'دليل المقاسات' : 'Size Chart'}
+                      </button>
+                    </div>
                     <div className="flex gap-2 flex-wrap">
                       {previewProduct.available_sizes.map((size) => (
                         <button
@@ -313,6 +323,9 @@ export default function ProductQuickPreview() {
 
         </motion.div>
       </div>
+
+      {/* Sizing specifications chart modal */}
+      <SizeChartModal isOpen={isSizeChartOpen} onClose={() => setIsSizeChartOpen(false)} />
     </AnimatePresence>
   );
 }

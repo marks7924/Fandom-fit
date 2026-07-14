@@ -21,8 +21,14 @@ import TrackOrderModal from '@/components/TrackOrderModal';
 import InviteFriendsModal from '@/components/InviteFriendsModal';
 import Footer from '@/components/Footer';
 import LoadingScreen from '@/components/LoadingScreen';
+import AuthModal from '@/components/AuthModal';
+import UserProfileModal from '@/components/UserProfileModal';
 
-export default function Home() {
+export default function Home({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
   const fetchInitialData = useStore((state) => state.fetchInitialData);
   const isLoading = useStore((state) => state.isLoading);
   const products = useStore((state) => state.products);
@@ -74,6 +80,10 @@ export default function Home() {
       <TrackOrderModal />
       {/* Invite Friends modal overlay */}
       <InviteFriendsModal />
+      {/* Auth Modal overlay */}
+      <AuthModal />
+      {/* Profile Modal overlay */}
+      <UserProfileModal />
     </>
   );
 }

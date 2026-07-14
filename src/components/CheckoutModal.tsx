@@ -71,14 +71,26 @@ export default function CheckoutModal() {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      // Reset form on open
-      setName('');
-      setPhone('');
-      setEmail('');
-      setCity('');
-      setAddress('');
+      
+      // Auto-fill from user profile address_data or localStorage saved customer data!
+      const savedDataStr = typeof window !== 'undefined' ? localStorage.getItem('ff_saved_customer_data') : null;
+      let savedData: any = {};
+      if (savedDataStr) {
+        try {
+          savedData = JSON.parse(savedDataStr);
+        } catch (e) {}
+      }
+
+      const userProfile = useStore.getState().profile;
+      const autofill = userProfile?.address_data || savedData || {};
+
+      setName(autofill.customer_name || '');
+      setPhone(autofill.customer_phone || '');
+      setEmail(autofill.customer_email || '');
+      setGovernorate(autofill.governorate || 'Cairo');
+      setCity(autofill.city || '');
+      setAddress(autofill.address || '');
       setNotes('');
-      setReferralCode('');
       setRewardCouponCode('');
 
       // Load coupon from localStorage if applied in Cart drawer
@@ -88,6 +100,7 @@ export default function CheckoutModal() {
       setCouponCode(savedCoupon);
       setAppliedDiscount(savedDiscount);
       setDiscountMsg(savedCoupon && savedDiscount > 0 ? (locale === 'ar' ? 'تم تحميل الكوبون المطبق من السلة!' : 'Coupon applied from your cart!') : '');
+      setReferralCode(localStorage.getItem('ff_referrer_phone') || '');
       setDiscountErr('');
       setShowSuccess(false);
 
@@ -121,6 +134,8 @@ export default function CheckoutModal() {
   // Pricing Calculations using getCartTotals for cart promotion
   let subtotal = 0;
   let cottonDiscount = 0;
+  let autoAppliedDiscount = 0;
+  let autoAppliedOfferName = '';
   let shippingFee = 0;
 
   if (isSingle) {
@@ -128,14 +143,17 @@ export default function CheckoutModal() {
     shippingFee = subtotal > 0 ? 50 : 0;
   } else {
     const cottonEnabled = settings.cotton_reward_system_enabled !== false;
-    const totals = getCartTotals(cart, cottonEnabled);
+    const autoOffers = settings.auto_applied_offers || [];
+    const totals = getCartTotals(cart, cottonEnabled, autoOffers);
     subtotal = totals.subtotal;
     cottonDiscount = totals.cottonDiscount;
+    autoAppliedDiscount = totals.autoAppliedDiscount;
+    autoAppliedOfferName = totals.autoAppliedOfferName;
     shippingFee = totals.shipping;
   }
 
   const discountAmount = Number(((subtotal * appliedDiscount) / 100).toFixed(2));
-  const total = subtotal - cottonDiscount - discountAmount + shippingFee;
+  const total = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - discountAmount + shippingFee);
 
   const handleApplyCoupon = async () => {
     setDiscountErr('');
@@ -610,6 +628,16 @@ export default function CheckoutModal() {
                     <div className="flex justify-between items-center text-green-600 font-bold">
                       <span>{locale === 'ar' ? 'عرض القطن (خصم ٢٥٪ على القطعة الثانية)' : 'Cotton Promo (25% off 2nd Item)'}</span>
                       <span>-{tp('price_egp', { price: cottonDiscount })}</span>
+                    </div>
+                  )}
+                  {autoAppliedDiscount > 0 && (
+                    <div className="flex justify-between items-center text-green-600 font-bold">
+                      <span>
+                        {locale === 'ar' 
+                          ? `خصم تلقائي: ${autoAppliedOfferName}` 
+                          : `Auto Offer: ${autoAppliedOfferName}`}
+                      </span>
+                      <span>-{tp('price_egp', { price: autoAppliedDiscount })}</span>
                     </div>
                   )}
                   {appliedDiscount > 0 && (

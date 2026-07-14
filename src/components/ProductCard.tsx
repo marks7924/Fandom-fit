@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useStore, Product } from '@/lib/store';
 import Image from 'next/image';
-import { Eye, Tag } from 'lucide-react';
+import { Eye, Tag, Heart } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 
 interface ProductCardProps {
@@ -20,6 +20,31 @@ export default function ProductCard({ product }: ProductCardProps) {
   const name = locale === 'ar' ? product.name_ar : product.name_en;
   const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
   const { hasDiscount, originalPrice, discountedPrice } = getProductEffectivePrice(product);
+
+  const { user, profile, toggleFavorite, setIsAuthModalOpen } = useStore();
+  const isFav = profile?.favorites?.includes(product.id) || false;
+
+  const handleFavoriteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) {
+      setIsAuthModalOpen(true);
+    } else {
+      toggleFavorite(product.id);
+    }
+  };
+
+  // Parse tags to separate default list from positioned tags
+  const parsedTags = (product.tags || []).map(t => {
+    try {
+      if (t.startsWith('{')) {
+        return JSON.parse(t);
+      }
+    } catch (err) {}
+    return { name: t, color: '', textColor: '', posX: null, posY: null };
+  });
+
+  const defaultTags = parsedTags.filter(tag => tag.posX === null || tag.posY === null);
+  const positionedTags = parsedTags.filter(tag => tag.posX !== null && tag.posY !== null);
 
   // Image fallback strategy
   const defaultPlaceholder = 
@@ -102,6 +127,32 @@ export default function ProductCard({ product }: ProductCardProps) {
           className={`object-contain p-2 group-hover:scale-105 transition-transform duration-500 ${!product.is_in_stock ? 'blur-[3px] opacity-50' : ''}`}
         />
 
+        {/* Positioned Visual Tags Overlay */}
+        {positionedTags.map((tag, i) => (
+          <span
+            key={i}
+            className="absolute z-20 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] select-none pointer-events-none"
+            style={{
+              left: `${tag.posX}%`,
+              top: `${tag.posY}%`,
+              backgroundColor: tag.color || '#F2CC8F',
+              color: tag.textColor || '#000000',
+              transform: 'translate(-50%, -50%)'
+            }}
+          >
+            {tag.name}
+          </span>
+        ))}
+
+        {/* Favorites Heart Button (Bottom Left of Photo) */}
+        <button
+          onClick={handleFavoriteClick}
+          className="absolute bottom-3 left-3 z-30 p-1.5 bg-white border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 pointer-events-auto"
+          title={isFav ? (locale === 'ar' ? 'حذف من المفضلة' : 'Remove from Favorites') : (locale === 'ar' ? 'إضافة للمفضلة' : 'Add to Favorites')}
+        >
+          <Heart size={12} className={isFav ? 'text-red-500 fill-red-500' : 'text-black'} />
+        </button>
+
         {/* Out of Stock visual label */}
         {!product.is_in_stock && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/10 select-none">
@@ -127,11 +178,11 @@ export default function ProductCard({ product }: ProductCardProps) {
       <div className="p-4 flex flex-col justify-between flex-1 bg-white">
         <div>
           {/* Custom Tags List */}
-          {product.tags && product.tags.length > 0 && (
+          {defaultTags.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-1.5 pointer-events-none">
-              {product.tags.map((tag, i) => (
+              {defaultTags.map((tag, i) => (
                 <span key={i} className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 bg-black/5 border border-black/15 text-black/60 rounded">
-                  {tag}
+                  {tag.name}
                 </span>
               ))}
             </div>
@@ -140,7 +191,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           <div className="flex justify-between items-start gap-2">
             <h4 
               onClick={() => setPreviewProduct(product)}
-              className="text-lg font-black uppercase text-black hover:text-brand-accent transition-colors line-clamp-1 cursor-pointer"
+              className="text-lg font-black uppercase text-black hover:text-brand-accent transition-colors break-words cursor-pointer"
             >
               {name}
             </h4>

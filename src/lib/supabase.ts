@@ -420,7 +420,11 @@ const getMockDb = () => {
       seo_desc: 'Bespoke fandom streetwear inspired by gaming, anime, and pop culture.',
       shipping_info_en: 'Free returns, shipping within 3-5 business days across Egypt.',
       shipping_info_ar: 'مرونة الاسترجاع، الشحن خلال ٣-٥ أيام عمل لجميع المحافظات.',
-      announcement: '🔥 SPECIAL ANNOUNCEMENT: Direct Web checkout is now active! Try ordering right here! 🔥'
+      announcement: '🔥 SPECIAL ANNOUNCEMENT: Direct Web checkout is now active! Try ordering right here! 🔥',
+      auto_applied_offers: [
+        { id: 'ao-1', name_en: 'Buy 3 Tee Promo (10% OFF)', name_ar: 'عرض شراء ٣ قطع (خصم ١٠٪)', type: 'quantity', min_quantity: 3, discount_percent: 10, is_active: true },
+        { id: 'ao-2', name_en: 'Anime Special (15% OFF)', name_ar: 'عرض الأنمي الخاص (خصم ١٥٪)', type: 'tag', required_tag: 'anime', discount_percent: 15, is_active: true }
+      ]
     };
     localStorage.setItem(settingsKey, JSON.stringify(settings));
   }
@@ -441,171 +445,295 @@ const saveMockDb = (key: string, data: any) => {
 };
 
 // Mock Client Interface mimicking Supabase js calls
+// Helper to generate chainable promises mimicking Supabase Client query builders
+const makeChainable = (data: any, singleItem: any = null) => {
+  const result = { data, error: null };
+  const chain: any = {
+    data,
+    error: null,
+    single: () => {
+      const item = singleItem || (Array.isArray(data) ? data[0] : data) || null;
+      return makeChainable(item, item);
+    },
+    maybeSingle: () => {
+      const item = singleItem || (Array.isArray(data) ? data[0] : data) || null;
+      return makeChainable(item, item);
+    },
+    eq: (field: string, value: any) => {
+      if (Array.isArray(data)) {
+        const filtered = data.filter((item: any) => item[field] === value);
+        return makeChainable(filtered, filtered[0] || null);
+      }
+      return makeChainable(data, singleItem);
+    },
+    ilike: (field: string, value: any) => {
+      if (Array.isArray(data)) {
+        const cleanVal = String(value).toLowerCase().replace(/%/g, '');
+        const filtered = data.filter((item: any) => String(item[field]).toLowerCase().includes(cleanVal));
+        return makeChainable(filtered, filtered[0] || null);
+      }
+      return makeChainable(data, singleItem);
+    },
+    order: (field: string, options?: any) => {
+      if (Array.isArray(data)) {
+        const sorted = [...data].sort((a: any, b: any) => {
+          const aVal = a[field];
+          const bVal = b[field];
+          const desc = options?.ascending === false;
+          if (aVal < bVal) return desc ? 1 : -1;
+          if (aVal > bVal) return desc ? -1 : 1;
+          return 0;
+        });
+        return makeChainable(sorted, sorted[0] || null);
+      }
+      return makeChainable(data, singleItem);
+    },
+    select: () => makeChainable(data, singleItem),
+    then: (onfulfilled: any) => Promise.resolve(result).then(onfulfilled)
+  };
+  return chain;
+};
+
+// Mock Client Interface mimicking Supabase js calls
 export const mockSupabase = {
   auth: {
     getUser: async () => {
       if (typeof window === 'undefined') return { data: { user: null } };
-      const user = JSON.parse(sessionStorage.getItem('ff_admin_user') || 'null');
-      return { data: { user } };
+      const adminUser = JSON.parse(sessionStorage.getItem('ff_admin_user') || 'null');
+      if (adminUser) return { data: { user: adminUser } };
+      const regularUser = JSON.parse(sessionStorage.getItem('ff_current_user') || 'null');
+      return { data: { user: regularUser } };
+    },
+    signUp: async ({ email, password, options }: any) => {
+      if (typeof window === 'undefined') return { data: null, error: { message: 'Window not defined' } };
+      const usersKey = 'ff_mock_users';
+      const users = JSON.parse(localStorage.getItem(usersKey) || '[]');
+      if (users.find((u: any) => u.email === email)) {
+        return { data: null, error: { message: 'User already exists' } };
+      }
+      const newUser = { id: 'u-' + Math.random().toString(36).substring(7), email };
+      users.push({ ...newUser, password });
+      localStorage.setItem(usersKey, JSON.stringify(users));
+
+      // Also create a profile
+      const profilesKey = 'ff_profiles';
+      const dbProfiles = JSON.parse(localStorage.getItem(profilesKey) || '[]');
+      const phoneInput = options?.data?.phone || '';
+      
+      const newProfile = {
+        id: newUser.id,
+        email: email,
+        phone: phoneInput,
+        loyalty_points: 0,
+        favorites: [],
+        referral_code: `REF-${newUser.id.replace('u-', '').toUpperCase()}`,
+        address_data: {},
+        created_at: new Date().toISOString()
+      };
+      dbProfiles.push(newProfile);
+      localStorage.setItem(profilesKey, JSON.stringify(dbProfiles));
+
+      sessionStorage.setItem('ff_current_user', JSON.stringify(newUser));
+      return { data: { user: newUser }, error: null };
     },
     signInWithPassword: async ({ email, password }: any) => {
+      if (typeof window === 'undefined') return { data: null, error: { message: 'Window not defined' } };
       if (email === 'admin@fandomfit.com' && password === 'admin123') {
         const user = { id: 'admin-id', email };
         sessionStorage.setItem('ff_admin_user', JSON.stringify(user));
         return { data: { user }, error: null };
       }
-      return { data: null, error: { message: 'Invalid credentials. Use admin@fandomfit.com / admin123 for testing.' } };
+      const usersKey = 'ff_mock_users';
+      const users = JSON.parse(localStorage.getItem(usersKey) || '[]');
+      const found = users.find((u: any) => u.email === email && u.password === password);
+      if (found) {
+        const user = { id: found.id, email: found.email };
+        sessionStorage.setItem('ff_current_user', JSON.stringify(user));
+        return { data: { user }, error: null };
+      }
+      return { data: null, error: { message: 'Invalid credentials' } };
+    },
+    signInWithOAuth: async ({ provider }: any) => {
+      if (typeof window === 'undefined') return { data: null, error: null };
+      // mock Google Auth
+      const user = { id: 'google-user-id', email: 'google_user@gmail.com' };
+      sessionStorage.setItem('ff_current_user', JSON.stringify(user));
+      
+      // Ensure profile exists
+      const profilesKey = 'ff_profiles';
+      const dbProfiles = JSON.parse(localStorage.getItem(profilesKey) || '[]');
+      if (!dbProfiles.find((p: any) => p.id === user.id)) {
+        const newProfile = {
+          id: user.id,
+          email: user.email,
+          phone: '',
+          loyalty_points: 0,
+          favorites: [],
+          referral_code: `REF-GOOGLE`,
+          address_data: {},
+          created_at: new Date().toISOString()
+        };
+        dbProfiles.push(newProfile);
+        localStorage.setItem(profilesKey, JSON.stringify(dbProfiles));
+      }
+      return { data: { user }, error: null };
     },
     signOut: async () => {
       sessionStorage.removeItem('ff_admin_user');
+      sessionStorage.removeItem('ff_current_user');
       return { error: null };
     }
   },
   from: (table: string) => {
     const db = getMockDb();
     
+    // Add default values for profiles if missing
+    if (typeof window !== 'undefined') {
+      const profilesKey = 'ff_profiles';
+      if (!localStorage.getItem(profilesKey)) {
+        localStorage.setItem(profilesKey, '[]');
+      }
+    }
+
+    const getTableData = () => {
+      if (typeof window === 'undefined') return [];
+      if (table === 'profiles') return JSON.parse(localStorage.getItem('ff_profiles') || '[]');
+      if (table === 'categories') return db.categories.sort((a: any, b: any) => a.display_order - b.display_order);
+      if (table === 'products') return db.products.sort((a: any, b: any) => a.display_order - b.display_order);
+      if (table === 'offers') return db.offers;
+      if (table === 'orders') return db.orders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      if (table === 'custom_requests') return db.custom_requests.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      if (table === 'settings' || table === 'homepage_sections') {
+        return Object.entries(db.settings).map(([key, value]) => ({ key, value }));
+      }
+      return [];
+    };
+
     return {
       select: (query = '*') => {
-        let data: any = [];
-        if (table === 'categories') data = db.categories.sort((a: any, b: any) => a.display_order - b.display_order);
-        else if (table === 'products') data = db.products.sort((a: any, b: any) => a.display_order - b.display_order);
-        else if (table === 'offers') data = db.offers;
-        else if (table === 'orders') data = db.orders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        else if (table === 'custom_requests') data = db.custom_requests.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        else if (table === 'settings' || table === 'homepage_sections') {
-          // returns keys as rows
-          data = Object.entries(db.settings).map(([key, value]) => ({ key, value }));
+        const data = getTableData();
+        if (table === 'settings' && query !== '*') {
+          return makeChainable({ key: query, value: db.settings }, { key: query, value: db.settings });
         }
-
-        return {
-          data,
-          error: null,
-          single: () => {
-            if (table === 'settings') {
-              return { data: { key: query, value: db.settings }, error: null };
-            }
-            return { data: data[0] || null, error: null };
-          },
-          eq: (field: string, value: any) => {
-            let filtered = [...data];
-            if (field === 'slug') filtered = data.filter((item: any) => item.slug === value);
-            else if (field === 'id') filtered = data.filter((item: any) => item.id === value);
-            else if (field === 'category_id') filtered = data.filter((item: any) => item.category_id === value);
-            
-            return {
-              data: filtered,
-              error: null,
-              single: () => ({ data: filtered[0] || null, error: filtered.length ? null : { message: 'Not found' } })
-            };
-          }
-        };
+        return makeChainable(data);
       },
-      insert: async (rows: any[]) => {
+      insert: (rows: any[]) => {
         const rowsArray = Array.isArray(rows) ? rows : [rows];
-        if (table === 'custom_requests') {
-          const newRequests = rowsArray.map(r => ({
+        const data = getTableData();
+        let newRows = [];
+
+        if (table === 'profiles') {
+          newRows = rowsArray.map(r => ({
+            id: r.id || 'u-' + Math.random().toString(36).substring(7),
+            loyalty_points: r.loyalty_points || 0,
+            favorites: r.favorites || [],
+            address_data: r.address_data || {},
+            created_at: new Date().toISOString(),
+            ...r
+          }));
+          const updated = [...data, ...newRows];
+          saveMockDb('ff_profiles', updated);
+        } else if (table === 'custom_requests') {
+          newRows = rowsArray.map(r => ({
             id: Math.random().toString(36).substring(7),
             created_at: new Date().toISOString(),
             status: 'pending',
             reference_images: [],
             ...r
           }));
-          const updated = [...db.custom_requests, ...newRequests];
+          const updated = [...data, ...newRows];
           saveMockDb('ff_custom_requests', updated);
-          return { data: newRequests, error: null };
         } else if (table === 'products') {
-          const newProducts = rowsArray.map(r => ({
+          newRows = rowsArray.map(r => ({
             id: Math.random().toString(36).substring(7),
             created_at: new Date().toISOString(),
             images: r.images || ['/placeholders/arcade_front.jpg'],
             ...r
           }));
-          const updated = [...db.products, ...newProducts];
-          saveMockDb('ff_products', updated);
-          return { data: newProducts, error: null };
+          const updated = [...data, ...newRows];
+          saveMockDb('ff_products_v3', updated);
         } else if (table === 'categories') {
-          const newCats = rowsArray.map(r => ({
+          newRows = rowsArray.map(r => ({
             id: Math.random().toString(36).substring(7),
             created_at: new Date().toISOString(),
+            show_in_browse: r.show_in_browse !== false,
             ...r
           }));
-          const updated = [...db.categories, ...newCats];
+          const updated = [...data, ...newRows];
           saveMockDb('ff_categories', updated);
-          return { data: newCats, error: null };
         } else if (table === 'offers') {
-          const newOffers = rowsArray.map(r => ({
+          newRows = rowsArray.map(r => ({
             id: Math.random().toString(36).substring(7),
             created_at: new Date().toISOString(),
             ...r
           }));
-          const updated = [...db.offers, ...newOffers];
+          const updated = [...data, ...newRows];
           saveMockDb('ff_offers', updated);
-          return { data: newOffers, error: null };
         } else if (table === 'orders') {
-          const newOrders = rowsArray.map(r => ({
+          newRows = rowsArray.map(r => ({
             id: Math.random().toString(36).substring(7),
             created_at: new Date().toISOString(),
             status: 'pending',
             ...r
           }));
-          const updated = [...db.orders, ...newOrders];
+          const updated = [...data, ...newRows];
           saveMockDb('ff_orders', updated);
-          return { data: newOrders, error: null };
+        } else {
+          newRows = rowsArray;
         }
-        return { data: rowsArray, error: null };
+
+        return makeChainable(newRows, newRows[0]);
       },
-      update: async (values: any) => {
+      update: (values: any) => {
         return {
           eq: (field: string, idVal: any) => {
+            const data = getTableData();
+            let updatedData = [];
+
             if (table === 'settings') {
-              // values holds settings object
               const updatedSettings = { ...db.settings, ...values };
               saveMockDb('ff_settings', updatedSettings);
-              return { data: updatedSettings, error: null };
+              return makeChainable(updatedSettings, updatedSettings);
             }
-            if (table === 'products') {
-              const updated = db.products.map((p: any) => p[field] === idVal ? { ...p, ...values } : p);
-              saveMockDb('ff_products', updated);
-              return { data: values, error: null };
+
+            const mockDbKeys: Record<string, string> = {
+              profiles: 'ff_profiles',
+              products: 'ff_products_v3',
+              categories: 'ff_categories',
+              offers: 'ff_offers',
+              custom_requests: 'ff_custom_requests',
+              orders: 'ff_orders'
+            };
+
+            const dbKey = mockDbKeys[table];
+            if (dbKey) {
+              updatedData = data.map((item: any) => item[field] === idVal ? { ...item, ...values } : item);
+              saveMockDb(dbKey, updatedData);
             }
-            if (table === 'categories') {
-              const updated = db.categories.map((c: any) => c[field] === idVal ? { ...c, ...values } : c);
-              saveMockDb('ff_categories', updated);
-              return { data: values, error: null };
-            }
-            if (table === 'offers') {
-              const updated = db.offers.map((o: any) => o[field] === idVal ? { ...o, ...values } : o);
-              saveMockDb('ff_offers', updated);
-              return { data: values, error: null };
-            }
-            if (table === 'custom_requests') {
-              const updated = db.custom_requests.map((r: any) => r[field] === idVal ? { ...r, ...values } : r);
-              saveMockDb('ff_custom_requests', updated);
-              return { data: values, error: null };
-            }
-            if (table === 'orders') {
-              const updated = db.orders.map((o: any) => o[field] === idVal ? { ...o, ...values } : o);
-              saveMockDb('ff_orders', updated);
-              return { data: values, error: null };
-            }
-            return { data: null, error: null };
+
+            const affected = updatedData.filter((item: any) => item[field] === idVal);
+            return makeChainable(affected, affected[0]);
           }
         };
       },
-      delete: async () => {
+      delete: () => {
         return {
           eq: (field: string, idVal: any) => {
-            if (table === 'products') {
-              const filtered = db.products.filter((p: any) => p[field] !== idVal);
-              saveMockDb('ff_products', filtered);
-            } else if (table === 'categories') {
-              const filtered = db.categories.filter((c: any) => c[field] !== idVal);
-              saveMockDb('ff_categories', filtered);
-            } else if (table === 'offers') {
-              const filtered = db.offers.filter((o: any) => o[field] !== idVal);
-              saveMockDb('ff_offers', filtered);
+            const data = getTableData();
+
+            const mockDbKeys: Record<string, string> = {
+              products: 'ff_products_v3',
+              categories: 'ff_categories',
+              offers: 'ff_offers',
+              orders: 'ff_orders'
+            };
+
+            const dbKey = mockDbKeys[table];
+            if (dbKey) {
+              const filtered = data.filter((item: any) => item[field] !== idVal);
+              saveMockDb(dbKey, filtered);
             }
-            return { error: null };
+            return makeChainable([]);
           }
         };
       }
@@ -614,12 +742,10 @@ export const mockSupabase = {
   storage: {
     from: (bucket: string) => ({
       upload: async (path: string, file: File) => {
-        // Mock file upload: generate object URL
         const mockUrl = URL.createObjectURL(file);
         return { data: { path: mockUrl }, error: null };
       },
       getPublicUrl: (path: string) => {
-        // If it starts with blob or standard path, return it, otherwise mock bucket path
         if (path.startsWith('blob:') || path.startsWith('/')) {
           return { data: { publicUrl: path } };
         }
