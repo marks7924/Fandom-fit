@@ -14,7 +14,7 @@ export default function ProductQuickPreview() {
   const tp = useTranslations('products');
   const locale = useLocale();
   
-  const { previewProduct, setPreviewProduct, setCheckoutProduct, getProductEffectivePrice } = useStore();
+  const { previewProduct, setPreviewProduct, setCheckoutProduct, getProductEffectivePrice, addToCart } = useStore();
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedFabric, setSelectedFabric] = useState('Standard Cotton');
@@ -285,12 +285,12 @@ export default function ProductQuickPreview() {
             {previewProduct.is_in_stock ? (
               <button
                 onClick={() => {
-                  setCheckoutProduct(previewProduct);
+                  addToCart(previewProduct, selectedSize, selectedFabric);
                   setPreviewProduct(null); // Close quick preview
                 }}
                 className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
               >
-                {tp('order_now')}
+                {tp('add_to_cart') || 'Add to Cart'}
               </button>
             ) : (
               <button

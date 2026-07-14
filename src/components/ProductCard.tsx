@@ -16,6 +16,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const locale = useLocale();
   const setPreviewProduct = useStore((state) => state.setPreviewProduct);
   const setCheckoutProduct = useStore((state) => state.setCheckoutProduct);
+  const addToCart = useStore((state) => state.addToCart);
 
   const name = locale === 'ar' ? product.name_ar : product.name_en;
   const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
@@ -239,10 +240,10 @@ export default function ProductCard({ product }: ProductCardProps) {
         <div className="mt-4 pt-3 border-t border-black/10">
           {product.is_in_stock ? (
             <button
-              onClick={() => setCheckoutProduct(product)}
+              onClick={() => addToCart(product, 'M', 'Standard Cotton')}
               className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white transition-all duration-300 border-2 border-black rounded-lg cursor-pointer"
             >
-              {t('order_now')}
+              {t('add_to_cart') || 'Add to Cart'}
             </button>
           ) : (
             <button

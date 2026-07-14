@@ -89,8 +89,22 @@ export default function AdminPage() {
     size_chart_img_en: '',
     size_chart_img_ar: '',
     size_chart_table: '',
-    auto_applied_offers: ''
+    auto_applied_offers: '',
+    default_sizes: 'S, M, L, XL, XXL',
+    default_fabrics: 'Standard Cotton, Premium Cotton',
+    default_tags: 'New Drop'
   });
+
+  const [sizeTable, setSizeTable] = useState<{ headers: string[]; rows: string[][] }>({
+    headers: ['Size', 'Width (Chest - cm)', 'Length (cm)', 'Sleeve (cm)'],
+    rows: [
+      ['S', '52', '70', '21'],
+      ['M', '55', '72', '22'],
+      ['L', '58', '74', '23']
+    ]
+  });
+
+  const [autoOffers, setAutoOffers] = useState<any[]>([]);
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
@@ -136,6 +150,27 @@ export default function AdminPage() {
       fetchOrders();
       // populate settings form once loaded
       const premiums = settings.fabric_premiums || {};
+
+      let tableVal = settings.size_chart_table;
+      if (tableVal) {
+        try {
+          const parsed = typeof tableVal === 'string' ? JSON.parse(tableVal) : tableVal;
+          if (parsed && parsed.headers && parsed.rows) {
+            setSizeTable(parsed);
+          }
+        } catch(e) {}
+      }
+
+      let offersVal = settings.auto_applied_offers;
+      if (offersVal) {
+        try {
+          const parsed = typeof offersVal === 'string' ? JSON.parse(offersVal) : offersVal;
+          if (Array.isArray(parsed)) {
+            setAutoOffers(parsed);
+          }
+        } catch(e) {}
+      }
+
       setSettingsForm({
         brand_name: settings.brand_name || 'Fandom Fit',
         tagline: settings.tagline || 'Wear What You Love.',
@@ -155,8 +190,11 @@ export default function AdminPage() {
         referral_reward_system_enabled: settings.referral_reward_system_enabled !== false,
         size_chart_img_en: settings.size_chart_img_en || '',
         size_chart_img_ar: settings.size_chart_img_ar || '',
-        size_chart_table: settings.size_chart_table || '',
-        auto_applied_offers: settings.auto_applied_offers || ''
+        size_chart_table: typeof settings.size_chart_table === 'string' ? settings.size_chart_table : JSON.stringify(settings.size_chart_table || ''),
+        auto_applied_offers: typeof settings.auto_applied_offers === 'string' ? settings.auto_applied_offers : JSON.stringify(settings.auto_applied_offers || ''),
+        default_sizes: settings.default_sizes || 'S, M, L, XL, XXL',
+        default_fabrics: settings.default_fabrics || 'Standard Cotton, Premium Cotton',
+        default_tags: settings.default_tags || 'New Drop'
       });
     }
   }, [isAuthenticated, settings]);
@@ -295,6 +333,11 @@ export default function AdminPage() {
     setEditingItem(null);
   };
 
+  const updateOffersList = (nextList: any[]) => {
+    setAutoOffers(nextList);
+    setSettingsForm(prev => ({ ...prev, auto_applied_offers: JSON.stringify(nextList) }));
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -330,6 +373,15 @@ export default function AdminPage() {
     alert(t('settings.save_success'));
   };
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
   // File Upload Handlers (simulated local storage files in mock mode, or supabase upload)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -348,9 +400,12 @@ export default function AdminPage() {
 
     for (const file of selectedFiles) {
       if (isUsingMock) {
-        // Mock File: create dynamic object URL
-        const mockUrl = URL.createObjectURL(file);
-        uploadedUrls.push(mockUrl);
+        try {
+          const base64 = await fileToBase64(file);
+          uploadedUrls.push(base64);
+        } catch (err) {
+          console.error('Mock upload conversion error:', err);
+        }
       } else {
         // Real File Upload to Supabase bucket 'products'
         const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -575,7 +630,13 @@ export default function AdminPage() {
                 <button
                   onClick={() => {
                     setEditingItem(null);
-                    setTagsText('');
+                    setTagsText(settingsForm.default_tags || '');
+                    const defaultSizes = settingsForm.default_sizes 
+                      ? settingsForm.default_sizes.split(',').map(s => s.trim()) 
+                      : ['S', 'M', 'L', 'XL'];
+                    const defaultFabrics = settingsForm.default_fabrics 
+                      ? settingsForm.default_fabrics.split(',').map(f => f.trim()) 
+                      : ['Standard Cotton', 'Premium Cotton'];
                     setProdForm({
                       name_en: '', name_ar: '', description_en: '', description_ar: '',
                       category_id: categories[0]?.id || '', price: 0, sale_price: '',
@@ -583,7 +644,8 @@ export default function AdminPage() {
                       is_new_arrival: true, is_best_seller: false, is_limited_edition: false,
                       is_pinned: false,
                       gives_cotton_reward: false,
-                      available_sizes: ['S', 'M', 'L', 'XL'], material_options: ['Standard Cotton', 'Premium Cotton'],
+                      available_sizes: defaultSizes,
+                      material_options: defaultFabrics,
                       images: [], display_order: 0
                     });
                     setIsFormOpen(true);
@@ -1923,26 +1985,300 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="border-t border-zinc-800 pt-4">
-                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Fallback Size Chart Table JSON (Customizable Headers & Rows)</label>
-                <textarea
-                  rows={3}
-                  value={settingsForm.size_chart_table ? (typeof settingsForm.size_chart_table === 'string' ? settingsForm.size_chart_table : JSON.stringify(settingsForm.size_chart_table, null, 2)) : ''}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_table: e.target.value })}
-                  placeholder={`{\n  "headers": ["Size", "Chest (cm)", "Length (cm)"],\n  "rows": [\n    ["S", "52", "70"],\n    ["M", "55", "72"]\n  ]\n}`}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono text-[10px]"
-                />
+              {/* Product Defaults Settings */}
+              <div className="border-t border-zinc-800 pt-4 space-y-3">
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block">
+                  ⚙️ Global Product Option Defaults (Inherited by New Products)
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Sizes (Comma separated)</label>
+                    <input
+                      type="text"
+                      value={settingsForm.default_sizes || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, default_sizes: e.target.value })}
+                      placeholder="e.g. S, M, L, XL, XXL"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Fabrics (Comma separated)</label>
+                    <input
+                      type="text"
+                      value={settingsForm.default_fabrics || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, default_fabrics: e.target.value })}
+                      placeholder="e.g. Standard Cotton, Premium Cotton"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Tags (Comma separated)</label>
+                    <input
+                      type="text"
+                      value={settingsForm.default_tags || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, default_tags: e.target.value })}
+                      placeholder="e.g. New Drop, anime"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="border-t border-zinc-800 pt-4">
-                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Auto-applied Promo Campaigns JSON</label>
-                <textarea
-                  rows={4}
-                  value={settingsForm.auto_applied_offers ? (typeof settingsForm.auto_applied_offers === 'string' ? settingsForm.auto_applied_offers : JSON.stringify(settingsForm.auto_applied_offers, null, 2)) : ''}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, auto_applied_offers: e.target.value })}
-                  placeholder={`[\n  {\n    "id": "ao-1",\n    "name_en": "Buy 3 Promo",\n    "type": "quantity",\n    "min_quantity": 3,\n    "discount_percent": 10,\n    "is_active": true\n  }\n]`}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono text-[10px]"
-                />
+              {/* Visual Size Chart Table Grid Editor */}
+              <div className="border-t border-zinc-800 pt-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] uppercase font-bold text-zinc-400 block">
+                    📐 Fallback Size Chart Table (Spreadsheet Editor)
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextHeaders = [...sizeTable.headers, `Col ${sizeTable.headers.length + 1}`];
+                        const nextRows = sizeTable.rows.map(r => [...r, '']);
+                        const nextTable = { headers: nextHeaders, rows: nextRows };
+                        setSizeTable(nextTable);
+                        setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
+                      }}
+                      className="px-2 py-1 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-white rounded text-[10px] font-bold uppercase cursor-pointer"
+                    >
+                      + Add Column
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (sizeTable.headers.length <= 1) return;
+                        const nextHeaders = sizeTable.headers.slice(0, -1);
+                        const nextRows = sizeTable.rows.map(r => r.slice(0, -1));
+                        const nextTable = { headers: nextHeaders, rows: nextRows };
+                        setSizeTable(nextTable);
+                        setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
+                      }}
+                      className="px-2 py-1 bg-red-950/40 hover:bg-red-900 border border-red-900/60 text-red-400 rounded text-[10px] font-bold uppercase cursor-pointer"
+                    >
+                      - Col
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextRows = [...sizeTable.rows, Array(sizeTable.headers.length).fill('')];
+                        const nextTable = { ...sizeTable, rows: nextRows };
+                        setSizeTable(nextTable);
+                        setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
+                      }}
+                      className="px-2 py-1 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-white rounded text-[10px] font-bold uppercase cursor-pointer"
+                    >
+                      + Add Row
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (sizeTable.rows.length <= 1) return;
+                        const nextRows = sizeTable.rows.slice(0, -1);
+                        const nextTable = { ...sizeTable, rows: nextRows };
+                        setSizeTable(nextTable);
+                        setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
+                      }}
+                      className="px-2 py-1 bg-red-950/40 hover:bg-red-900 border border-red-900/60 text-red-400 rounded text-[10px] font-bold uppercase cursor-pointer"
+                    >
+                      - Row
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto border border-zinc-800 rounded-lg bg-zinc-950 p-2">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr>
+                        {sizeTable.headers.map((h, i) => (
+                          <th key={i} className="p-1 min-w-[80px]">
+                            <input
+                              type="text"
+                              value={h}
+                              onChange={(e) => {
+                                const nextHeaders = [...sizeTable.headers];
+                                nextHeaders[i] = e.target.value;
+                                const nextTable = { ...sizeTable, headers: nextHeaders };
+                                setSizeTable(nextTable);
+                                setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
+                              }}
+                              className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] font-bold uppercase"
+                            />
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sizeTable.rows.map((row, ri) => (
+                        <tr key={ri}>
+                          {row.map((cell, ci) => (
+                            <td key={ci} className="p-1">
+                              <input
+                                type="text"
+                                value={cell}
+                                onChange={(e) => {
+                                  const nextRows = sizeTable.rows.map((r, idx) => {
+                                    if (idx === ri) {
+                                      const nextRow = [...r];
+                                      nextRow[ci] = e.target.value;
+                                      return nextRow;
+                                    }
+                                    return r;
+                                  });
+                                  const nextTable = { ...sizeTable, rows: nextRows };
+                                  setSizeTable(nextTable);
+                                  setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
+                                }}
+                                className="w-full px-2 py-1 bg-zinc-950 border border-zinc-850 rounded text-white text-[10px]"
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Visual Auto-Applied Campaigns Builder */}
+              <div className="border-t border-zinc-800 pt-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] uppercase font-bold text-zinc-400 block">
+                    🏷️ Auto-Applied Campaigns
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newOffer = {
+                        id: `ao-${Date.now()}`,
+                        name_en: 'New Promo Offer',
+                        name_ar: 'عرض ترويجي جديد',
+                        type: 'quantity', // 'quantity' | 'tag' | 'both'
+                        min_quantity: 2,
+                        required_tag: '',
+                        discount_percent: 10,
+                        is_active: true
+                      };
+                      const nextList = [...autoOffers, newOffer];
+                      updateOffersList(nextList);
+                    }}
+                    className="px-2 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white rounded text-[10px] font-bold uppercase cursor-pointer"
+                  >
+                    + Add Campaign
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {autoOffers.map((offer, idx) => (
+                    <div key={offer.id} className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl space-y-2 relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextList = autoOffers.filter(o => o.id !== offer.id);
+                          updateOffersList(nextList);
+                        }}
+                        className="absolute top-2 right-2 text-zinc-500 hover:text-red-500 cursor-pointer"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Campaign Name (English)</label>
+                          <input
+                            type="text"
+                            value={offer.name_en || ''}
+                            onChange={(e) => {
+                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, name_en: e.target.value } : o);
+                              updateOffersList(nextList);
+                            }}
+                            className="w-full px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Campaign Name (Arabic)</label>
+                          <input
+                            type="text"
+                            dir="rtl"
+                            value={offer.name_ar || ''}
+                            onChange={(e) => {
+                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, name_ar: e.target.value } : o);
+                              updateOffersList(nextList);
+                            }}
+                            className="w-full px-2.5 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px] text-right font-arabic"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 items-end">
+                        <div>
+                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Discount Type</label>
+                          <select
+                            value={offer.type || 'quantity'}
+                            onChange={(e) => {
+                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, type: e.target.value } : o);
+                              updateOffersList(nextList);
+                            }}
+                            className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                          >
+                            <option value="quantity">Min Quantity</option>
+                            <option value="tag">Required Tag</option>
+                            <option value="both">Both</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Min Qty</label>
+                          <input
+                            type="number"
+                            value={offer.min_quantity ?? 1}
+                            onChange={(e) => {
+                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, min_quantity: Number(e.target.value) } : o);
+                              updateOffersList(nextList);
+                            }}
+                            className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Required Tag</label>
+                          <input
+                            type="text"
+                            value={offer.required_tag || ''}
+                            onChange={(e) => {
+                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, required_tag: e.target.value } : o);
+                              updateOffersList(nextList);
+                            }}
+                            placeholder="e.g. anime"
+                            className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Discount %</label>
+                          <input
+                            type="number"
+                            value={offer.discount_percent ?? 10}
+                            onChange={(e) => {
+                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, discount_percent: Number(e.target.value) } : o);
+                              updateOffersList(nextList);
+                            }}
+                            className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 h-7">
+                          <input
+                            type="checkbox"
+                            checked={!!offer.is_active}
+                            onChange={(e) => {
+                              const nextList = autoOffers.map((o, i) => i === idx ? { ...o, is_active: e.target.checked } : o);
+                              updateOffersList(nextList);
+                            }}
+                            className="accent-brand-accent cursor-pointer"
+                          />
+                          <span className="text-[9px] uppercase font-bold text-zinc-400">Active</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <button

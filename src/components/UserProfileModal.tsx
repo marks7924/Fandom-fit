@@ -26,10 +26,20 @@ export default function UserProfileModal() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
+  const activeProfile = profile || {
+    id: user?.id || '',
+    email: user?.email || '',
+    phone: '',
+    loyalty_points: 0,
+    favorites: [],
+    referral_code: user ? `REF-${user.id.replace('u-', '').substring(0, 5).toUpperCase()}` : '',
+    address_data: {}
+  };
+
   // Filter orders by user's phone number
   useEffect(() => {
-    if (profile?.phone) {
-      const cleanPhone = profile.phone.trim();
+    if (activeProfile?.phone) {
+      const cleanPhone = activeProfile.phone.trim();
       const filtered = orders.filter(
         (o: any) => o.customer_phone?.trim() === cleanPhone
       );
@@ -37,16 +47,16 @@ export default function UserProfileModal() {
     } else {
       setUserOrders([]);
     }
-  }, [profile, orders]);
+  }, [activeProfile, orders]);
 
-  if (!isProfileModalOpen || !user || !profile) return null;
+  if (!isProfileModalOpen || !user) return null;
 
   const handleClose = () => {
     setIsProfileModalOpen(false);
   };
 
   const referralLink = typeof window !== 'undefined' 
-    ? `${window.location.origin}/?ref=${profile.phone || profile.id}`
+    ? `${window.location.origin}/?ref=${activeProfile.phone || user.id}`
     : '';
 
   const handleCopyLink = () => {
@@ -56,9 +66,9 @@ export default function UserProfileModal() {
   };
 
   // Calculate referral stats from database orders
-  const refCode = profile.phone || profile.id;
+  const refCode = activeProfile.phone || user.id;
   const friendOrders = orders.filter(
-    (o: any) => o.referral_code?.trim() === refCode && o.customer_phone?.trim() !== profile.phone?.trim()
+    (o: any) => o.referral_code?.trim() === refCode && o.customer_phone?.trim() !== activeProfile.phone?.trim()
   );
   
   const totalInvitedOrders = friendOrders.length;
@@ -98,7 +108,7 @@ export default function UserProfileModal() {
                 {locale === 'ar' ? 'الملف الشخصي' : 'Member Circle'}
               </h3>
               <p className="text-xs font-semibold text-black/50 font-handwriting">
-                {profile.email} {profile.phone && `| ${profile.phone}`}
+                {activeProfile.email} {activeProfile.phone && `| ${activeProfile.phone}`}
               </p>
             </div>
             
@@ -127,7 +137,7 @@ export default function UserProfileModal() {
                     {locale === 'ar' ? 'نقاط الولاء المتراكمة' : 'Loyalty Points'}
                   </h4>
                   <span className="text-2xl font-black text-black">
-                    {profile.loyalty_points || 0} pts
+                    {activeProfile.loyalty_points || 0} pts
                   </span>
                   <p className="text-[9px] font-extrabold text-[#E07A5F] uppercase mt-0.5">
                     {locale === 'ar' ? 'احصل على نقطة مقابل كل ١٠ جنيهات تدفعها' : '1 point for every 10 EGP spent'}
@@ -182,9 +192,9 @@ export default function UserProfileModal() {
                 <Heart className="text-red-500 fill-red-500" size={16} />
                 {locale === 'ar' ? 'تصميماتك المفضلة' : 'Your Favorites'}
               </h4>
-              {profile.favorites && profile.favorites.length > 0 ? (
+              {activeProfile.favorites && activeProfile.favorites.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {profile.favorites.map((favId: string) => {
+                  {activeProfile.favorites.map((favId: string) => {
                     const product = products.find(p => p.id === favId);
                     if (!product) return null;
                     const name = locale === 'ar' ? product.name_ar : product.name_en;

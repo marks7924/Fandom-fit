@@ -305,7 +305,7 @@ export const useStore = create<StoreState>((set, get) => ({
     if (!user) return;
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      if (data) {
+      if (data && !error) {
         set({ profile: data });
       } else {
         // Create profile if missing
@@ -319,11 +319,27 @@ export const useStore = create<StoreState>((set, get) => ({
           referral_code: referralCode,
           address_data: {}
         };
-        await supabase.from('profiles').insert([newProfile]);
+        try {
+          await supabase.from('profiles').insert([newProfile]);
+        } catch (e) {
+          console.warn('Could not insert profile in database, using offline fallback:', e);
+        }
         set({ profile: newProfile });
       }
     } catch (err) {
-      console.error('Error syncing profile:', err);
+      console.error('Error syncing profile, falling back to local object:', err);
+      const referralCode = `REF-${user.id.replace('u-', '').substring(0, 5).toUpperCase()}`;
+      set({
+        profile: {
+          id: user.id,
+          email: user.email || '',
+          phone: '',
+          loyalty_points: 0,
+          favorites: [],
+          referral_code: referralCode,
+          address_data: {}
+        }
+      });
     }
   },
 
@@ -868,7 +884,12 @@ export const useStore = create<StoreState>((set, get) => ({
       const { data: allCats } = await supabase.from('categories').select('*');
       if (allCats) set({ categories: allCats });
     } catch (error) {
-      console.error('Error adding category:', error);
+      console.error('Error adding category to DB, using local state fallback:', error);
+      const fallbackCat = {
+        ...category,
+        id: `cat-${Date.now()}`
+      };
+      set({ categories: [...get().categories, fallbackCat] });
     }
   },
 
@@ -879,7 +900,9 @@ export const useStore = create<StoreState>((set, get) => ({
       const { data: allCats } = await supabase.from('categories').select('*');
       if (allCats) set({ categories: allCats });
     } catch (error) {
-      console.error('Error updating category:', error);
+      console.error('Error updating category in DB, using local state fallback:', error);
+      const updatedCats = get().categories.map(c => c.id === id ? { ...c, ...category } : c);
+      set({ categories: updatedCats });
     }
   },
 
