@@ -4,11 +4,18 @@ import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, Phone, LogIn, UserPlus } from 'lucide-react';
+import { X, Mail, Lock, Phone, LogIn, UserPlus, User, MapPin, ChevronDown, ChevronUp } from 'lucide-react';
+
+const EGYPT_GOVERNORATES = [
+  'Cairo', 'Giza', 'Alexandria', 'Dakahlia', 'Red Sea', 'Beheira', 'Fayoum',
+  'Gharbia', 'Ismailia', 'Menofia', 'Minya', 'Qaliubiya', 'New Valley',
+  'Suez', 'Aswan', 'Assiut', 'Beni Suef', 'Port Said', 'Damietta',
+  'Sharkia', 'South Sinai', 'Kafr El Sheikh', 'Matrouh', 'Luxor',
+  'Qena', 'North Sinai', 'Sohag'
+];
 
 export default function AuthModal() {
   const locale = useLocale();
-  const t = useTranslations('checkout'); // Reuse generic translation namespace if needed
   
   const {
     isAuthModalOpen,
@@ -22,6 +29,11 @@ export default function AuthModal() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [isAddressOpen, setIsAddressOpen] = useState(false);
+  const [governorate, setGovernorate] = useState('');
+  const [city, setCity] = useState('');
+  const [street, setStreet] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,6 +47,11 @@ export default function AuthModal() {
     setEmail('');
     setPassword('');
     setPhone('');
+    setName('');
+    setGovernorate('');
+    setCity('');
+    setStreet('');
+    setIsAddressOpen(false);
   };
 
   const handleGoogleLogin = async () => {
@@ -56,6 +73,11 @@ export default function AuthModal() {
     setSuccessMsg('');
 
     if (!email || !password) return;
+
+    if (!isLogin && !name.trim()) {
+      setErrorMsg(locale === 'ar' ? 'الاسم مطلوب للتسجيل' : 'Your name is required to register');
+      return;
+    }
 
     if (!isLogin && !phone) {
       setErrorMsg(locale === 'ar' ? 'رقم الهاتف مطلوب للتسجيل' : 'Phone number is required for registration');
@@ -79,7 +101,11 @@ export default function AuthModal() {
         setErrorMsg(res.error || 'Invalid credentials');
       }
     } else {
-      const res = await signUpUser(email.trim(), password, phone.trim());
+      const address = (governorate || city || street)
+        ? { governorate, city, street }
+        : undefined;
+
+      const res = await signUpUser(email.trim(), password, phone.trim(), name.trim(), address);
       setLoading(false);
       if (res.success) {
         setSuccessMsg(locale === 'ar' ? 'تم إنشاء الحساب وتسجيل الدخول!' : 'Account created and logged in!');
@@ -107,7 +133,7 @@ export default function AuthModal() {
           initial={{ scale: 0.9, y: 20, opacity: 0 }}
           animate={{ scale: 1, y: 0, opacity: 1 }}
           exit={{ scale: 0.9, y: 20, opacity: 0 }}
-          className="relative w-full max-w-md bg-[#EDE0D0] border-4 border-black p-6 rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden z-10"
+          className="relative w-full max-w-md bg-[#EDE0D0] border-4 border-black p-6 rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden z-10 max-h-[90vh] overflow-y-auto"
         >
           {/* Close button */}
           <button
@@ -141,6 +167,26 @@ export default function AuthModal() {
             {successMsg && (
               <div className="p-3 bg-green-100 border-2 border-green-500 rounded-xl text-xs font-black text-green-700">
                 ✓ {successMsg}
+              </div>
+            )}
+
+            {/* Name Input (Sign Up Only) */}
+            {!isLogin && (
+              <div>
+                <label className="text-[10px] font-black uppercase text-black/60 block mb-1">
+                  {locale === 'ar' ? 'الاسم الكامل *' : 'Full Name *'}
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    placeholder={locale === 'ar' ? 'مثال: محمد علي' : 'e.g. Mark Hassan'}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl text-xs focus:outline-none"
+                  />
+                  <User className="absolute left-3 top-2.5 text-black/40" size={14} />
+                </div>
               </div>
             )}
 
@@ -184,7 +230,7 @@ export default function AuthModal() {
             {!isLogin && (
               <div>
                 <label className="text-[10px] font-black uppercase text-black/60 block mb-1">
-                  {locale === 'ar' ? 'رقم الهاتف (رقم مصري)' : 'Phone Number (Egyptian)'}
+                  {locale === 'ar' ? 'رقم الهاتف (رقم مصري) *' : 'Phone Number (Egyptian) *'}
                 </label>
                 <div className="relative">
                   <input
@@ -201,9 +247,86 @@ export default function AuthModal() {
                 {/* Note about phone number lock */}
                 <p className="text-[9px] font-extrabold text-brand-accent uppercase mt-2 bg-amber-50 p-2 border border-brand-accent/30 rounded-lg leading-relaxed">
                   {locale === 'ar'
-                    ? '⚠️ ملحوظة هامة: يجب إدخال رقم الهاتف بشكل صحيح، ولا يمكن تغييره لاحقاً! جميع مكافآت القطن والإحالة الخاصة بك مرتبطة برقمك.'
-                    : '⚠️ IMPORTANT: Your phone number must be correct and CANNOT be changed later! All of your cotton rewards and referrals will be locked to this number.'}
+                    ? '⚠️ ملحوظة هامة: يجب إدخال رقم الهاتف بشكل صحيح، ولا يمكن تغييره لاحقاً!'
+                    : '⚠️ IMPORTANT: Your phone number CANNOT be changed later!'}
                 </p>
+              </div>
+            )}
+
+            {/* Optional Address (Sign Up Only) - Collapsible */}
+            {!isLogin && (
+              <div className="border-2 border-black/20 rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setIsAddressOpen(!isAddressOpen)}
+                  className="w-full flex items-center justify-between p-3 bg-black/5 hover:bg-black/10 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <MapPin size={14} className="text-brand-accent" />
+                    <span className="text-[10px] font-black uppercase text-black/70">
+                      {locale === 'ar' ? 'عنوان التوصيل (اختياري)' : 'Delivery Address (Optional)'}
+                    </span>
+                  </div>
+                  {isAddressOpen ? <ChevronUp size={14} className="text-black/50" /> : <ChevronDown size={14} className="text-black/50" />}
+                </button>
+
+                <AnimatePresence>
+                  {isAddressOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="p-3 space-y-3 bg-white/50"
+                    >
+                      <p className="text-[9px] font-bold text-black/50 uppercase">
+                        {locale === 'ar' ? 'يمكن تعديل العنوان لاحقاً من ملفك الشخصي' : 'You can edit your address later from your profile'}
+                      </p>
+
+                      {/* Governorate */}
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-black/60 block mb-1">
+                          {locale === 'ar' ? 'المحافظة' : 'Governorate'}
+                        </label>
+                        <select
+                          value={governorate}
+                          onChange={(e) => setGovernorate(e.target.value)}
+                          className="w-full px-3 py-2 bg-white text-black font-semibold border-2 border-black/30 rounded-xl text-xs focus:outline-none"
+                        >
+                          <option value="">{locale === 'ar' ? 'اختر المحافظة' : 'Select Governorate'}</option>
+                          {EGYPT_GOVERNORATES.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                      </div>
+
+                      {/* City */}
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-black/60 block mb-1">
+                          {locale === 'ar' ? 'المدينة / الحي' : 'City / District'}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={locale === 'ar' ? 'مثال: مدينة نصر' : 'e.g. Nasr City'}
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          className="w-full px-3 py-2 bg-white text-black font-semibold border-2 border-black/30 rounded-xl text-xs focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Street */}
+                      <div>
+                        <label className="text-[10px] font-black uppercase text-black/60 block mb-1">
+                          {locale === 'ar' ? 'العنوان التفصيلي (شارع، مبنى، شقة)' : 'Street Address (Street, Building, Apt)'}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={locale === 'ar' ? 'مثال: ٥ شارع الوحدة، عمارة ٣، شقة ٧' : 'e.g. 5 Wahda St, Bldg 3, Apt 7'}
+                          value={street}
+                          onChange={(e) => setStreet(e.target.value)}
+                          className="w-full px-3 py-2 bg-white text-black font-semibold border-2 border-black/30 rounded-xl text-xs focus:outline-none"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             )}
 
@@ -240,7 +363,7 @@ export default function AuthModal() {
             </div>
           </div>
 
-          {/* Google OAuth mock button */}
+          {/* Google OAuth button */}
           <button
             onClick={handleGoogleLogin}
             disabled={loading}

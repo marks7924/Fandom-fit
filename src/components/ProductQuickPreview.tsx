@@ -18,8 +18,20 @@ export default function ProductQuickPreview() {
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedFabric, setSelectedFabric] = useState('Standard Cotton');
+  const [selectedFit, setSelectedFit] = useState<'regular' | 'oversized'>('oversized');
   const [shareCopied, setShareCopied] = useState(false);
   const [isSizeChartOpen, setIsSizeChartOpen] = useState(false);
+
+  // Sync state on product change
+  useEffect(() => {
+    if (previewProduct) {
+      const defaultFit = previewProduct.fit_type === 'regular' ? 'regular' : 'oversized';
+      setSelectedFit(defaultFit);
+      setSelectedSize(previewProduct.available_sizes?.[0] || 'M');
+      setSelectedFabric(previewProduct.material_options?.[0] || 'Standard Cotton');
+      setActiveImageIdx(0);
+    }
+  }, [previewProduct]);
 
   // Esc key closes modal
   useEffect(() => {
@@ -207,6 +219,52 @@ export default function ProductQuickPreview() {
                     {description}
                   </p>
 
+                  {/* Fit Type Selection (Regular vs Oversized) */}
+                  {(previewProduct.fit_type === 'both' || !previewProduct.fit_type) && (
+                    <div className="mt-6">
+                      <label className="text-xs font-black uppercase tracking-wider text-black/60 block mb-2">
+                        {locale === 'ar' ? 'اختر القصة (القصة الواسعة هي الأيقونية لدينا)' : 'Select Fit (Oversized is our signature look)'}
+                      </label>
+                      <div className="flex gap-2">
+                        {[
+                          { id: 'oversized', label: locale === 'ar' ? 'قصة واسعة (Oversized)' : 'Oversized Fit' },
+                          { id: 'regular', label: locale === 'ar' ? 'قصة معتادة (Regular Fit)' : 'Regular Fit' }
+                        ].map((fit) => {
+                          const isSel = selectedFit === fit.id;
+                          return (
+                            <button
+                              key={fit.id}
+                              type="button"
+                              onClick={() => setSelectedFit(fit.id as any)}
+                              className={`flex-1 py-2.5 text-xs font-black rounded-lg border-2 border-black transition-all ${
+                                isSel
+                                  ? 'bg-black text-[#EDE0D0] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                  : 'bg-white text-black hover:bg-black/5'
+                              }`}
+                            >
+                              {fit.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {previewProduct.fit_type === 'regular' && (
+                    <div className="mt-4">
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-600 border border-zinc-300 px-2 py-1 rounded">
+                        ℹ️ {locale === 'ar' ? 'متوفر بمقاس معتاد فقط' : 'Regular Fit Only'}
+                      </span>
+                    </div>
+                  )}
+                  {previewProduct.fit_type === 'oversized' && (
+                    <div className="mt-4">
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-600 border border-zinc-300 px-2 py-1 rounded">
+                        ℹ️ {locale === 'ar' ? 'متوفر بمقاس واسع فقط' : 'Oversized Fit Only'}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Size Selector */}
                   <div className="mt-6">
                     <div className="flex justify-between items-center mb-2">
@@ -285,7 +343,7 @@ export default function ProductQuickPreview() {
             {previewProduct.is_in_stock ? (
               <button
                 onClick={() => {
-                  addToCart(previewProduct, selectedSize, selectedFabric);
+                  addToCart(previewProduct, selectedSize, selectedFabric, 1, selectedFit);
                   setPreviewProduct(null); // Close quick preview
                 }}
                 className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
@@ -325,7 +383,7 @@ export default function ProductQuickPreview() {
       </div>
 
       {/* Sizing specifications chart modal */}
-      <SizeChartModal isOpen={isSizeChartOpen} onClose={() => setIsSizeChartOpen(false)} />
+      <SizeChartModal isOpen={isSizeChartOpen} onClose={() => setIsSizeChartOpen(false)} productFitType={previewProduct.fit_type} />
     </AnimatePresence>
   );
 }

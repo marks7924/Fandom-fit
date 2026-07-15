@@ -2,15 +2,23 @@
 
 import { useStore } from '@/lib/store';
 import { useLocale } from 'next-intl';
-import { Share2, Gift } from 'lucide-react';
+import { Share2, Gift, Lock } from 'lucide-react';
 
 export default function ReferralBanner() {
   const locale = useLocale();
-  const { settings, setIsInviteOpen } = useStore();
+  const { settings, setIsInviteOpen, user, setIsAuthModalOpen } = useStore();
 
   const isReferralEnabled = settings.referral_reward_system_enabled !== false;
 
   if (!isReferralEnabled) return null;
+
+  const handleGetReferralLink = () => {
+    if (user) {
+      setIsInviteOpen(true);
+    } else {
+      setIsAuthModalOpen(true);
+    }
+  };
 
   return (
     <section className="py-12 bg-white/40 border-y-3 border-black relative overflow-hidden">
@@ -33,12 +41,19 @@ export default function ReferralBanner() {
                   ? 'شارك رابط الإحالة الخاص بك مع أصدقائك. بمجرد قيامهم بالطلب الأول، ستحصل فوراً على كوبون خصم ١٥٪ مرتبط برقم هاتفك لاستخدامه في أي وقت!'
                   : 'Share your referral link with friends. Once they complete their first order, you will instantly receive a 15% OFF coupon bound to your mobile phone to apply on your next order!'}
               </p>
+              {!user && (
+                <p className="text-[10px] font-black uppercase text-brand-accent/80 flex items-center justify-center md:justify-start gap-1 mt-1">
+                  <Lock size={10} />
+                  {locale === 'ar' ? 'يجب تسجيل الدخول للحصول على رابط الإحالة' : 'Login required to get your referral link'}
+                </p>
+              )}
             </div>
 
             <button
-              onClick={() => setIsInviteOpen(true)}
-              className="px-6 py-3.5 bg-black hover:bg-brand-accent text-[#EDE0D0] hover:text-white border-3 border-black rounded-xl font-black uppercase text-xs tracking-wider transition-all duration-300 hover:translate-y-[-2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-[1px] cursor-pointer shrink-0"
+              onClick={handleGetReferralLink}
+              className="px-6 py-3.5 bg-black hover:bg-brand-accent text-[#EDE0D0] hover:text-white border-3 border-black rounded-xl font-black uppercase text-xs tracking-wider transition-all duration-300 hover:translate-y-[-2px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-[1px] cursor-pointer shrink-0 flex items-center gap-2"
             >
+              {!user && <Lock size={12} />}
               {locale === 'ar' ? 'احصل على رابط الإحالة' : 'Get Referral Link'}
             </button>
           </div>

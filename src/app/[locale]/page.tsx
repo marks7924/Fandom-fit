@@ -36,6 +36,8 @@ export default function Home({
   const isSizeChartOpen = useStore((state) => state.isSizeChartOpen);
   const setIsSizeChartOpen = useStore((state) => state.setIsSizeChartOpen);
 
+  const trackReferralClick = useStore((state) => state.trackReferralClick);
+
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
@@ -44,11 +46,19 @@ export default function Home({
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const ref = urlParams.get('ref');
-      if (ref && /^01[0-25]\d{8}$/.test(ref.trim())) {
-        localStorage.setItem('ff_referrer_phone', ref.trim());
+      if (ref) {
+        const cleanRef = ref.trim();
+        if (cleanRef.startsWith('REF-') || /^01[0-25]\d{8}$/.test(cleanRef)) {
+          localStorage.setItem('ff_referrer_phone', cleanRef);
+          const sessionTracked = sessionStorage.getItem('ff_referral_tracked');
+          if (sessionTracked !== cleanRef) {
+            trackReferralClick(cleanRef);
+            sessionStorage.setItem('ff_referral_tracked', cleanRef);
+          }
+        }
       }
     }
-  }, []);
+  }, [trackReferralClick]);
 
   // Show branded loading screen on first load
   if (isLoading && products.length === 0) {

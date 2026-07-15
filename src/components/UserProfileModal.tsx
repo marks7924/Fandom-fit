@@ -12,7 +12,7 @@ export default function UserProfileModal() {
   const t = useTranslations('checkout');
   const tp = useTranslations('products');
   
-  const {
+  const [
     isProfileModalOpen,
     setIsProfileModalOpen,
     user,
@@ -21,34 +21,59 @@ export default function UserProfileModal() {
     products,
     signOutUser,
     setPreviewProduct,
-    settings
-  } = useStore();
+    settings,
+    fetchOrdersByPhone,
+    updateProfile
+  ] = [
+    useStore(s => s.isProfileModalOpen),
+    useStore(s => s.setIsProfileModalOpen),
+    useStore(s => s.user),
+    useStore(s => s.profile),
+    useStore(s => s.orders),
+    useStore(s => s.products),
+    useStore(s => s.signOutUser),
+    useStore(s => s.setPreviewProduct),
+    useStore(s => s.settings),
+    useStore(s => s.fetchOrdersByPhone),
+    useStore(s => s.updateProfile)
+  ];
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [userOrders, setUserOrders] = useState<any[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [addrGovernorate, setAddrGovernorate] = useState('');
+  const [addrCity, setAddrCity] = useState('');
+  const [addrStreet, setAddrStreet] = useState('');
 
   const activeProfile = profile || {
     id: user?.id || '',
     email: user?.email || '',
     phone: '',
+    full_name: '',
     loyalty_points: 0,
     favorites: [],
     referral_code: user ? `REF-${user.id.replace('u-', '').substring(0, 5).toUpperCase()}` : '',
     address_data: {}
   };
 
-  // Filter orders by user's phone number
+  // Fetch fresh orders when modal opens
   useEffect(() => {
-    if (activeProfile?.phone) {
-      const cleanPhone = activeProfile.phone.trim();
-      const filtered = orders.filter(
-        (o: any) => o.customer_phone?.trim() === cleanPhone
-      );
-      setUserOrders(filtered);
+    if (isProfileModalOpen && activeProfile?.phone) {
+      setIsLoadingOrders(true);
+      fetchOrdersByPhone(activeProfile.phone).then(fetched => {
+        setUserOrders(fetched || []);
+        setIsLoadingOrders(false);
+      });
+      // Also populate address edit fields
+      const ad = activeProfile.address_data || {};
+      setAddrGovernorate(ad.governorate || '');
+      setAddrCity(ad.city || '');
+      setAddrStreet(ad.street || '');
     } else {
       setUserOrders([]);
     }
-  }, [activeProfile, orders]);
+  }, [isProfileModalOpen, activeProfile?.phone]);
 
   if (!isProfileModalOpen || !user) return null;
 
@@ -108,6 +133,9 @@ export default function UserProfileModal() {
               <h3 className="text-3xl font-black uppercase text-black">
                 {locale === 'ar' ? 'الملف الشخصي' : 'Member Circle'}
               </h3>
+              {activeProfile.full_name && (
+                <p className="text-sm font-black text-black/70">{activeProfile.full_name}</p>
+              )}
               <p className="text-xs font-semibold text-black/50 font-handwriting">
                 {activeProfile.email} {activeProfile.phone && `| ${activeProfile.phone}`}
               </p>
@@ -193,10 +221,7 @@ export default function UserProfileModal() {
 
                 <div className="flex gap-4 mt-3 border-t border-black/10 pt-2 text-[10px] font-bold text-black/60 uppercase">
                   <div>
-                    {locale === 'ar' ? 'المرات المستخدمة:' : 'Used:'} <span className="font-black text-black">{totalInvitedOrders}</span>
-                  </div>
-                  <div>
-                    {locale === 'ar' ? 'طلبات الأصدقاء:' : 'Orders placed:'} <span className="font-black text-green-600">{completedInvitedOrders}</span>
+                    {locale === 'ar' ? 'زيارات الرابط الحالي:' : 'Link Clicks:'} <span className="font-black text-brand-accent">{activeProfile.referral_clicks || 0} / {settings.referral_clicks_threshold || 5}</span>
                   </div>
                 </div>
               </div>
@@ -250,7 +275,12 @@ export default function UserProfileModal() {
                 <ShoppingBag className="text-brand-accent" size={16} />
                 {locale === 'ar' ? 'سجل طلباتك' : 'Order History & Tracking'}
               </h4>
-              {userOrders.length > 0 ? (
+              {isLoadingOrders ? (
+                <div className="flex items-center gap-2 text-xs font-bold text-black/40 py-4">
+                  <Truck size={16} className="animate-bounce text-brand-accent" />
+                  {locale === 'ar' ? 'جاري تحميل طلباتك...' : 'Loading your orders...'}
+                </div>
+              ) : userOrders.length > 0 ? (
                 <div className="space-y-3">
                   {userOrders.map((order: any) => {
                     const orderDate = new Date(order.created_at).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', {

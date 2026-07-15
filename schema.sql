@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS products (
     is_pinned BOOLEAN DEFAULT FALSE,
     gives_cotton_reward BOOLEAN DEFAULT FALSE,
     tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+    fit_type VARCHAR(50) DEFAULT 'both',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -288,6 +289,8 @@ CREATE POLICY "Allow admin all on profiles" ON profiles
 
 -- 14. Add structural attributes to categories and orders tables
 ALTER TABLE categories ADD COLUMN IF NOT EXISTS show_in_browse BOOLEAN DEFAULT TRUE;
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS fit_type VARCHAR(50) DEFAULT 'both';
 
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email VARCHAR(255);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS governorate VARCHAR(100);

@@ -132,13 +132,14 @@ export default function ProductCard({ product }: ProductCardProps) {
         {positionedTags.map((tag, i) => (
           <span
             key={i}
-            className="absolute z-20 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] select-none pointer-events-none"
+            className="absolute z-20 px-1.5 py-0.5 rounded font-black uppercase tracking-wider border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] select-none pointer-events-none"
             style={{
               left: `${tag.posX}%`,
               top: `${tag.posY}%`,
               backgroundColor: tag.color || '#F2CC8F',
               color: tag.textColor || '#000000',
-              transform: 'translate(-50%, -50%)'
+              transform: `translate(-50%, -50%) rotate(${tag.rotation || 0}deg)`,
+              fontSize: `${tag.fontSize || 8}px`
             }}
           >
             {tag.name}
@@ -240,7 +241,10 @@ export default function ProductCard({ product }: ProductCardProps) {
         <div className="mt-4 pt-3 border-t border-black/10">
           {product.is_in_stock ? (
             <button
-              onClick={() => addToCart(product, 'M', 'Standard Cotton')}
+              onClick={() => {
+                const defaultFit = product.fit_type === 'regular' ? 'regular' : 'oversized';
+                addToCart(product, 'M', 'Standard Cotton', 1, defaultFit);
+              }}
               className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white transition-all duration-300 border-2 border-black rounded-lg cursor-pointer"
             >
               {t('add_to_cart') || 'Add to Cart'}

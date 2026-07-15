@@ -34,6 +34,7 @@ export interface Product {
   is_pinned?: boolean;
   gives_cotton_reward?: boolean;
   tags?: string[];
+  fit_type?: 'regular' | 'oversized' | 'both';
 }
 
 export interface Offer {
@@ -102,15 +103,17 @@ export interface Order {
   referral_code?: string;
   reward_coupon_code?: string;
   created_at: string;
+  user_id?: string | null;
 }
 
 export interface CartItem {
-  id: string; // product_id-size-fabric
+  id: string; // product_id-size-fabric-fit
   product: Product;
   size: string;
   fabric: string;
   quantity: number;
   price: number;
+  fitType?: 'regular' | 'oversized';
 }
 
 interface StoreState {
@@ -135,7 +138,7 @@ interface StoreState {
   cart: CartItem[];
   isCartOpen: boolean;
   setIsCartOpen: (open: boolean) => void;
-  addToCart: (product: Product, size: string, fabric: string, quantity?: number) => void;
+  addToCart: (product: Product, size: string, fabric: string, quantity?: number, fitType?: 'regular' | 'oversized') => void;
   removeFromCart: (cartItemId: string) => void;
   updateCartQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -155,6 +158,7 @@ interface StoreState {
   completeOrder: (id: string) => Promise<void>;
   updateAnnouncement: (message: string) => Promise<void>;
   updateAnnouncementAr: (message: string) => Promise<void>;
+  trackReferralClick: (refCode: string) => Promise<void>;
 
   // Admin Operations
   fetchAdminRequests: () => Promise<void>;
@@ -204,13 +208,14 @@ interface StoreState {
   setIsProfileModalOpen: (open: boolean) => void;
   isSizeChartOpen: boolean;
   setIsSizeChartOpen: (open: boolean) => void;
-  signUpUser: (email: string, password: string, phone: string) => Promise<{ success: boolean; error?: string }>;
+  signUpUser: (email: string, password: string, phone: string, name?: string, address?: { governorate?: string; city?: string; street?: string }) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (patch: Record<string, any>) => Promise<void>;
   signInUser: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signInUserWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   signOutUser: () => Promise<void>;
   toggleFavorite: (productId: string) => Promise<void>;
   syncUserProfile: () => Promise<void>;
-  updateCartItemSpecs: (cartItemId: string, newSize: string, newFabric: string) => void;
+  updateCartItemSpecs: (cartItemId: string, newSize: string, newFabric: string, newFitType?: 'regular' | 'oversized') => void;
 }
 
 export interface DiscountCampaign {
@@ -251,23 +256,52 @@ export const useStore = create<StoreState>((set, get) => ({
   isSizeChartOpen: false,
   setIsSizeChartOpen: (open) => set({ isSizeChartOpen: open }),
 
-  signUpUser: async (email, password, phone) => {
+  signUpUser: async (email, password, phone, name, address) => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { phone } }
+        options: { data: { phone, full_name: name || '' } }
       });
       if (error) return { success: false, error: error.message };
       
       const user = data?.user || null;
       if (user) {
         set({ user });
-        await get().syncUserProfile();
+        // Build initial profile with name and optional address
+        const referralCode = `REF-${user.id.replace('u-', '').substring(0, 5).toUpperCase()}`;
+        const newProfile: Record<string, any> = {
+          id: user.id,
+          email: user.email || '',
+          phone: phone || '',
+          full_name: name || '',
+          loyalty_points: 0,
+          favorites: [],
+          referral_code: referralCode,
+          address_data: address && (address.governorate || address.city || address.street) ? address : {}
+        };
+        try {
+          await supabase.from('profiles').upsert([newProfile]);
+        } catch (e) {
+          console.warn('Could not upsert profile:', e);
+        }
+        set({ profile: newProfile });
       }
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Signup failed' };
+    }
+  },
+
+  updateProfile: async (patch) => {
+    const { user, profile } = get();
+    if (!user) return;
+    const updated = { ...profile, ...patch };
+    set({ profile: updated });
+    try {
+      await supabase.from('profiles').update(patch).eq('id', user.id);
+    } catch (err) {
+      console.error('Error updating profile:', err);
     }
   },
 
@@ -368,13 +402,14 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  updateCartItemSpecs: (cartItemId, newSize, newFabric) => {
+  updateCartItemSpecs: (cartItemId, newSize, newFabric, newFitType) => {
     const cart = get().cart;
     const { getProductEffectivePrice } = get();
     const item = cart.find(i => i.id === cartItemId);
     if (!item) return;
     
-    const newId = `${item.product.id}-${newSize}-${newFabric}`;
+    const finalFitType = newFitType || item.fitType || 'regular';
+    const newId = `${item.product.id}-${newSize}-${newFabric}-${finalFitType}`;
     
     // Calculate new price
     const { discountedPrice } = getProductEffectivePrice(item.product);
@@ -388,6 +423,7 @@ export const useStore = create<StoreState>((set, get) => ({
           id: newId,
           size: newSize,
           fabric: newFabric,
+          fitType: finalFitType,
           price: newItemPrice
         };
       }
@@ -404,14 +440,14 @@ export const useStore = create<StoreState>((set, get) => ({
   isCheckoutOpen: false,
   setIsCheckoutOpen: (open) => set({ isCheckoutOpen: open }),
 
-  addToCart: (product, size, fabric, quantity = 1) => {
+  addToCart: (product, size, fabric, quantity = 1, fitType = 'regular') => {
     const cart = get().cart;
     const { getProductEffectivePrice } = get();
     const { discountedPrice } = getProductEffectivePrice(product);
     const premium = getFabricPremium(fabric);
     const itemPrice = discountedPrice + premium;
     
-    const cartItemId = `${product.id}-${size}-${fabric}`;
+    const cartItemId = `${product.id}-${size}-${fabric}-${fitType}`;
     const existingIndex = cart.findIndex((item) => item.id === cartItemId);
     
     let updatedCart;
@@ -430,7 +466,8 @@ export const useStore = create<StoreState>((set, get) => ({
           size,
           fabric,
           quantity,
-          price: itemPrice
+          price: itemPrice,
+          fitType
         }
       ];
     }
@@ -768,6 +805,65 @@ export const useStore = create<StoreState>((set, get) => ({
 
     } catch (error) {
       console.error('Error completing order:', error);
+    }
+  },
+
+  trackReferralClick: async (refCode) => {
+    if (!refCode) return;
+    try {
+      const { data: matchedProfiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .or(`referral_code.eq.${refCode},phone.eq.${refCode}`);
+        
+      if (matchedProfiles && matchedProfiles.length > 0) {
+        const targetProfile = matchedProfiles[0];
+        const nextClicks = (targetProfile.referral_clicks || 0) + 1;
+        const threshold = get().settings.referral_clicks_threshold ?? 5;
+        
+        if (nextClicks >= threshold) {
+          const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const code = `REFERRAL-${randomString}`;
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + 30);
+
+          const newOffer = {
+            title_en: 'Referral Clicks Goal Reward (15% OFF)',
+            title_ar: 'مكافأة هدف زيارات الرابط (خصم ١٥٪)',
+            description_en: 'Goal reached! (' + threshold + ' clicks on your link). Bound to phone: ' + targetProfile.phone,
+            description_ar: 'تم الوصول للهدف! (' + threshold + ' زيارة لرابطك). مرتبطة برقم هاتف: ' + targetProfile.phone,
+            discount_text_en: '15% OFF',
+            discount_text_ar: 'خصم ١٥٪',
+            code: code,
+            discount_percent: 15,
+            max_uses: 1,
+            max_uses_per_user: 1,
+            is_active: true,
+            show_on_homepage: false,
+            discount_type: 'percentage',
+            discount_value: 15,
+            coupon_type: 'referral_reward',
+            is_one_time: true,
+            is_public: false,
+            bound_phone: targetProfile.phone || undefined,
+            expires_at: expiryDate.toISOString()
+          };
+
+          await supabase.from('offers').insert([newOffer]);
+
+          await supabase
+            .from('profiles')
+            .update({ referral_clicks: 0 })
+            .eq('id', targetProfile.id);
+        } else {
+          await supabase
+            .from('profiles')
+            .update({ referral_clicks: nextClicks })
+            .eq('id', targetProfile.id);
+        }
+      }
+    } catch (e) {
+      console.error('Error tracking referral click:', e);
     }
   },
 
@@ -1115,6 +1211,8 @@ export interface CartTotals {
   cottonDiscount: number;
   autoAppliedDiscount: number;
   autoAppliedOfferName: string;
+  thresholdDiscount: number;
+  thresholdOfferName: string;
   shipping: number;
   finalTotal: number;
 }
@@ -1122,7 +1220,8 @@ export interface CartTotals {
 export const getCartTotals = (
   cart: CartItem[], 
   cottonEnabled: boolean = true, 
-  autoOffers: any[] = []
+  autoOffers: any[] = [],
+  thresholdOffersList: any[] = []
 ): CartTotals => {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
@@ -1133,7 +1232,6 @@ export const getCartTotals = (
   if (hasCotton && totalQty >= 2) {
     const flatItems = cart.flatMap(item => Array(item.quantity).fill(item));
     flatItems.sort((a, b) => b.price - a.price);
-    // flatItems[1] is the next highest priced item in the cart
     cottonDiscount = Math.round(flatItems[1].price * 0.25);
   }
   
@@ -1167,15 +1265,46 @@ export const getCartTotals = (
       }
     }
   }
+
+  // Calculate Threshold Offers
+  let thresholdDiscount = 0;
+  let thresholdOfferName = '';
+  let freeDelivery = false;
+
+  if (thresholdOffersList && thresholdOffersList.length > 0) {
+    for (const offer of thresholdOffersList) {
+      if (!offer.is_active) continue;
+      if (subtotal >= offer.min_order_amount) {
+        if (offer.discount_type === 'free_delivery') {
+          freeDelivery = true;
+          thresholdOfferName = offer.label_en || 'Free Delivery';
+        } else if (offer.discount_type === 'percentage') {
+          const disc = Math.round((subtotal * offer.discount_value) / 100);
+          if (disc > thresholdDiscount) {
+            thresholdDiscount = disc;
+            thresholdOfferName = offer.label_en || `${offer.discount_value}% OFF`;
+          }
+        } else if (offer.discount_type === 'fixed') {
+          const disc = Math.min(offer.discount_value, subtotal);
+          if (disc > thresholdDiscount) {
+            thresholdDiscount = disc;
+            thresholdOfferName = offer.label_en || `${offer.discount_value} EGP OFF`;
+          }
+        }
+      }
+    }
+  }
   
-  const shipping = subtotal > 0 ? 50 : 0;
-  const finalTotal = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount + shipping);
+  const shipping = freeDelivery ? 0 : (subtotal > 0 ? 50 : 0);
+  const finalTotal = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount + shipping);
   
   return {
     subtotal,
     cottonDiscount,
     autoAppliedDiscount,
     autoAppliedOfferName,
+    thresholdDiscount,
+    thresholdOfferName,
     shipping,
     finalTotal
   };

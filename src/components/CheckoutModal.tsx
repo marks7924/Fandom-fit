@@ -68,6 +68,17 @@ export default function CheckoutModal() {
   // Sizing choices (only for single product checkout)
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedFabric, setSelectedFabric] = useState('Standard Cotton');
+  const [selectedFit, setSelectedFit] = useState<'regular' | 'oversized'>('oversized');
+
+  // Sync state on checkoutProduct change
+  useEffect(() => {
+    if (checkoutProduct) {
+      const defaultFit = checkoutProduct.fit_type === 'regular' ? 'regular' : 'oversized';
+      setSelectedFit(defaultFit);
+      setSelectedSize(checkoutProduct.available_sizes?.[0] || 'M');
+      setSelectedFabric(checkoutProduct.material_options?.[0] || 'Standard Cotton');
+    }
+  }, [checkoutProduct]);
 
   // Governorates Lists
   const governoratesEn = [
@@ -92,23 +103,20 @@ export default function CheckoutModal() {
       document.body.style.overflow = 'hidden';
       
       // Auto-fill from user profile address_data or localStorage saved customer data!
-      const savedDataStr = typeof window !== 'undefined' ? localStorage.getItem('ff_saved_customer_data') : null;
-      let savedData: any = {};
-      if (savedDataStr) {
-        try {
-          savedData = JSON.parse(savedDataStr);
-        } catch (e) {}
-      }
-
       const userProfile = useStore.getState().profile;
-      const autofill = userProfile?.address_data || savedData || {};
+      const addrData = userProfile?.address_data || {};
+      const savedData = (() => {
+        try { return JSON.parse(localStorage.getItem('ff_saved_customer_data') || '{}'); }
+        catch { return {}; }
+      })();
 
-      setName(autofill.customer_name || '');
-      setPhone(autofill.customer_phone || '');
-      setEmail(autofill.customer_email || '');
-      setGovernorate(autofill.governorate || 'Cairo');
-      setCity(autofill.city || '');
-      setAddress(autofill.address || '');
+      // Priority: profile fields first, then address_data, then localStorage
+      setName(userProfile?.full_name || addrData.customer_name || savedData.customer_name || '');
+      setPhone(userProfile?.phone || addrData.customer_phone || savedData.customer_phone || '');
+      setEmail(userProfile?.email || addrData.customer_email || savedData.customer_email || '');
+      setGovernorate(addrData.governorate || savedData.governorate || 'Cairo');
+      setCity(addrData.city || savedData.city || '');
+      setAddress(addrData.street || addrData.address || savedData.address || '');
       setNotes('');
       setRewardCouponCode('');
 
@@ -155,7 +163,17 @@ export default function CheckoutModal() {
   let cottonDiscount = 0;
   let autoAppliedDiscount = 0;
   let autoAppliedOfferName = '';
+  let thresholdDiscount = 0;
+  let thresholdOfferName = '';
   let shippingFee = 0;
+
+  const thresholdOffers = (() => {
+    try {
+      const raw = settings.threshold_offers;
+      if (!raw) return [];
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch { return []; }
+  })();
 
   if (isSingle) {
     subtotal = singleItemPrice;
@@ -163,11 +181,13 @@ export default function CheckoutModal() {
   } else {
     const cottonEnabled = settings.cotton_reward_system_enabled !== false;
     const autoOffers = settings.auto_applied_offers || [];
-    const totals = getCartTotals(cart, cottonEnabled, autoOffers);
+    const totals = getCartTotals(cart, cottonEnabled, autoOffers, thresholdOffers);
     subtotal = totals.subtotal;
     cottonDiscount = totals.cottonDiscount;
     autoAppliedDiscount = totals.autoAppliedDiscount;
     autoAppliedOfferName = totals.autoAppliedOfferName;
+    thresholdDiscount = totals.thresholdDiscount;
+    thresholdOfferName = totals.thresholdOfferName;
     shippingFee = totals.shipping;
   }
 
@@ -180,7 +200,7 @@ export default function CheckoutModal() {
     ? Math.round((subtotal * loyaltyDiscountPercent) / 100)
     : 0;
 
-  const total = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - discountAmount - loyaltyDiscount + shippingFee);
+  const total = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount - discountAmount - loyaltyDiscount + shippingFee);
 
   const handleApplyCoupon = async () => {
     setDiscountErr('');
@@ -244,11 +264,12 @@ export default function CheckoutModal() {
 
     // Compile items array for database
     const orderItems = isSingle && checkoutProduct ? [{
-      id: `${checkoutProduct.id}-${selectedSize}-${selectedFabric}`,
+      id: `${checkoutProduct.id}-${selectedSize}-${selectedFabric}-${selectedFit}`,
       product_id: checkoutProduct.id,
       product_name: singleItemName,
       size: selectedSize,
       fabric: selectedFabric,
+      fit_type: selectedFit,
       quantity: 1,
       price: singleItemPrice,
       image: singleItemImage
@@ -258,16 +279,17 @@ export default function CheckoutModal() {
       product_name: locale === 'ar' ? item.product.name_ar : item.product.name_en,
       size: item.size,
       fabric: item.fabric,
+      fit_type: item.fitType || 'oversized',
       quantity: item.quantity,
       price: item.price,
       image: (item.product.images && item.product.images.length > 0) ? item.product.images[0] : (item.product.category_id === '4' ? '/placeholders/manga_front.jpg' : '/placeholders/arcade_front.jpg')
     }));
 
     const primaryProductName = isSingle && checkoutProduct
-      ? `${singleItemName} (${selectedSize})`
-      : cart.map(item => `${locale === 'ar' ? item.product.name_ar : item.product.name_en} (${item.size}) x${item.quantity}`).join(', ');
+      ? `${singleItemName} (${selectedSize} - ${selectedFit === 'regular' ? 'Regular' : 'Oversized'})`
+      : cart.map(item => `${locale === 'ar' ? item.product.name_ar : item.product.name_en} (${item.size} - ${item.fitType === 'regular' ? 'Regular Fit' : 'Oversized Fit'}) x${item.quantity}`).join(', ');
 
-    const fullNotes = `[Checkout Type: Web]${isSingle ? ` | Fabric: ${selectedFabric}` : ''}${notes ? ` | Customer Note: ${notes}` : ''}${appliedDiscount > 0 ? ` | Coupon Code: ${couponCode.trim()} (${appliedDiscount}% Off)` : ''}${referralCode.trim() ? ` | Referral: ${referralCode.trim()}` : ''}`;
+    const fullNotes = `[Checkout Type: Web]${isSingle ? ` | Fabric: ${selectedFabric} | Fit: ${selectedFit}` : ` | Items Spec: ${cart.map(i => `${i.product.name_en}: ${i.fabric}/${i.fitType || 'oversized'}`).join(', ')}`}${notes ? ` | Customer Note: ${notes}` : ''}${appliedDiscount > 0 ? ` | Coupon Code: ${couponCode.trim()} (${appliedDiscount}% Off)` : ''}${referralCode.trim() ? ` | Referral: ${referralCode.trim()}` : ''}`;
 
     const result = await addOrder({
       product_id: isSingle && checkoutProduct ? checkoutProduct.id : null,
@@ -283,7 +305,8 @@ export default function CheckoutModal() {
       city,
       address,
       coupon_code: couponCode.trim() || undefined,
-      referral_code: referralCode.trim() || undefined
+      referral_code: referralCode.trim() || undefined,
+      user_id: user?.id || null
     });
 
     setIsSubmitting(false);
@@ -293,6 +316,25 @@ export default function CheckoutModal() {
       if (!isSingle) clearCart();
       localStorage.removeItem('ff_applied_coupon');
       localStorage.removeItem('ff_coupon_discount');
+
+      // Save address to profile if logged in and no address saved yet
+      const currentProfile = useStore.getState().profile;
+      const currentUser = useStore.getState().user;
+      if (currentUser && currentProfile) {
+        const hasAddress = currentProfile.address_data && (currentProfile.address_data.governorate || currentProfile.address_data.city || currentProfile.address_data.street);
+        if (!hasAddress) {
+          // Save address to profile for future autofill
+          await useStore.getState().updateProfile({
+            address_data: { governorate, city, street: address }
+          });
+        }
+      } else {
+        // Guest: save to localStorage for next visit
+        localStorage.setItem('ff_saved_customer_data', JSON.stringify({
+          customer_name: name, customer_phone: cleanPhone,
+          customer_email: email.trim(), governorate, city, address
+        }));
+      }
 
       const shortCode = result.id.split('-')[0].toUpperCase();
       setOrderRef(shortCode);
@@ -424,6 +466,22 @@ export default function CheckoutModal() {
                           ))}
                         </select>
                       </div>
+
+                      {(checkoutProduct.fit_type === 'both' || !checkoutProduct.fit_type) && (
+                        <div className="col-span-2 mt-2">
+                          <label className="text-[9px] font-black uppercase text-black/40 block mb-1">
+                            {locale === 'ar' ? 'القصة (الستايل)' : 'Fit Type'}
+                          </label>
+                          <select
+                            value={selectedFit}
+                            onChange={(e) => setSelectedFit(e.target.value as any)}
+                            className="text-[10px] font-bold border-2 border-black rounded px-1.5 py-0.5 bg-white text-black w-full"
+                          >
+                            <option value="oversized">{locale === 'ar' ? 'قصة واسعة (Oversized)' : 'Oversized Fit'}</option>
+                            <option value="regular">{locale === 'ar' ? 'قصة معتادة (Regular)' : 'Regular Fit'}</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -438,7 +496,9 @@ export default function CheckoutModal() {
                           <div className="min-w-0">
                             <span className="font-black text-black block truncate uppercase">{locale === 'ar' ? item.product.name_ar : item.product.name_en}</span>
                             <span className="text-[9px] text-black/60 font-semibold block uppercase">
-                              {locale === 'ar' ? `مقاس ${item.size} • ${item.fabric === 'Standard Cotton' ? 'قطن قياسي' : 'قطن ثقيل'}` : `Size ${item.size} • ${item.fabric}`} x{item.quantity}
+                              {locale === 'ar' 
+                                ? `مقاس ${item.size} • ${item.fitType === 'regular' ? 'قصة معتادة' : 'قصة واسعة'} • ${item.fabric === 'Standard Cotton' ? 'قطن قياسي' : 'قطن ثقيل'}` 
+                                : `Size ${item.size} • ${item.fitType === 'regular' ? 'Regular' : 'Oversized'} • ${item.fabric}`} x{item.quantity}
                             </span>
                           </div>
                           <span className="font-black text-brand-accent shrink-0">

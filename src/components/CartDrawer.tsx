@@ -38,19 +38,28 @@ export default function CartDrawer() {
   // Subtotal & Cotton Promotion Calculations
   const cottonEnabled = settings.cotton_reward_system_enabled !== false;
   const autoOffers = settings.auto_applied_offers || [];
+  const thresholdOffers = (() => {
+    try {
+      const raw = settings.threshold_offers;
+      if (!raw) return [];
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch { return []; }
+  })();
   const { 
     subtotal, 
     cottonDiscount, 
     autoAppliedDiscount, 
     autoAppliedOfferName, 
+    thresholdDiscount,
+    thresholdOfferName,
     shipping, 
     finalTotal 
-  } = getCartTotals(cart, cottonEnabled, autoOffers);
+  } = getCartTotals(cart, cottonEnabled, autoOffers, thresholdOffers);
   const shippingFee = shipping;
 
   // Discount Calculation
   const discountAmount = Number(((subtotal * discountPercent) / 100).toFixed(2));
-  const finalTotalWithPromo = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - discountAmount + shippingFee);
+  const finalTotalWithPromo = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount - discountAmount + shippingFee);
 
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) return;
@@ -223,7 +232,7 @@ export default function CartDrawer() {
                           {/* Size selector dropdown */}
                           <select
                             value={item.size}
-                            onChange={(e) => updateCartItemSpecs(item.id, e.target.value, item.fabric)}
+                            onChange={(e) => updateCartItemSpecs(item.id, e.target.value, item.fabric, item.fitType)}
                             className="text-[9px] font-black uppercase bg-[#EDE0D0] px-1 py-0.5 rounded border border-black focus:outline-none cursor-pointer"
                           >
                             {(item.product.available_sizes || ['S', 'M', 'L', 'XL', 'XXL']).map((s) => (
@@ -236,7 +245,7 @@ export default function CartDrawer() {
                           {/* Fabric selector dropdown */}
                           <select
                             value={item.fabric}
-                            onChange={(e) => updateCartItemSpecs(item.id, item.size, e.target.value)}
+                            onChange={(e) => updateCartItemSpecs(item.id, item.size, e.target.value, item.fitType)}
                             className="text-[9px] font-black uppercase bg-[#EDE0D0] px-1 py-0.5 rounded border border-black focus:outline-none cursor-pointer"
                           >
                             {(item.product.material_options || ['Standard Cotton', 'Premium Cotton']).map((f) => (
@@ -245,6 +254,22 @@ export default function CartDrawer() {
                               </option>
                             ))}
                           </select>
+
+                          {/* Fit selector dropdown or badge */}
+                          {item.product.fit_type === 'both' || !item.product.fit_type ? (
+                            <select
+                              value={item.fitType || 'oversized'}
+                              onChange={(e) => updateCartItemSpecs(item.id, item.size, item.fabric, e.target.value as any)}
+                              className="text-[9px] font-black uppercase bg-[#EDE0D0] px-1 py-0.5 rounded border border-black focus:outline-none cursor-pointer"
+                            >
+                              <option value="oversized">{locale === 'ar' ? 'قصة واسعة' : 'Oversized'}</option>
+                              <option value="regular">{locale === 'ar' ? 'قصة معتادة' : 'Regular'}</option>
+                            </select>
+                          ) : (
+                            <span className="text-[9px] font-black uppercase bg-zinc-200 text-zinc-700 px-1 py-0.5 rounded border border-zinc-300">
+                              {item.fitType === 'regular' ? (locale === 'ar' ? 'قصة معتادة' : 'Regular Fit') : (locale === 'ar' ? 'قصة واسعة' : 'Oversized Fit')}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -351,9 +376,15 @@ export default function CartDrawer() {
                     <span>-{tp('price_egp', { price: discountAmount })}</span>
                   </div>
                 )}
+                {thresholdDiscount > 0 && (
+                  <div className="flex justify-between items-center text-emerald-600 font-bold">
+                    <span>🎁 {thresholdOfferName || (locale === 'ar' ? 'خصم على المبلغ' : 'Order Discount')}</span>
+                    <span>-{tp('price_egp', { price: thresholdDiscount })}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center text-black/60 font-semibold">
                   <span>{locale === 'ar' ? 'الشحن' : 'Shipping'}</span>
-                  <span>{tp('price_egp', { price: shippingFee })}</span>
+                  <span>{shippingFee === 0 ? (locale === 'ar' ? '🎉 مجاني!' : '🎉 Free!') : tp('price_egp', { price: shippingFee })}</span>
                 </div>
                 <div className="flex justify-between items-center text-black border-t border-black/10 pt-1.5 font-black text-sm">
                   <span>{locale === 'ar' ? 'المجموع النهائي' : 'Final Total'}</span>

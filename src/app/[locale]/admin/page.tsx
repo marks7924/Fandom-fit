@@ -49,8 +49,11 @@ export default function AdminPage() {
     is_pinned: false,
     gives_cotton_reward: false,
     available_sizes: ['S', 'M', 'L', 'XL'], material_options: ['Standard Cotton', 'Premium Cotton'],
-    images: [] as string[], display_order: 0
+    images: [] as string[], display_order: 0,
+    fit_type: 'both'
   });
+
+  const [imageLinkInput, setImageLinkInput] = useState('');
 
   const [catForm, setCatForm] = useState({
     name_en: '', name_ar: '', slug: '', display_order: 0, is_hidden: false, show_in_browse: true,
@@ -95,7 +98,8 @@ export default function AdminPage() {
     default_fabrics: 'Standard Cotton, Premium Cotton',
     default_tags: 'New Drop',
     loyalty_orders_threshold: 5,
-    loyalty_discount_percent: 20
+    loyalty_discount_percent: 20,
+    referral_clicks_threshold: 5
   });
 
   const [sizeTable, setSizeTable] = useState<{ headers: string[]; rows: string[][] }>({
@@ -109,7 +113,23 @@ export default function AdminPage() {
 
   const [autoOffers, setAutoOffers] = useState<any[]>([]);
   const [isAutoOffersOpen, setIsAutoOffersOpen] = useState(false);
+  const [thresholdOffers, setThresholdOffers] = useState<any[]>([]);
+  const [isThresholdOffersOpen, setIsThresholdOffersOpen] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
+  const [sizeChartsList, setSizeChartsList] = useState<any[]>([]);
+
+  // Bulk Edit States
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+  const [bulkTargetType, setBulkTargetType] = useState<'all' | 'category'>('all');
+  const [bulkCategoryId, setBulkCategoryId] = useState('');
+  const [bulkSizes, setBulkSizes] = useState<string[]>([]);
+  const [bulkFabrics, setBulkFabrics] = useState<string[]>([]);
+  const [bulkFitType, setBulkFitType] = useState('both');
+  const [bulkTags, setBulkTags] = useState('');
+  const [bulkUpdateSizesEnabled, setBulkUpdateSizesEnabled] = useState(false);
+  const [bulkUpdateFabricsEnabled, setBulkUpdateFabricsEnabled] = useState(false);
+  const [bulkUpdateFitTypeEnabled, setBulkUpdateFitTypeEnabled] = useState(false);
+  const [bulkUpdateTagsEnabled, setBulkUpdateTagsEnabled] = useState(false);
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
@@ -125,6 +145,8 @@ export default function AdminPage() {
   const [selectedTagToPosition, setSelectedTagToPosition] = useState('');
   const [tagBgColor, setTagBgColor] = useState('#F2CC8F');
   const [tagTextColor, setTagTextColor] = useState('#000000');
+  const [tagRotation, setTagRotation] = useState(0);
+  const [tagFontSize, setTagFontSize] = useState(10);
 
   useEffect(() => {
     if (prodForm.available_sizes) {
@@ -176,6 +198,52 @@ export default function AdminPage() {
         } catch(e) {}
       }
 
+      let thresholdVal = settings.threshold_offers;
+      if (thresholdVal) {
+        try {
+          const parsed = typeof thresholdVal === 'string' ? JSON.parse(thresholdVal) : thresholdVal;
+          if (Array.isArray(parsed)) {
+            setThresholdOffers(parsed);
+          }
+        } catch(e) {}
+      }
+
+      let chartsVal = settings.size_charts;
+      if (chartsVal) {
+        try {
+          const parsed = typeof chartsVal === 'string' ? JSON.parse(chartsVal) : chartsVal;
+          if (Array.isArray(parsed)) {
+            setSizeChartsList(parsed);
+          }
+        } catch(e) {}
+      } else {
+        setSizeChartsList([
+          {
+            id: 'oversized',
+            name_en: 'Oversized Fit Size Chart',
+            name_ar: 'جدول قياسات المقاس الواسع',
+            img_en: settings.size_chart_img_en || '',
+            img_ar: settings.size_chart_img_ar || '',
+            table: sizeTable
+          },
+          {
+            id: 'regular',
+            name_en: 'Regular Fit Size Chart',
+            name_ar: 'جدول قياسات المقاس المعتاد',
+            img_en: '',
+            img_ar: '',
+            table: {
+              headers: ['Size', 'Width (Chest - cm)', 'Length (cm)', 'Sleeve (cm)'],
+              rows: [
+                ['S', '50', '68', '20'],
+                ['M', '53', '70', '21'],
+                ['L', '56', '72', '22']
+              ]
+            }
+          }
+        ]);
+      }
+
       setSettingsForm({
         brand_name: settings.brand_name || 'Fandom Fit',
         tagline: settings.tagline || 'Wear What You Love.',
@@ -201,7 +269,8 @@ export default function AdminPage() {
         default_fabrics: settings.default_fabrics || 'Standard Cotton, Premium Cotton',
         default_tags: settings.default_tags || 'New Drop',
         loyalty_orders_threshold: settings.loyalty_orders_threshold ?? 5,
-        loyalty_discount_percent: settings.loyalty_discount_percent ?? 20
+        loyalty_discount_percent: settings.loyalty_discount_percent ?? 20,
+        referral_clicks_threshold: settings.referral_clicks_threshold ?? 5
       });
     }
   }, [isAuthenticated, settings]);
@@ -253,6 +322,53 @@ export default function AdminPage() {
     return result;
   };
 
+  const handleBulkUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkUpdateSizesEnabled && !bulkUpdateFabricsEnabled && !bulkUpdateFitTypeEnabled && !bulkUpdateTagsEnabled) {
+      alert('Please enable and check at least one attribute toggle to bulk update!');
+      return;
+    }
+
+    const confirmMsg = bulkTargetType === 'all' 
+      ? 'Are you sure you want to bulk update ALL products in the catalog?' 
+      : `Are you sure you want to bulk update products under the selected category?`;
+    
+    if (!confirm(confirmMsg)) return;
+
+    // Filter target products
+    const targetProducts = products.filter(p => {
+      if (bulkTargetType === 'category') {
+        return p.category_id === bulkCategoryId;
+      }
+      return true;
+    });
+
+    if (targetProducts.length === 0) {
+      alert('No products found matching the bulk edit filter target.');
+      return;
+    }
+
+    // Build update payload
+    const updatePayload: Record<string, any> = {};
+    if (bulkUpdateSizesEnabled) updatePayload.available_sizes = bulkSizes;
+    if (bulkUpdateFabricsEnabled) updatePayload.material_options = bulkFabrics;
+    if (bulkUpdateFitTypeEnabled) updatePayload.fit_type = bulkFitType as 'regular' | 'oversized' | 'both';
+    if (bulkUpdateTagsEnabled) updatePayload.tags = splitTagsText(bulkTags);
+
+    let successCount = 0;
+    for (const prod of targetProducts) {
+      try {
+        await updateProduct(prod.id, updatePayload);
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to bulk update product ${prod.name_en || prod.id}:`, err);
+      }
+    }
+
+    alert(`Successfully bulk updated ${successCount} of ${targetProducts.length} target products.`);
+    setIsBulkEditOpen(false);
+  };
+
   // CRUD handlers
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,7 +385,8 @@ export default function AdminPage() {
       price: Number(prodForm.price),
       sale_price: prodForm.sale_price ? Number(prodForm.sale_price) : null,
       display_order: Number(prodForm.display_order),
-      tags: splitTagsText(tagsText)
+      tags: splitTagsText(tagsText),
+      fit_type: prodForm.fit_type as 'regular' | 'oversized' | 'both'
     };
 
     if (editingItem) {
@@ -348,7 +465,10 @@ export default function AdminPage() {
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const finalSettings = { ...settingsForm } as any;
+    const finalSettings = { 
+      ...settingsForm,
+      size_charts: sizeChartsList
+    } as any;
 
     // Parse size chart table if custom JSON
     if (typeof finalSettings.size_chart_table === 'string' && finalSettings.size_chart_table.trim()) {
@@ -653,7 +773,8 @@ export default function AdminPage() {
                       gives_cotton_reward: false,
                       available_sizes: defaultSizes,
                       material_options: defaultFabrics,
-                      images: [], display_order: 0
+                      images: [], display_order: 0,
+                      fit_type: 'both'
                     });
                     setIsFormOpen(true);
                   }}
@@ -723,7 +844,7 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div>
                     <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('products.fields.price')}</label>
                     <input
@@ -805,6 +926,19 @@ export default function AdminPage() {
                     >
                       Reset options to Category/Global Defaults
                     </button>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Fit Type Option</label>
+                    <select
+                      value={prodForm.fit_type || 'both'}
+                      onChange={(e) => setProdForm({ ...prodForm, fit_type: e.target.value })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent cursor-pointer"
+                    >
+                      <option value="both">Both (Regular & Oversized)</option>
+                      <option value="oversized">Oversized Only</option>
+                      <option value="regular">Regular Only</option>
+                    </select>
                   </div>
                 </div>
 
@@ -1084,25 +1218,33 @@ export default function AdminPage() {
                 </div>
 
                 {/* Images Upload Mock */}
-                <div>
+                <div className="space-y-3">
                   <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('products.fields.images')}</label>
-                  <div className="flex flex-wrap gap-2.5 items-center">
-                    {prodForm.images.map((img, idx) => (
-                      <div key={idx} className="relative w-16 h-16 border border-zinc-800 rounded bg-zinc-950 overflow-hidden">
-                        <Image src={img} alt="upload-preview" fill className="object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setProdForm({ ...prodForm, images: prodForm.images.filter((_, i) => i !== idx) })}
-                          className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-0.5"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ))}
-                    
-                    <label className="w-16 h-16 border-2 border-dashed border-zinc-800 hover:border-zinc-700 rounded bg-zinc-950 flex flex-col items-center justify-center cursor-pointer text-zinc-500">
-                      <Plus size={16} />
-                      <span className="text-[8px] mt-1 font-bold">Upload</span>
+                  
+                  {/* Uploader & Url bar */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Paste image link URL here..."
+                      value={imageLinkInput}
+                      onChange={(e) => setImageLinkInput(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = imageLinkInput.trim();
+                        if (trimmed) {
+                          setProdForm({ ...prodForm, images: [...prodForm.images, trimmed] });
+                          setImageLinkInput('');
+                        }
+                      }}
+                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white rounded-lg text-[10px] font-bold uppercase transition-colors cursor-pointer shrink-0"
+                    >
+                      Add URL
+                    </button>
+                    <label className="px-3 py-2 bg-brand-accent hover:bg-brand-accent/90 border border-brand-accent text-white rounded-lg text-[10px] font-bold uppercase cursor-pointer flex items-center gap-1 shrink-0 transition-colors">
+                      ⬆ Upload File
                       <input 
                         type="file" 
                         multiple
@@ -1112,6 +1254,24 @@ export default function AdminPage() {
                       />
                     </label>
                   </div>
+
+                  {/* Thumbnail Previews */}
+                  {prodForm.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2.5 p-2.5 bg-zinc-950 border border-zinc-850 rounded-xl">
+                      {prodForm.images.map((img, idx) => (
+                        <div key={idx} className="relative w-16 h-16 border border-zinc-800 rounded bg-zinc-900 overflow-hidden shrink-0 group/img">
+                          <Image src={img} alt="upload-preview" fill className="object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setProdForm({ ...prodForm, images: prodForm.images.filter((_, i) => i !== idx) })}
+                            className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 hover:bg-red-700 cursor-pointer border border-black shadow"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-4 border-t border-zinc-800 flex justify-end gap-3">
@@ -1126,7 +1286,216 @@ export default function AdminPage() {
               </form>
             ) : (
               /* Products List */
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+              <div className="space-y-6">
+                
+                {/* ⚡ Bulk Edit Products Panel */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkEditOpen(!isBulkEditOpen)}
+                    className="w-full flex justify-between items-center p-4 text-xs font-black uppercase text-white bg-zinc-850 hover:bg-zinc-800 cursor-pointer select-none transition-colors border-b border-zinc-800"
+                  >
+                    <span className="flex items-center gap-2">
+                      ⚡ Bulk Edit Products Tool (Update multiple items at once)
+                    </span>
+                    <span className="text-[10px] font-bold text-zinc-400">{isBulkEditOpen ? '▲ Close Tool' : '▼ Open Tool'}</span>
+                  </button>
+
+                  {isBulkEditOpen && (
+                    <form onSubmit={handleBulkUpdate} className="p-4 sm:p-6 space-y-6 bg-zinc-900/60 border-t border-zinc-800">
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Column 1: Target Scope */}
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-black uppercase tracking-wider text-brand-accent pb-1 border-b border-zinc-800">1. Target Scope</h4>
+                          
+                          <div className="space-y-2">
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block">Update target products</label>
+                            <div className="flex gap-4">
+                              <label className="flex items-center gap-2 text-xs font-bold text-zinc-300 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="bulk-target"
+                                  checked={bulkTargetType === 'all'}
+                                  onChange={() => setBulkTargetType('all')}
+                                  className="accent-brand-accent"
+                                />
+                                All Products
+                              </label>
+                              <label className="flex items-center gap-2 text-xs font-bold text-zinc-300 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="bulk-target"
+                                  checked={bulkTargetType === 'category'}
+                                  onChange={() => setBulkTargetType('category')}
+                                  className="accent-brand-accent"
+                                />
+                                By Category
+                              </label>
+                            </div>
+                          </div>
+
+                          {bulkTargetType === 'category' && (
+                            <div>
+                              <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Select Target Category</label>
+                              <select
+                                value={bulkCategoryId}
+                                onChange={(e) => setBulkCategoryId(e.target.value)}
+                                required
+                                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent cursor-pointer font-mono"
+                              >
+                                <option value="">-- Choose Category --</option>
+                                {categories.map((c) => (
+                                  <option key={c.id} value={c.id}>{c.name_en}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Column 2: Fields to Change */}
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-black uppercase tracking-wider text-brand-accent pb-1 border-b border-zinc-800">2. Values to Modify</h4>
+                          
+                          <p className="text-[9px] text-zinc-500 uppercase leading-relaxed">
+                            Check the boxes next to each attribute you want to overwrite, select the new values, and click run. Checked items will overwrite target products.
+                          </p>
+
+                          <div className="space-y-4">
+                            {/* Option 1: Sizes */}
+                            <div className="bg-zinc-950 p-3 border border-zinc-850 rounded-xl space-y-2">
+                              <label className="flex items-center gap-2 text-xs font-bold text-zinc-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={bulkUpdateSizesEnabled}
+                                  onChange={(e) => setBulkUpdateSizesEnabled(e.target.checked)}
+                                  className="accent-brand-accent"
+                                />
+                                Overwrite Sizes List
+                              </label>
+                              {bulkUpdateSizesEnabled && (
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {sizeOptions.map(sz => {
+                                    const checked = bulkSizes.includes(sz);
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={sz}
+                                        onClick={() => {
+                                          const next = checked ? bulkSizes.filter(s => s !== sz) : [...bulkSizes, sz];
+                                          setBulkSizes(next);
+                                        }}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                                          checked ? 'bg-brand-accent text-white border-brand-accent' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'
+                                        }`}
+                                      >
+                                        {sz}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Option 2: Fabrics */}
+                            <div className="bg-zinc-950 p-3 border border-zinc-850 rounded-xl space-y-2">
+                              <label className="flex items-center gap-2 text-xs font-bold text-zinc-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={bulkUpdateFabricsEnabled}
+                                  onChange={(e) => setBulkUpdateFabricsEnabled(e.target.checked)}
+                                  className="accent-brand-accent"
+                                />
+                                Overwrite Material Options
+                              </label>
+                              {bulkUpdateFabricsEnabled && (
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {fabricOptions.map(fb => {
+                                    const checked = bulkFabrics.includes(fb);
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={fb}
+                                        onClick={() => {
+                                          const next = checked ? bulkFabrics.filter(f => f !== fb) : [...bulkFabrics, fb];
+                                          setBulkFabrics(next);
+                                        }}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                                          checked ? 'bg-brand-accent text-white border-brand-accent' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white'
+                                        }`}
+                                      >
+                                        {fb}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Option 3: Fit Type */}
+                            <div className="bg-zinc-950 p-3 border border-zinc-850 rounded-xl space-y-2">
+                              <label className="flex items-center gap-2 text-xs font-bold text-zinc-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={bulkUpdateFitTypeEnabled}
+                                  onChange={(e) => setBulkUpdateFitTypeEnabled(e.target.checked)}
+                                  className="accent-brand-accent"
+                                />
+                                Overwrite Fit Type Option
+                              </label>
+                              {bulkUpdateFitTypeEnabled && (
+                                <select
+                                  value={bulkFitType}
+                                  onChange={(e) => setBulkFitType(e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] cursor-pointer"
+                                >
+                                  <option value="both">Both (Regular & Oversized)</option>
+                                  <option value="oversized">Oversized Only</option>
+                                  <option value="regular">Regular Only</option>
+                                </select>
+                              )}
+                            </div>
+
+                            {/* Option 4: Custom Tags */}
+                            <div className="bg-zinc-950 p-3 border border-zinc-850 rounded-xl space-y-2">
+                              <label className="flex items-center gap-2 text-xs font-bold text-zinc-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={bulkUpdateTagsEnabled}
+                                  onChange={(e) => setBulkUpdateTagsEnabled(e.target.checked)}
+                                  className="accent-brand-accent"
+                                />
+                                Overwrite Custom Tags
+                              </label>
+                              {bulkUpdateTagsEnabled && (
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Hot, Summer Drop, anime"
+                                  value={bulkTags}
+                                  onChange={(e) => setBulkTags(e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                                />
+                              )}
+                            </div>
+
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-3 border-t border-zinc-800">
+                        <button
+                          type="submit"
+                          className="px-5 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-[10px] cursor-pointer shadow transition-colors"
+                        >
+                          ⚡ Run Bulk Update
+                        </button>
+                      </div>
+
+                    </form>
+                  )}
+                </div>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[750px] text-left font-mono">
                   <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
@@ -1177,7 +1546,13 @@ export default function AdminPage() {
                             onClick={() => {
                               setEditingItem(p);
                               setTagsText((p.tags || []).join(', '));
-                              setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false, gives_cotton_reward: p.gives_cotton_reward || false });
+                              setProdForm({ 
+                                ...p, 
+                                sale_price: p.sale_price || '', 
+                                is_pinned: p.is_pinned || false, 
+                                gives_cotton_reward: p.gives_cotton_reward || false,
+                                fit_type: p.fit_type || 'both'
+                              });
                               setIsFormOpen(true);
                             }}
                             className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white"
@@ -1197,6 +1572,7 @@ export default function AdminPage() {
                 </table>
               </div>
             </div>
+          </div>
           )}
           </div>
         )}
@@ -2056,6 +2432,159 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+            {/* Order Threshold Discounts Panel */}
+            <div className="mt-6 border border-zinc-800 bg-zinc-900 rounded-2xl overflow-hidden max-w-2xl">
+              <button
+                type="button"
+                onClick={() => setIsThresholdOffersOpen(!isThresholdOffersOpen)}
+                className="w-full flex justify-between items-center p-4 text-sm font-black uppercase text-white bg-zinc-850 hover:bg-zinc-800 cursor-pointer select-none transition-colors border-b border-zinc-800"
+              >
+                <span className="flex items-center gap-2">
+                  💰 Order Amount Threshold Discounts ({thresholdOffers.filter(o => o.is_active).length} active)
+                </span>
+                <span>{isThresholdOffersOpen ? '▲ Collapse' : '▼ Expand & Edit'}</span>
+              </button>
+
+              {isThresholdOffersOpen && (
+                <div className="p-4 sm:p-6 space-y-5">
+                  <div className="flex justify-between items-start">
+                    <p className="text-[10px] text-zinc-400 uppercase leading-relaxed max-w-md">
+                      Set discount conditions based on cart total. When a customer's order exceeds the minimum, the discount applies automatically.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newOffer = {
+                          id: `thresh-${Date.now()}`,
+                          min_order_amount: 500,
+                          discount_type: 'percentage', // 'percentage' | 'fixed' | 'free_delivery'
+                          discount_value: 10,
+                          label_en: 'Order Discount',
+                          label_ar: 'خصم على الطلب',
+                          is_active: true
+                        };
+                        const nextList = [...thresholdOffers, newOffer];
+                        setThresholdOffers(nextList);
+                      }}
+                      className="px-3 py-1.5 bg-brand-accent hover:bg-brand-accent/90 text-white rounded text-[10px] font-bold uppercase cursor-pointer transition-colors shrink-0"
+                    >
+                      + Add Threshold
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {thresholdOffers.map((offer, idx) => (
+                      <div key={offer.id} className="p-4 bg-zinc-950 border border-zinc-800 rounded-xl space-y-3 relative">
+                        <button
+                          type="button"
+                          onClick={() => setThresholdOffers(thresholdOffers.filter((_, i) => i !== idx))}
+                          className="absolute top-3 right-3 text-zinc-500 hover:text-red-400 cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Min Order Amount (EGP)</label>
+                            <input
+                              type="number" min={0}
+                              value={offer.min_order_amount}
+                              onChange={(e) => {
+                                const next = [...thresholdOffers];
+                                next[idx] = { ...next[idx], min_order_amount: Number(e.target.value) };
+                                setThresholdOffers(next);
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Discount Type</label>
+                            <select
+                              value={offer.discount_type}
+                              onChange={(e) => {
+                                const next = [...thresholdOffers];
+                                next[idx] = { ...next[idx], discount_type: e.target.value };
+                                setThresholdOffers(next);
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                            >
+                              <option value="percentage">Percentage (%)</option>
+                              <option value="fixed">Fixed Amount (EGP)</option>
+                              <option value="free_delivery">Free Delivery</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {offer.discount_type !== 'free_delivery' && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">
+                                {offer.discount_type === 'percentage' ? 'Discount %' : 'Discount Amount (EGP)'}
+                              </label>
+                              <input
+                                type="number" min={0}
+                                value={offer.discount_value}
+                                onChange={(e) => {
+                                  const next = [...thresholdOffers];
+                                  next[idx] = { ...next[idx], discount_value: Number(e.target.value) };
+                                  setThresholdOffers(next);
+                                }}
+                                className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Label (English)</label>
+                              <input
+                                type="text"
+                                value={offer.label_en || ''}
+                                onChange={(e) => {
+                                  const next = [...thresholdOffers];
+                                  next[idx] = { ...next[idx], label_en: e.target.value };
+                                  setThresholdOffers(next);
+                                }}
+                                className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={offer.is_active}
+                            onChange={(e) => {
+                              const next = [...thresholdOffers];
+                              next[idx] = { ...next[idx], is_active: e.target.checked };
+                              setThresholdOffers(next);
+                            }}
+                            className="accent-brand-accent"
+                          />
+                          <label className="text-[10px] font-bold text-zinc-300">Active</label>
+                          <span className="text-[9px] text-zinc-500 ml-2">
+                            {offer.is_active
+                              ? `✅ Orders over ${offer.min_order_amount} EGP → ${offer.discount_type === 'free_delivery' ? 'Free Delivery' : offer.discount_type === 'percentage' ? `${offer.discount_value}% off` : `${offer.discount_value} EGP off`}`
+                              : '⚪ Inactive'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-end pt-3 border-t border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await saveSettings({ ...settings, threshold_offers: JSON.stringify(thresholdOffers) });
+                        alert('Threshold Offers saved!');
+                      }}
+                      className="px-6 py-2.5 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-xs cursor-pointer"
+                    >
+                      Save Threshold Offers
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -2120,435 +2649,640 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB 6: SETTINGS */}
+        {/* TAB 6: SETTINGS — Card-Based Accordion Layout */}
         {activeTab === 'settings' && (
-          <div className="space-y-6">
+          <div className="space-y-4 max-w-3xl">
             <h2 className="text-3xl font-black uppercase text-white">{t('sidebar.settings')}</h2>
 
-            <form onSubmit={handleSaveSettings} className="bg-zinc-900 border border-zinc-800 p-4 sm:p-6 rounded-2xl space-y-4 max-w-lg">
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.brand_name')}</label>
-                  <input
-                    type="text"
-                    value={settingsForm.brand_name}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, brand_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.tagline')}</label>
-                  <input
-                    type="text"
-                    value={settingsForm.tagline}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, tagline: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
-                  />
-                </div>
-              </div>
+            <form onSubmit={handleSaveSettings} className="space-y-3">
 
-              <div>
-                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.instagram_url')}</label>
-                <input
-                  type="text"
-                  value={settingsForm.instagram_url}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, instagram_url: e.target.value })}
-                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.tiktok_url')}</label>
-                  <input
-                    type="text"
-                    value={settingsForm.tiktok_url}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, tiktok_url: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.facebook_url')}</label>
-                  <input
-                    type="text"
-                    value={settingsForm.facebook_url}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, facebook_url: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.seo_title')}</label>
-                  <input
-                    type="text"
-                    value={settingsForm.seo_title}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, seo_title: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.seo_desc')}</label>
-                  <input
-                    type="text"
-                    value={settingsForm.seo_desc}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, seo_desc: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="border-t border-zinc-800 pt-4">
-                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-2">Fabric Pricing Customization (Added Premiums in EGP)</label>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Premium Fabric</label>
-                    <input
-                      type="number" min={0}
-                      value={settingsForm.fabric_premium_premium}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, fabric_premium_premium: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
+              {/* ── CARD: Brand Identity ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🏷️</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Brand Identity</p>
+                      <p className="text-[10px] text-zinc-500">Name, tagline, and logo</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Heavy Fabric</label>
-                    <input
-                      type="number" min={0}
-                      value={settingsForm.fabric_premium_heavy}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, fabric_premium_heavy: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Oversized Fabric</label>
-                    <input
-                      type="number" min={0}
-                      value={settingsForm.fabric_premium_oversized}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, fabric_premium_oversized: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.brand_name')}</label>
+                      <input type="text" value={settingsForm.brand_name}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, brand_name: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.tagline')}</label>
+                      <input type="text" value={settingsForm.tagline}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, tagline: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
                   </div>
                 </div>
-              </div>
+              </details>
 
-              <div className="border-t border-zinc-800 pt-4 space-y-3">
-                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">System Reward Engine Controls</label>
-                
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="cotton_reward_system_enabled"
-                    checked={settingsForm.cotton_reward_system_enabled}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, cotton_reward_system_enabled: e.target.checked })}
-                    className="accent-brand-accent animate-none" 
-                  />
-                  <label htmlFor="cotton_reward_system_enabled" className="text-xs font-bold text-zinc-300 select-none">
-                    🧶 Enable Cotton Reward System & Cart Discounts (25% OFF 2nd Item)
-                  </label>
+              {/* ── CARD: Social Media ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📱</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Social Media</p>
+                      <p className="text-[10px] text-zinc-500">Instagram, TikTok, Facebook links</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800 space-y-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.instagram_url')}</label>
+                    <input type="text" value={settingsForm.instagram_url}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, instagram_url: e.target.value })}
+                      placeholder="https://instagram.com/fandomfit"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.tiktok_url')}</label>
+                      <input type="text" value={settingsForm.tiktok_url}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, tiktok_url: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.facebook_url')}</label>
+                      <input type="text" value={settingsForm.facebook_url}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, facebook_url: e.target.value })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
+                  </div>
                 </div>
+              </details>
 
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="referral_reward_system_enabled"
-                    checked={settingsForm.referral_reward_system_enabled}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, referral_reward_system_enabled: e.target.checked })}
-                    className="accent-brand-accent animate-none" 
-                  />
-                  <label htmlFor="referral_reward_system_enabled" className="text-xs font-bold text-zinc-300 select-none">
-                    🎁 Enable Referral Reward Sharing System (15% OFF)
-                  </label>
+              {/* ── CARD: SEO ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🔍</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">SEO Settings</p>
+                      <p className="text-[10px] text-zinc-500">Search engine title and description</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800 space-y-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.seo_title')}</label>
+                    <input type="text" value={settingsForm.seo_title}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, seo_title: e.target.value })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">{t('settings.seo_desc')}</label>
+                    <textarea rows={2} value={settingsForm.seo_desc}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, seo_desc: e.target.value })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent resize-none" />
+                  </div>
                 </div>
-              </div>
+              </details>
 
-              <div>
-                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-2">Scrolling Homepage Announcement Bar</label>
-                <div className="space-y-2">
+              {/* ── CARD: Announcement Bar ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📢</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Announcement Bar</p>
+                      <p className="text-[10px] text-zinc-500">Scrolling banner on homepage</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800 space-y-3">
                   <div>
                     <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1 flex items-center gap-1">
                       <span className="px-1.5 py-0.5 bg-zinc-700 rounded text-zinc-300">EN</span> English Text
                     </label>
-                    <input
-                      type="text"
-                      value={settingsForm.announcement}
+                    <input type="text" value={settingsForm.announcement}
                       onChange={(e) => setSettingsForm({ ...settingsForm, announcement: e.target.value })}
-                      placeholder="e.g. Free Shipping across Cairo for orders above 1000 EGP!"
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
+                      placeholder="e.g. Free Shipping for orders above 1000 EGP!"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
                   </div>
                   <div>
                     <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1 flex items-center gap-1">
                       <span className="px-1.5 py-0.5 bg-zinc-700 rounded text-zinc-300">AR</span> Arabic Text
                     </label>
-                    <input
-                      type="text"
-                      dir="rtl"
-                      value={settingsForm.announcement_ar}
+                    <input type="text" dir="rtl" value={settingsForm.announcement_ar}
                       onChange={(e) => setSettingsForm({ ...settingsForm, announcement_ar: e.target.value })}
-                      placeholder="مثال: شحن مجاني داخل القاهرة للطلبات فوق ١٠٠٠ جنيه!"
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent text-right font-arabic"
-                    />
+                      placeholder="مثال: شحن مجاني للطلبات فوق ١٠٠٠ جنيه!"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent text-right font-arabic" />
                   </div>
                 </div>
-              </div>
+              </details>
 
-              <div className="border-t border-zinc-800 pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">English Size Chart Image</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={settingsForm.size_chart_img_en || ''}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_img_en: e.target.value })}
-                      placeholder="e.g. /images/size-chart-en.jpg"
-                      className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
-                    <label className="px-3 py-2 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-white rounded-lg text-[10px] font-bold uppercase cursor-pointer flex items-center justify-center shrink-0">
-                      Upload
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            try {
-                              const base64 = await fileToBase64(e.target.files[0]);
-                              setSettingsForm({ ...settingsForm, size_chart_img_en: base64 });
-                            } catch(err) {
-                              console.error(err);
-                            }
-                          }
-                        }}
-                        className="hidden"
-                      />
-                    </label>
+              {/* ── CARD: Fabric Pricing ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">💰</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Fabric Pricing</p>
+                      <p className="text-[10px] text-zinc-500">Price premiums added per fabric type</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800">
+                  <div className="grid grid-cols-3 gap-4 mt-3">
+                    {[
+                      { label: '🧶 Premium Fabric', key: 'fabric_premium_premium' },
+                      { label: '🪨 Heavy Fabric', key: 'fabric_premium_heavy' },
+                      { label: '📦 Oversized Fabric', key: 'fabric_premium_oversized' },
+                    ].map(({ label, key }) => (
+                      <div key={key}>
+                        <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">{label} (+EGP)</label>
+                        <input type="number" min={0}
+                          value={(settingsForm as any)[key]}
+                          onChange={(e) => setSettingsForm({ ...settingsForm, [key]: Number(e.target.value) })}
+                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Arabic Size Chart Image</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={settingsForm.size_chart_img_ar || ''}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, size_chart_img_ar: e.target.value })}
-                      placeholder="e.g. /images/size-chart-ar.jpg"
-                      className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent text-right"
-                    />
-                    <label className="px-3 py-2 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-white rounded-lg text-[10px] font-bold uppercase cursor-pointer flex items-center justify-center shrink-0">
-                      Upload
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            try {
-                              const base64 = await fileToBase64(e.target.files[0]);
-                              setSettingsForm({ ...settingsForm, size_chart_img_ar: base64 });
-                            } catch(err) {
-                              console.error(err);
-                            }
-                          }
-                        }}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
+              </details>
 
-              {/* Product Defaults Settings */}
-              <div className="border-t border-zinc-800 pt-4 space-y-3">
-                <label className="text-[10px] uppercase font-bold text-zinc-400 block">
-                  ⚙️ Global Product Option Defaults (Inherited by New Products)
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Sizes (Comma separated)</label>
-                    <input
-                      type="text"
-                      value={settingsForm.default_sizes || ''}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, default_sizes: e.target.value })}
-                      placeholder="e.g. S, M, L, XL, XXL"
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
+              {/* ── CARD: Reward Engine ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🎁</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Reward Engine</p>
+                      <p className="text-[10px] text-zinc-500">Enable/disable cotton & referral systems</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Fabrics (Comma separated)</label>
-                    <input
-                      type="text"
-                      value={settingsForm.default_fabrics || ''}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, default_fabrics: e.target.value })}
-                      placeholder="e.g. Standard Cotton, Premium Cotton"
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Tags (Comma separated)</label>
-                    <input
-                      type="text"
-                      value={settingsForm.default_tags || ''}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, default_tags: e.target.value })}
-                      placeholder="e.g. New Drop, anime"
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Loyalty Reward System Configuration (Request 2) */}
-              <div className="border-t border-zinc-800 pt-4 space-y-3 col-span-2">
-                <label className="text-[10px] uppercase font-bold text-zinc-400 block">
-                  🏆 Per-Order Loyalty Reward Configurations
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Loyalty Order Interval (e.g. every 5 orders)</label>
-                    <input
-                      type="number"
-                      value={settingsForm.loyalty_orders_threshold || 5}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, loyalty_orders_threshold: Number(e.target.value) })}
-                      placeholder="e.g. 5"
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Loyalty Discount Percentage (%)</label>
-                    <input
-                      type="number"
-                      value={settingsForm.loyalty_discount_percent || 20}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, loyalty_discount_percent: Number(e.target.value) })}
-                      placeholder="e.g. 20"
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Visual Size Chart Table Grid Editor */}
-              <div className="border-t border-zinc-800 pt-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] uppercase font-bold text-zinc-400 block">
-                    📐 Fallback Size Chart Table (Spreadsheet Editor)
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-4 border-t border-zinc-800 space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer group/toggle">
+                    <div className={`relative w-10 h-5 rounded-full border-2 border-zinc-700 transition-colors ${settingsForm.cotton_reward_system_enabled ? 'bg-brand-accent border-brand-accent' : 'bg-zinc-800'}`}
+                      onClick={() => setSettingsForm({ ...settingsForm, cotton_reward_system_enabled: !settingsForm.cotton_reward_system_enabled })}>
+                      <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-all shadow-sm ${settingsForm.cotton_reward_system_enabled ? 'left-5' : 'left-0.5'}`} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-zinc-200">🧶 Cotton Reward System</p>
+                      <p className="text-[9px] text-zinc-500">25% off 2nd item when cart has cotton-eligible items</p>
+                    </div>
                   </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextHeaders = [...sizeTable.headers, `Col ${sizeTable.headers.length + 1}`];
-                        const nextRows = sizeTable.rows.map(r => [...r, '']);
-                        const nextTable = { headers: nextHeaders, rows: nextRows };
-                        setSizeTable(nextTable);
-                        setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
-                      }}
-                      className="px-2 py-1 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-white rounded text-[10px] font-bold uppercase cursor-pointer"
-                    >
-                      + Add Column
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (sizeTable.headers.length <= 1) return;
-                        const nextHeaders = sizeTable.headers.slice(0, -1);
-                        const nextRows = sizeTable.rows.map(r => r.slice(0, -1));
-                        const nextTable = { headers: nextHeaders, rows: nextRows };
-                        setSizeTable(nextTable);
-                        setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
-                      }}
-                      className="px-2 py-1 bg-red-950/40 hover:bg-red-900 border border-red-900/60 text-red-400 rounded text-[10px] font-bold uppercase cursor-pointer"
-                    >
-                      - Col
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextRows = [...sizeTable.rows, Array(sizeTable.headers.length).fill('')];
-                        const nextTable = { ...sizeTable, rows: nextRows };
-                        setSizeTable(nextTable);
-                        setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
-                      }}
-                      className="px-2 py-1 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-white rounded text-[10px] font-bold uppercase cursor-pointer"
-                    >
-                      + Add Row
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (sizeTable.rows.length <= 1) return;
-                        const nextRows = sizeTable.rows.slice(0, -1);
-                        const nextTable = { ...sizeTable, rows: nextRows };
-                        setSizeTable(nextTable);
-                        setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
-                      }}
-                      className="px-2 py-1 bg-red-950/40 hover:bg-red-900 border border-red-900/60 text-red-400 rounded text-[10px] font-bold uppercase cursor-pointer"
-                    >
-                      - Row
-                    </button>
+                  <label className="flex items-center gap-3 cursor-pointer group/toggle">
+                    <div className={`relative w-10 h-5 rounded-full border-2 border-zinc-700 transition-colors ${settingsForm.referral_reward_system_enabled ? 'bg-brand-accent border-brand-accent' : 'bg-zinc-800'}`}
+                      onClick={() => setSettingsForm({ ...settingsForm, referral_reward_system_enabled: !settingsForm.referral_reward_system_enabled })}>
+                      <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-all shadow-sm ${settingsForm.referral_reward_system_enabled ? 'left-5' : 'left-0.5'}`} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-zinc-200">🔗 Referral Reward System</p>
+                      <p className="text-[9px] text-zinc-500">Referral sharing with 15% OFF coupon</p>
+                    </div>
+                  </label>
+                </div>
+              </details>
+
+              {/* ── CARD: Loyalty Points ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🏆</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Loyalty Reward Config</p>
+                      <p className="text-[10px] text-zinc-500">Set order count threshold and discount reward</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800">
+                  <div className="grid grid-cols-3 gap-4 mt-3">
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Orders to Unlock Reward</label>
+                      <input type="number" min={1}
+                        value={settingsForm.loyalty_orders_threshold || 5}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, loyalty_orders_threshold: Number(e.target.value) })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Loyalty Discount %</label>
+                      <input type="number" min={1} max={100}
+                        value={settingsForm.loyalty_discount_percent || 20}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, loyalty_discount_percent: Number(e.target.value) })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Referral Link Clicks Goal</label>
+                      <input type="number" min={1}
+                        value={settingsForm.referral_clicks_threshold || 5}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, referral_clicks_threshold: Number(e.target.value) })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-zinc-500 mt-2">
+                    ✅ Every {settingsForm.loyalty_orders_threshold || 5} orders → customer gets {settingsForm.loyalty_discount_percent || 20}% off their next order | Referral Link Click Goal: {settingsForm.referral_clicks_threshold || 5} clicks to earn 15% coupon code
+                  </p>
+                </div>
+              </details>
+
+              {/* ── CARD: Product Defaults ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">⚙️</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Product Defaults</p>
+                      <p className="text-[10px] text-zinc-500">Global defaults for new products (sizes, fabrics, tags)</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Sizes</label>
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-zinc-950 border border-zinc-850 rounded-xl min-h-[38px]">
+                        {(settingsForm.default_sizes || '').split(',').map(s => s.trim()).filter(Boolean).map((s, idx) => (
+                          <span key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded text-[9px] font-bold uppercase shrink-0">
+                            {s}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const list = (settingsForm.default_sizes || '').split(',').map(item => item.trim()).filter(Boolean);
+                                list.splice(idx, 1);
+                                setSettingsForm({ ...settingsForm, default_sizes: list.join(', ') });
+                              }}
+                              className="text-zinc-500 hover:text-white cursor-pointer font-black"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          type="text"
+                          placeholder="Type & press Enter..."
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = e.currentTarget.value.trim().toUpperCase();
+                              if (!val) return;
+                              const list = (settingsForm.default_sizes || '').split(',').map(item => item.trim()).filter(Boolean);
+                              if (!list.includes(val)) {
+                                setSettingsForm({ ...settingsForm, default_sizes: [...list, val].join(', ') });
+                              }
+                              e.currentTarget.value = '';
+                            }
+                          }}
+                          className="bg-transparent border-none outline-none text-white text-xs flex-1 min-w-[70px]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Fabrics</label>
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-zinc-950 border border-zinc-850 rounded-xl min-h-[38px]">
+                        {(settingsForm.default_fabrics || '').split(',').map(f => f.trim()).filter(Boolean).map((f, idx) => (
+                          <span key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded text-[9px] font-bold uppercase shrink-0">
+                            {f}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const list = (settingsForm.default_fabrics || '').split(',').map(item => item.trim()).filter(Boolean);
+                                list.splice(idx, 1);
+                                setSettingsForm({ ...settingsForm, default_fabrics: list.join(', ') });
+                              }}
+                              className="text-zinc-500 hover:text-white cursor-pointer font-black"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          type="text"
+                          placeholder="Type & press Enter..."
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = e.currentTarget.value.trim();
+                              if (!val) return;
+                              const list = (settingsForm.default_fabrics || '').split(',').map(item => item.trim()).filter(Boolean);
+                              if (!list.includes(val)) {
+                                setSettingsForm({ ...settingsForm, default_fabrics: [...list, val].join(', ') });
+                              }
+                              e.currentTarget.value = '';
+                            }
+                          }}
+                          className="bg-transparent border-none outline-none text-white text-xs flex-1 min-w-[90px]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Default Tags</label>
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-zinc-950 border border-zinc-850 rounded-xl min-h-[38px]">
+                        {(settingsForm.default_tags || '').split(',').map(t => t.trim()).filter(Boolean).map((t, idx) => (
+                          <span key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded text-[9px] font-bold uppercase shrink-0">
+                            {t}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const list = (settingsForm.default_tags || '').split(',').map(item => item.trim()).filter(Boolean);
+                                list.splice(idx, 1);
+                                setSettingsForm({ ...settingsForm, default_tags: list.join(', ') });
+                              }}
+                              className="text-zinc-500 hover:text-white cursor-pointer font-black"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          type="text"
+                          placeholder="Type & press Enter..."
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = e.currentTarget.value.trim();
+                              if (!val) return;
+                              const list = (settingsForm.default_tags || '').split(',').map(item => item.trim()).filter(Boolean);
+                              if (!list.includes(val)) {
+                                setSettingsForm({ ...settingsForm, default_tags: [...list, val].join(', ') });
+                              }
+                              e.currentTarget.value = '';
+                            }
+                          }}
+                          className="bg-transparent border-none outline-none text-white text-xs flex-1 min-w-[90px]"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
+              </details>
+              {/* ── CARD: Size Charts ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📐</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Size Charts Manager</p>
+                      <p className="text-[10px] text-zinc-500">Add and customize multiple named fit size charts</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-4 border-t border-zinc-800 space-y-6 mt-2">
+                  
+                  {/* Header action */}
+                  <div className="flex justify-between items-center pb-2 border-b border-zinc-850">
+                    <p className="text-[10px] text-zinc-400 uppercase">Manage fit tables (e.g. Oversized, Regular)</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newChart = {
+                          id: `fit-${Date.now()}`,
+                          name_en: 'New Size Chart',
+                          name_ar: 'جدول قياسات جديد',
+                          img_en: '',
+                          img_ar: '',
+                          table: {
+                            headers: ['Size', 'Width (Chest - cm)', 'Length (cm)'],
+                            rows: [
+                              ['S', '50', '68'],
+                              ['M', '53', '70'],
+                              ['L', '56', '72']
+                            ]
+                          }
+                        };
+                        setSizeChartsList([...sizeChartsList, newChart]);
+                      }}
+                      className="px-2.5 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white rounded text-[10px] font-bold uppercase cursor-pointer transition-colors"
+                    >
+                      + Add Chart Table
+                    </button>
+                  </div>
 
-                <div className="overflow-x-auto border border-zinc-800 rounded-lg bg-zinc-950 p-2">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr>
-                        {sizeTable.headers.map((h, i) => (
-                          <th key={i} className="p-1 min-w-[80px]">
+                  <div className="space-y-6">
+                    {sizeChartsList.map((chart, idx) => (
+                      <div key={chart.id} className="p-4 bg-zinc-950 border border-zinc-800 rounded-xl space-y-4 relative">
+                        {/* Remove button */}
+                        <button
+                          type="button"
+                          onClick={() => setSizeChartsList(sizeChartsList.filter((_, i) => i !== idx))}
+                          className="absolute top-3 right-3 text-zinc-500 hover:text-red-400 cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+
+                        {/* Chart Names */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Chart Name (English)</label>
                             <input
                               type="text"
-                              value={h}
+                              value={chart.name_en}
                               onChange={(e) => {
-                                const nextHeaders = [...sizeTable.headers];
-                                nextHeaders[i] = e.target.value;
-                                const nextTable = { ...sizeTable, headers: nextHeaders };
-                                setSizeTable(nextTable);
-                                setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
+                                const next = [...sizeChartsList];
+                                next[idx] = { ...next[idx], name_en: e.target.value };
+                                setSizeChartsList(next);
                               }}
-                              className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] font-bold uppercase"
+                              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
                             />
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sizeTable.rows.map((row, ri) => (
-                        <tr key={ri}>
-                          {row.map((cell, ci) => (
-                            <td key={ci} className="p-1">
-                              <input
-                                type="text"
-                                value={cell}
-                                onChange={(e) => {
-                                  const nextRows = sizeTable.rows.map((r, idx) => {
-                                    if (idx === ri) {
-                                      const nextRow = [...r];
-                                      nextRow[ci] = e.target.value;
-                                      return nextRow;
-                                    }
-                                    return r;
-                                  });
-                                  const nextTable = { ...sizeTable, rows: nextRows };
-                                  setSizeTable(nextTable);
-                                  setSettingsForm(prev => ({ ...prev, size_chart_table: JSON.stringify(nextTable) }));
-                                }}
-                                className="w-full px-2 py-1 bg-zinc-950 border border-zinc-850 rounded text-white text-[10px]"
-                              />
-                            </td>
+                          </div>
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Chart Name (Arabic)</label>
+                            <input
+                              type="text"
+                              dir="rtl"
+                              value={chart.name_ar}
+                              onChange={(e) => {
+                                const next = [...sizeChartsList];
+                                next[idx] = { ...next[idx], name_ar: e.target.value };
+                                setSizeChartsList(next);
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] text-right font-arabic"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Chart Images */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-zinc-900 pt-3">
+                          {[{ label: 'English Image', key: 'img_en' }, { label: 'Arabic Image', key: 'img_ar' }].map((imgOpt) => (
+                            <div key={imgOpt.key}>
+                              <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-1">{imgOpt.label}</label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={(chart as any)[imgOpt.key] || ''}
+                                  onChange={(e) => {
+                                    const next = [...sizeChartsList];
+                                    (next[idx] as any)[imgOpt.key] = e.target.value;
+                                    setSizeChartsList(next);
+                                  }}
+                                  placeholder="/images/size-chart.jpg"
+                                  className="flex-1 px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                                />
+                                <label className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white rounded text-[9px] font-bold uppercase cursor-pointer flex items-center shrink-0">
+                                  ⬆ Upload
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={async (e) => {
+                                      if (e.target.files?.[0]) {
+                                        try {
+                                          const b64 = await fileToBase64(e.target.files[0]);
+                                          const next = [...sizeChartsList];
+                                          (next[idx] as any)[imgOpt.key] = b64;
+                                          setSizeChartsList(next);
+                                        } catch(err) { console.error(err); }
+                                      }
+                                    }}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+                            </div>
                           ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                        </div>
+
+                        {/* Spreadsheet Grid Table Editor */}
+                        <div className="border-t border-zinc-900 pt-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[9px] uppercase font-bold text-zinc-400">Custom Spreadsheet Grid</label>
+                            <div className="flex gap-1">
+                              {[
+                                {
+                                  label: '+Col',
+                                  action: () => {
+                                    const h = [...chart.table.headers, `Col${chart.table.headers.length + 1}`];
+                                    const r = chart.table.rows.map((row: string[]) => [...row, '']);
+                                    const next = [...sizeChartsList];
+                                    next[idx].table = { headers: h, rows: r };
+                                    setSizeChartsList(next);
+                                  }
+                                },
+                                {
+                                  label: '-Col',
+                                  action: () => {
+                                    if (chart.table.headers.length <= 1) return;
+                                    const h = chart.table.headers.slice(0, -1);
+                                    const r = chart.table.rows.map((row: string[]) => row.slice(0, -1));
+                                    const next = [...sizeChartsList];
+                                    next[idx].table = { headers: h, rows: r };
+                                    setSizeChartsList(next);
+                                  }
+                                },
+                                {
+                                  label: '+Row',
+                                  action: () => {
+                                    const r = [...chart.table.rows, Array(chart.table.headers.length).fill('')];
+                                    const next = [...sizeChartsList];
+                                    next[idx].table = { ...chart.table, rows: r };
+                                    setSizeChartsList(next);
+                                  }
+                                },
+                                {
+                                  label: '-Row',
+                                  action: () => {
+                                    if (chart.table.rows.length <= 1) return;
+                                    const r = chart.table.rows.slice(0, -1);
+                                    const next = [...sizeChartsList];
+                                    next[idx].table = { ...chart.table, rows: r };
+                                    setSizeChartsList(next);
+                                  }
+                                }
+                              ].map((btn) => (
+                                <button
+                                  key={btn.label}
+                                  type="button"
+                                  onClick={btn.action}
+                                  className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase cursor-pointer border ${
+                                    btn.label.startsWith('-')
+                                      ? 'border-red-900/60 text-red-400 bg-red-950/30 hover:bg-red-900'
+                                      : 'border-zinc-700 text-white bg-zinc-850 hover:bg-zinc-800'
+                                  }`}
+                                >
+                                  {btn.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="overflow-x-auto border border-zinc-800 rounded-lg bg-zinc-950 p-2">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead>
+                                <tr>
+                                  {chart.table.headers.map((h: string, hi: number) => (
+                                    <th key={hi} className="p-1 min-w-[70px]">
+                                      <input
+                                        type="text"
+                                        value={h}
+                                        onChange={(e) => {
+                                          const nh = [...chart.table.headers];
+                                          nh[hi] = e.target.value;
+                                          const next = [...sizeChartsList];
+                                          next[idx].table.headers = nh;
+                                          setSizeChartsList(next);
+                                        }}
+                                        className="w-full px-1.5 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[9px] font-bold uppercase"
+                                      />
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {chart.table.rows.map((row: string[], ri: number) => (
+                                  <tr key={ri}>
+                                    {row.map((cell: string, ci: number) => (
+                                      <td key={ci} className="p-1">
+                                        <input
+                                          type="text"
+                                          value={cell}
+                                          onChange={(e) => {
+                                            const nr = chart.table.rows.map((r: string[], rIdx: number) => {
+                                              if (rIdx === ri) {
+                                                const nc = [...r];
+                                                nc[ci] = e.target.value;
+                                                return nc;
+                                              }
+                                              return r;
+                                            });
+                                            const next = [...sizeChartsList];
+                                            next[idx].table.rows = nr;
+                                            setSizeChartsList(next);
+                                          }}
+                                          className="w-full px-1.5 py-1 bg-zinc-950 border border-zinc-850 rounded text-white text-[9px]"
+                                        />
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                      </div>
+                    ))}
+                  </div>
+
                 </div>
-              </div>
+              </details>
 
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-lg uppercase text-xs cursor-pointer transition-colors"
-              >
-                <Save size={14} />
-                Save Settings
+              {/* ── Save Button ── */}
+              <button type="submit"
+                className="w-full flex items-center justify-center gap-2 py-3 bg-brand-accent hover:bg-brand-accent/90 text-white font-black rounded-xl uppercase text-sm cursor-pointer transition-colors shadow-[0_4px_0_rgba(0,0,0,0.3)]">
+                <Save size={16} />
+                Save All Settings
               </button>
-
             </form>
           </div>
         )}
@@ -2837,6 +3571,32 @@ export default function AdminPage() {
                   </div>
                 </div>
 
+                {/* Badge Rotation & Font Size Customization */}
+                <div className="grid grid-cols-2 gap-4 border-t border-zinc-850 pt-3">
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Rotation ({tagRotation}°)</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="360"
+                      value={tagRotation}
+                      onChange={(e) => setTagRotation(Number(e.target.value))}
+                      className="w-full accent-brand-accent cursor-pointer bg-zinc-950 border border-zinc-800 rounded h-8 px-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Font Size ({tagFontSize}px)</label>
+                    <input
+                      type="range"
+                      min="8"
+                      max="24"
+                      value={tagFontSize}
+                      onChange={(e) => setTagFontSize(Number(e.target.value))}
+                      className="w-full accent-brand-accent cursor-pointer bg-zinc-950 border border-zinc-800 rounded h-8 px-2"
+                    />
+                  </div>
+                </div>
+
                 {/* Placed Tags Check List */}
                 <div className="border-t border-zinc-850 pt-3 space-y-2">
                   <label className="text-[9px] uppercase font-bold text-zinc-500 block">Placed Badges</label>
@@ -2854,6 +3614,7 @@ export default function AdminPage() {
                               <div>
                                 <span className="font-bold text-white uppercase">{parsed.name}</span>
                                 <span className="text-zinc-500 ml-2">({parsed.posX}%, {parsed.posY}%)</span>
+                                <span className="text-zinc-500 ml-1">Rot: {parsed.rotation || 0}°, Sz: {parsed.fontSize || 10}px</span>
                               </div>
                               <button
                                 type="button"
@@ -2896,7 +3657,9 @@ export default function AdminPage() {
                       color: tagBgColor,
                       textColor: tagTextColor,
                       posX: x,
-                      posY: y
+                      posY: y,
+                      rotation: tagRotation,
+                      fontSize: tagFontSize
                     };
 
                     const existing = splitTagsText(tagsText);
@@ -2931,13 +3694,14 @@ export default function AdminPage() {
                             return (
                               <span
                                 key={i}
-                                className="absolute z-10 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] pointer-events-none"
+                                className="absolute z-10 px-1.5 py-0.5 rounded font-black uppercase tracking-wider border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] pointer-events-none"
                                 style={{
                                   left: `${parsed.posX}%`,
                                   top: `${parsed.posY}%`,
                                   backgroundColor: parsed.color || '#F2CC8F',
                                   color: parsed.textColor || '#000000',
-                                  transform: 'translate(-50%, -50%)'
+                                  transform: `translate(-50%, -50%) rotate(${parsed.rotation || 0}deg)`,
+                                  fontSize: `${parsed.fontSize || 8}px`
                                 }}
                               >
                                 {parsed.name}
