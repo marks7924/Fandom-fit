@@ -130,6 +130,10 @@ export default function AdminPage() {
   const [bulkUpdateFabricsEnabled, setBulkUpdateFabricsEnabled] = useState(false);
   const [bulkUpdateFitTypeEnabled, setBulkUpdateFitTypeEnabled] = useState(false);
   const [bulkUpdateTagsEnabled, setBulkUpdateTagsEnabled] = useState(false);
+  const [bulkPrice, setBulkPrice] = useState('');
+  const [bulkSalePrice, setBulkSalePrice] = useState('');
+  const [bulkUpdatePriceEnabled, setBulkUpdatePriceEnabled] = useState(false);
+  const [bulkUpdateSalePriceEnabled, setBulkUpdateSalePriceEnabled] = useState(false);
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
@@ -324,7 +328,14 @@ export default function AdminPage() {
 
   const handleBulkUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bulkUpdateSizesEnabled && !bulkUpdateFabricsEnabled && !bulkUpdateFitTypeEnabled && !bulkUpdateTagsEnabled) {
+    if (
+      !bulkUpdateSizesEnabled && 
+      !bulkUpdateFabricsEnabled && 
+      !bulkUpdateFitTypeEnabled && 
+      !bulkUpdateTagsEnabled &&
+      !bulkUpdatePriceEnabled &&
+      !bulkUpdateSalePriceEnabled
+    ) {
       alert('Please enable and check at least one attribute toggle to bulk update!');
       return;
     }
@@ -354,6 +365,26 @@ export default function AdminPage() {
     if (bulkUpdateFabricsEnabled) updatePayload.material_options = bulkFabrics;
     if (bulkUpdateFitTypeEnabled) updatePayload.fit_type = bulkFitType as 'regular' | 'oversized' | 'both';
     if (bulkUpdateTagsEnabled) updatePayload.tags = splitTagsText(bulkTags);
+    
+    if (bulkUpdatePriceEnabled) {
+      if (isNaN(Number(bulkPrice)) || Number(bulkPrice) < 0 || bulkPrice.trim() === '') {
+        alert('Please enter a valid price number.');
+        return;
+      }
+      updatePayload.price = Number(bulkPrice);
+    }
+    
+    if (bulkUpdateSalePriceEnabled) {
+      if (bulkSalePrice.trim() === '') {
+        updatePayload.sale_price = null;
+      } else {
+        if (isNaN(Number(bulkSalePrice)) || Number(bulkSalePrice) < 0) {
+          alert('Please enter a valid sale price number or leave blank to clear sale price.');
+          return;
+        }
+        updatePayload.sale_price = Number(bulkSalePrice);
+      }
+    }
 
     let successCount = 0;
     for (const prod of targetProducts) {
@@ -1473,6 +1504,52 @@ export default function AdminPage() {
                                   placeholder="e.g. Hot, Summer Drop, anime"
                                   value={bulkTags}
                                   onChange={(e) => setBulkTags(e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                                />
+                              )}
+                            </div>
+
+                            {/* Option 5: Price */}
+                            <div className="bg-zinc-950 p-3 border border-zinc-850 rounded-xl space-y-2">
+                              <label className="flex items-center gap-2 text-xs font-bold text-zinc-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={bulkUpdatePriceEnabled}
+                                  onChange={(e) => setBulkUpdatePriceEnabled(e.target.checked)}
+                                  className="accent-brand-accent"
+                                />
+                                Overwrite Price (EGP)
+                              </label>
+                              {bulkUpdatePriceEnabled && (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  placeholder="e.g. 450"
+                                  value={bulkPrice}
+                                  onChange={(e) => setBulkPrice(e.target.value)}
+                                  className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                                />
+                              )}
+                            </div>
+
+                            {/* Option 6: Sale Price */}
+                            <div className="bg-zinc-950 p-3 border border-zinc-850 rounded-xl space-y-2">
+                              <label className="flex items-center gap-2 text-xs font-bold text-zinc-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={bulkUpdateSalePriceEnabled}
+                                  onChange={(e) => setBulkUpdateSalePriceEnabled(e.target.checked)}
+                                  className="accent-brand-accent"
+                                />
+                                Overwrite Sale Price (EGP)
+                              </label>
+                              {bulkUpdateSalePriceEnabled && (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  placeholder="Leave blank to clear sale price, or enter e.g. 390"
+                                  value={bulkSalePrice}
+                                  onChange={(e) => setBulkSalePrice(e.target.value)}
                                   className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
                                 />
                               )}
