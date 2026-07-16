@@ -27,7 +27,10 @@ export default function ProductQuickPreview() {
     if (previewProduct) {
       const defaultFit = previewProduct.fit_type === 'regular' ? 'regular' : 'oversized';
       setSelectedFit(defaultFit);
-      setSelectedSize(previewProduct.available_sizes?.[0] || 'M');
+      const firstInStockSize = previewProduct.available_sizes.find(
+        (size) => (previewProduct.stock_quantities?.[size] ?? 10) > 0
+      ) || previewProduct.available_sizes?.[0] || 'M';
+      setSelectedSize(firstInStockSize);
       setSelectedFabric(previewProduct.material_options?.[0] || 'Standard Cotton');
       setActiveImageIdx(0);
     }
@@ -279,19 +282,55 @@ export default function ProductQuickPreview() {
                       </button>
                     </div>
                     <div className="flex gap-2 flex-wrap">
-                      {previewProduct.available_sizes.map((size) => (
-                        <button
-                          key={size}
-                          onClick={() => setSelectedSize(size)}
-                          className={`w-10 h-10 text-xs font-black rounded-lg border-2 border-black flex items-center justify-center transition-all ${
-                            selectedSize === size
-                              ? 'bg-black text-[#EDE0D0] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]'
-                              : 'bg-white text-black hover:bg-black/5'
-                          }`}
-                        >
-                          {size}
-                        </button>
-                      ))}
+                      {previewProduct.available_sizes.map((size) => {
+                        const qty = previewProduct.stock_quantities?.[size] ?? 10;
+                        const isOutOfStock = qty <= 0;
+                        return (
+                          <button
+                            key={size}
+                            disabled={isOutOfStock}
+                            onClick={() => setSelectedSize(size)}
+                            className={`w-10 h-10 text-xs font-black rounded-lg border-2 border-black flex items-center justify-center transition-all ${
+                              isOutOfStock
+                                ? 'bg-zinc-100 text-zinc-400 border-zinc-300 opacity-40 cursor-not-allowed line-through'
+                                : selectedSize === size
+                                ? 'bg-black text-[#EDE0D0] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]'
+                                : 'bg-white text-black hover:bg-black/5 hover:scale-[1.03]'
+                            }`}
+                          >
+                            {size}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Size Stock Status */}
+                    <div className="mt-2 min-h-[1.25rem] flex items-center">
+                      {(() => {
+                        const qty = previewProduct.stock_quantities?.[selectedSize] ?? 10;
+                        if (qty <= 0) {
+                          return (
+                            <span className="text-[10px] font-black text-red-600 flex items-center gap-1.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-600 animate-ping"></span>
+                              {locale === 'ar' ? `⚠️ المقاس ${selectedSize} غير متوفر حالياً` : `⚠️ Size ${selectedSize} is Out of Stock`}
+                            </span>
+                          );
+                        } else if (qty <= 3) {
+                          return (
+                            <span className="text-[10px] font-black text-amber-600 animate-pulse flex items-center gap-1.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              {locale === 'ar' ? `🔥 متبقي ${qty} قطع فقط من المقاس ${selectedSize}!` : `🔥 Only ${qty} left in stock for size ${selectedSize}!`}
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <span className="text-[10px] font-black text-green-600 flex items-center gap-1.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                              {locale === 'ar' ? `✅ متوفر (${qty} قطعة)` : `✅ In Stock (${qty} available)`}
+                            </span>
+                          );
+                        }
+                      })()}
                     </div>
                   </div>
 
@@ -340,7 +379,7 @@ export default function ProductQuickPreview() {
           <div className="p-6 bg-white border-t-3 border-black flex flex-col sm:flex-row gap-3">
             
             {/* Direct Order Button */}
-            {previewProduct.is_in_stock ? (
+            {previewProduct.is_in_stock && (previewProduct.stock_quantities?.[selectedSize] ?? 10) > 0 ? (
               <button
                 onClick={() => {
                   addToCart(previewProduct, selectedSize, selectedFabric, 1, selectedFit);
@@ -355,7 +394,7 @@ export default function ProductQuickPreview() {
                 disabled
                 className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase bg-zinc-400 text-zinc-100 border-3 border-zinc-500 rounded-xl cursor-not-allowed"
               >
-                {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
+                {locale === 'ar' ? 'المقاس غير متوفر' : 'Size Out of Stock'}
               </button>
             )}
 

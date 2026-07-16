@@ -16,6 +16,9 @@ export default function CheckoutModal() {
   const {
     checkoutProduct,
     setCheckoutProduct,
+    checkoutSelectedSize,
+    checkoutSelectedFabric,
+    checkoutSelectedFit,
     isCheckoutOpen,
     setIsCheckoutOpen,
     cart,
@@ -73,12 +76,15 @@ export default function CheckoutModal() {
   // Sync state on checkoutProduct change
   useEffect(() => {
     if (checkoutProduct) {
-      const defaultFit = checkoutProduct.fit_type === 'regular' ? 'regular' : 'oversized';
-      setSelectedFit(defaultFit);
-      setSelectedSize(checkoutProduct.available_sizes?.[0] || 'M');
-      setSelectedFabric(checkoutProduct.material_options?.[0] || 'Standard Cotton');
+      const defaultFit = checkoutSelectedFit || (checkoutProduct.fit_type === 'regular' ? 'regular' : 'oversized');
+      setSelectedFit(defaultFit as any);
+      const firstInStockSize = checkoutProduct.available_sizes.find(
+        (size) => (checkoutProduct.stock_quantities?.[size] ?? 10) > 0
+      ) || checkoutProduct.available_sizes?.[0] || 'M';
+      setSelectedSize(checkoutSelectedSize || firstInStockSize);
+      setSelectedFabric(checkoutSelectedFabric || checkoutProduct.material_options?.[0] || 'Standard Cotton');
     }
-  }, [checkoutProduct]);
+  }, [checkoutProduct, checkoutSelectedSize, checkoutSelectedFabric, checkoutSelectedFit]);
 
   // Governorates Lists
   const governoratesEn = [
@@ -243,6 +249,31 @@ export default function CheckoutModal() {
     if (!/^01[0-25]\d{8}$/.test(cleanPhone)) {
       alert(locale === 'ar' ? 'الرجاء إدخال رقم موبايل مصري صحيح (مثال: 01012345678)' : 'Please enter a valid Egyptian mobile number (e.g. 01012345678)');
       return;
+    }
+
+    // Validate stock levels before proceeding
+    if (isSingle && checkoutProduct) {
+      const sizeStock = checkoutProduct.stock_quantities?.[selectedSize] ?? 10;
+      if (sizeStock <= 0) {
+        alert(locale === 'ar' ? `المقاس ${selectedSize} نفد من المخزن للتو. يرجى اختيار مقاس آخر.` : `Size ${selectedSize} just went out of stock. Please select another size.`);
+        return;
+      }
+    } else {
+      // For multi-item cart orders, check each item's stock
+      const { products } = useStore.getState();
+      for (const item of cart) {
+        const prod = products.find(p => p.id === item.product.id);
+        if (prod) {
+          const qty = prod.stock_quantities?.[item.size] ?? 10;
+          if (qty < item.quantity) {
+            alert(locale === 'ar' 
+              ? `عذراً، المنتج "${prod.name_ar}" (مقاس ${item.size}) لم يعد متوفراً بالكمية المطلوبة. المتاح حالياً: ${qty} قطع.`
+              : `Sorry, product "${prod.name_en}" (Size ${item.size}) does not have enough stock. Available: ${qty} items.`
+            );
+            return;
+          }
+        }
+      }
     }
 
     setIsSubmitting(true);
@@ -444,9 +475,15 @@ export default function CheckoutModal() {
                           onChange={(e) => setSelectedSize(e.target.value)}
                           className="text-[10px] font-bold border-2 border-black rounded px-1.5 py-0.5 bg-white text-black w-full"
                         >
-                          {checkoutProduct.available_sizes.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
+                          {checkoutProduct.available_sizes.map((s) => {
+                            const qty = checkoutProduct.stock_quantities?.[s] ?? 10;
+                            const isOutOfStock = qty <= 0;
+                            return (
+                              <option key={s} value={s} disabled={isOutOfStock}>
+                                {s} {isOutOfStock ? `(${locale === 'ar' ? 'غير متوفر' : 'Out of stock'})` : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
 
@@ -482,6 +519,29 @@ export default function CheckoutModal() {
                           </select>
                         </div>
                       )}
+                    </div>
+
+                    {/* Real-time stock alerts for checkout product */}
+                    <div className="mt-3">
+                      {(() => {
+                        const qty = checkoutProduct.stock_quantities?.[selectedSize] ?? 10;
+                        if (qty <= 0) {
+                          return (
+                            <span className="text-[10px] font-black text-red-600 flex items-center gap-1.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-600 animate-ping"></span>
+                              {locale === 'ar' ? `⚠️ المقاس ${selectedSize} غير متوفر حالياً` : `⚠️ Size ${selectedSize} is Out of Stock`}
+                            </span>
+                          );
+                        } else if (qty <= 3) {
+                          return (
+                            <span className="text-[10px] font-black text-amber-600 animate-pulse flex items-center gap-1.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              {locale === 'ar' ? `🔥 متبقي ${qty} قطع فقط من المقاس ${selectedSize}!` : `🔥 Only ${qty} left in stock for size ${selectedSize}!`}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                 ) : (

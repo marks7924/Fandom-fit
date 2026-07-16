@@ -35,6 +35,7 @@ export interface Product {
   gives_cotton_reward?: boolean;
   tags?: string[];
   fit_type?: 'regular' | 'oversized' | 'both';
+  stock_quantities?: Record<string, number>;
 }
 
 export interface Offer {
@@ -129,6 +130,9 @@ interface StoreState {
   activeCategory: string; // 'all' or category slug
   previewProduct: Product | null;
   checkoutProduct: Product | null;
+  checkoutSelectedSize: string | null;
+  checkoutSelectedFabric: string | null;
+  checkoutSelectedFit: 'regular' | 'oversized' | null;
   isTrackOrderOpen: boolean;
   setIsTrackOrderOpen: (open: boolean) => void;
   isInviteOpen: boolean;
@@ -148,7 +152,7 @@ interface StoreState {
   fetchInitialData: () => Promise<void>;
   setActiveCategory: (slug: string) => void;
   setPreviewProduct: (product: Product | null) => void;
-  setCheckoutProduct: (product: Product | null) => void;
+  setCheckoutProduct: (product: Product | null, options?: { size?: string, fabric?: string, fitType?: 'regular' | 'oversized' }) => void;
   addCustomRequest: (req: Omit<CustomRequest, 'id' | 'created_at' | 'status' | 'notes'>) => Promise<boolean>;
   
   // Order Operations
@@ -166,9 +170,14 @@ interface StoreState {
   saveSettings: (settings: Record<string, any>) => Promise<void>;
   
   // Product CRUD
-  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
-  updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<Product | null>;
+  updateProduct: (id: string, product: Partial<Product>) => Promise<Product | null>;
   deleteProduct: (id: string) => Promise<void>;
+  
+  // Product Designs CRUD
+  fetchProductDesigns: (productId: string) => Promise<any[]>;
+  addProductDesign: (design: { product_id: string, design_url: string, notes: string }) => Promise<any>;
+  deleteProductDesign: (id: string) => Promise<void>;
   
   // Category CRUD
   addCategory: (category: Omit<Category, 'id'>) => Promise<void>;
@@ -241,6 +250,9 @@ export const useStore = create<StoreState>((set, get) => ({
   activeCategory: 'all',
   previewProduct: null,
   checkoutProduct: null,
+  checkoutSelectedSize: null,
+  checkoutSelectedFabric: null,
+  checkoutSelectedFit: null,
   isTrackOrderOpen: false,
   setIsTrackOrderOpen: (open) => set({ isTrackOrderOpen: open }),
   isInviteOpen: false,
@@ -407,6 +419,22 @@ export const useStore = create<StoreState>((set, get) => ({
     const { getProductEffectivePrice } = get();
     const item = cart.find(i => i.id === cartItemId);
     if (!item) return;
+
+    // Verify stock availability for the new size selection
+    if (item.product.stock_quantities && item.product.stock_quantities[newSize] !== undefined) {
+      const availableStock = item.product.stock_quantities[newSize];
+      if (item.quantity > availableStock) {
+        if (typeof window !== 'undefined') {
+          const isAr = localStorage.getItem('locale') === 'ar' || window.location.pathname.includes('/ar');
+          alert(
+            isAr
+              ? `عذراً، الكمية المطلوبة تتعدى المخزن المتاح لـ ${newSize} (${availableStock}).`
+              : `Sorry, requested quantity exceeds available stock for ${newSize} (${availableStock}).`
+          );
+        }
+        return;
+      }
+    }
     
     const finalFitType = newFitType || item.fitType || 'regular';
     const newId = `${item.product.id}-${newSize}-${newFabric}-${finalFitType}`;
@@ -442,6 +470,27 @@ export const useStore = create<StoreState>((set, get) => ({
 
   addToCart: (product, size, fabric, quantity = 1, fitType = 'regular') => {
     const cart = get().cart;
+    
+    // Verify stock availability
+    if (product.stock_quantities && product.stock_quantities[size] !== undefined) {
+      const availableStock = product.stock_quantities[size];
+      const cartItemId = `${product.id}-${size}-${fabric}-${fitType}`;
+      const existingItem = cart.find((item) => item.id === cartItemId);
+      const currentCartQty = existingItem ? existingItem.quantity : 0;
+      
+      if (currentCartQty + quantity > availableStock) {
+        if (typeof window !== 'undefined') {
+          const isAr = localStorage.getItem('locale') === 'ar' || window.location.pathname.includes('/ar');
+          alert(
+            isAr
+              ? `عذراً، الكمية المطلوبة تتعدى المخزن المتاح (${availableStock}).`
+              : `Sorry, requested quantity exceeds available stock (${availableStock}).`
+          );
+        }
+        return;
+      }
+    }
+
     const { getProductEffectivePrice } = get();
     const { discountedPrice } = getProductEffectivePrice(product);
     const premium = getFabricPremium(fabric);
@@ -487,6 +536,23 @@ export const useStore = create<StoreState>((set, get) => ({
       get().removeFromCart(cartItemId);
       return;
     }
+
+    const item = get().cart.find(i => i.id === cartItemId);
+    if (item && item.product.stock_quantities && item.product.stock_quantities[item.size] !== undefined) {
+      const availableStock = item.product.stock_quantities[item.size];
+      if (quantity > availableStock) {
+        if (typeof window !== 'undefined') {
+          const isAr = localStorage.getItem('locale') === 'ar' || window.location.pathname.includes('/ar');
+          alert(
+            isAr
+              ? `عذراً، المخزن المتاح لهذا المقاس هو ${availableStock} فقط.`
+              : `Sorry, available stock for this size is only ${availableStock}.`
+          );
+        }
+        return;
+      }
+    }
+
     const updatedCart = get().cart.map((item) => 
       item.id === cartItemId ? { ...item, quantity } : item
     );
@@ -559,7 +625,12 @@ export const useStore = create<StoreState>((set, get) => ({
 
   setActiveCategory: (slug) => set({ activeCategory: slug }),
   setPreviewProduct: (product) => set({ previewProduct: product }),
-  setCheckoutProduct: (product) => set({ checkoutProduct: product }),
+  setCheckoutProduct: (product, options) => set({ 
+    checkoutProduct: product,
+    checkoutSelectedSize: options?.size || null,
+    checkoutSelectedFabric: options?.fabric || null,
+    checkoutSelectedFit: options?.fitType || null
+  }),
 
   addCustomRequest: async (req) => {
     try {
@@ -703,6 +774,40 @@ export const useStore = create<StoreState>((set, get) => ({
       const newOrder = data?.[0] || null;
       if (newOrder) {
         set({ orders: [newOrder, ...get().orders] });
+
+        // Decrement stock levels for ordered items
+        if (order.items && Array.isArray(order.items)) {
+          for (const item of order.items) {
+            const prod = get().products.find(p => p.id === item.product_id);
+            if (prod) {
+              const currentStock = prod.stock_quantities || { S: 10, M: 15, L: 8, XL: 2, XXL: 0 };
+              const sizeKey = (item.size || 'M').toUpperCase();
+              const oldQty = currentStock[sizeKey] !== undefined ? currentStock[sizeKey] : 10;
+              const newQty = Math.max(0, oldQty - (item.quantity || 1));
+              
+              const updatedStock = {
+                ...currentStock,
+                [sizeKey]: newQty
+              };
+
+              // Check if all sizes are 0, and auto-update is_in_stock to false if so
+              const totalStock = Object.values(updatedStock).reduce((sum, q) => Number(sum) + Number(q), 0);
+              const isInStock = totalStock > 0;
+
+              // Save to Database
+              await supabase.from('products').update({ 
+                stock_quantities: updatedStock,
+                is_in_stock: isInStock
+              }).eq('id', prod.id);
+
+              // Update local state list
+              const updatedProducts = get().products.map(p => 
+                p.id === prod.id ? { ...p, stock_quantities: updatedStock, is_in_stock: isInStock } : p
+              );
+              set({ products: updatedProducts });
+            }
+          }
+        }
 
         // Save order address details locally
         if (typeof window !== 'undefined') {
@@ -955,23 +1060,67 @@ export const useStore = create<StoreState>((set, get) => ({
 
   addProduct: async (product) => {
     try {
-      const { data, error } = await supabase.from('products').insert([product]);
+      const { data, error } = await supabase.from('products').insert([product]).select();
       if (error) throw error;
       const { data: allProducts } = await supabase.from('products').select('*');
       if (allProducts) set({ products: allProducts });
+      return data?.[0] || null;
     } catch (error) {
       console.error('Error adding product:', error);
+      return null;
     }
   },
 
   updateProduct: async (id, product) => {
     try {
-      const { error } = await supabase.from('products').update(product).eq('id', id);
+      const { data, error } = await supabase.from('products').update(product).eq('id', id).select();
       if (error) throw error;
       const { data: allProducts } = await supabase.from('products').select('*');
       if (allProducts) set({ products: allProducts });
+      return data?.[0] || null;
     } catch (error) {
       console.error('Error updating product:', error);
+      return null;
+    }
+  },
+
+  fetchProductDesigns: async (productId) => {
+    try {
+      const { data, error } = await supabase
+        .from('product_designs')
+        .select('*')
+        .eq('product_id', productId);
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching product designs:', error);
+      return [];
+    }
+  },
+
+  addProductDesign: async (design) => {
+    try {
+      const { data, error } = await supabase
+        .from('product_designs')
+        .insert([design])
+        .select();
+      if (error) throw error;
+      return data?.[0] || null;
+    } catch (error) {
+      console.error('Error adding product design:', error);
+      return null;
+    }
+  },
+
+  deleteProductDesign: async (id) => {
+    try {
+      const { error } = await supabase
+        .from('product_designs')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting product design:', error);
     }
   },
 

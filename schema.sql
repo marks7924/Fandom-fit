@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS products (
     gives_cotton_reward BOOLEAN DEFAULT FALSE,
     tags TEXT[] DEFAULT ARRAY[]::TEXT[],
     fit_type VARCHAR(50) DEFAULT 'both',
+    stock_quantities JSONB DEFAULT '{"S": 10, "M": 15, "L": 8, "XL": 2, "XXL": 0}'::JSONB,
+    admin_design_images TEXT[] DEFAULT ARRAY[]::TEXT[],
+    admin_design_notes TEXT DEFAULT '',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -300,6 +303,48 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(50);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS referral_code VARCHAR(50);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS reward_coupon_code VARCHAR(255);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS items JSONB;
+
+-- 15. Add stock_quantities to products table
+ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_quantities JSONB DEFAULT '{}'::JSONB;
+
+-- 16. Create Product Designs table (Admin Only)
+CREATE TABLE IF NOT EXISTS product_designs (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE NOT NULL,
+    design_url TEXT NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE product_designs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow admin all on product_designs" ON product_designs;
+CREATE POLICY "Allow admin all on product_designs" ON product_designs 
+    FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
+-- 17. Storage Setup for Private Product Designs (Auth-locked, admin only)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('designs', 'designs', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage policies for the private 'designs' bucket
+DROP POLICY IF EXISTS "Allow admin select on designs bucket" ON storage.objects;
+CREATE POLICY "Allow admin select on designs bucket" ON storage.objects 
+    FOR SELECT USING (bucket_id = 'designs' AND EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
+DROP POLICY IF EXISTS "Allow admin insert on designs bucket" ON storage.objects;
+CREATE POLICY "Allow admin insert on designs bucket" ON storage.objects 
+    FOR INSERT WITH CHECK (bucket_id = 'designs' AND EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
+DROP POLICY IF EXISTS "Allow admin update on designs bucket" ON storage.objects;
+CREATE POLICY "Allow admin update on designs bucket" ON storage.objects 
+    FOR UPDATE USING (bucket_id = 'designs' AND EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid())) 
+    WITH CHECK (bucket_id = 'designs' AND EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
+DROP POLICY IF EXISTS "Allow admin delete on designs bucket" ON storage.objects;
+CREATE POLICY "Allow admin delete on designs bucket" ON storage.objects 
+    FOR DELETE USING (bucket_id = 'designs' AND EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
 
 
 

@@ -39,6 +39,19 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
 
   const product = products.find((p) => p.slug === slug);
 
+  useEffect(() => {
+    if (product) {
+      const firstInStockSize = product.available_sizes.find(
+        (size) => (product.stock_quantities?.[size] ?? 10) > 0
+      );
+      if (firstInStockSize) {
+        setSelectedSize(firstInStockSize);
+      } else if (product.available_sizes.length > 0) {
+        setSelectedSize(product.available_sizes[0]);
+      }
+    }
+  }, [product]);
+
   // Still fetching — show branded loader instead of premature "not found"
   if (isLoading && !product) {
     return <LoadingScreen />;
@@ -214,19 +227,55 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     {t('select_size')}
                   </label>
                   <div className="flex gap-2.5 flex-wrap">
-                    {product.available_sizes.map((size) => (
-                      <button
-                        key={size}
-                        onClick={() => setSelectedSize(size)}
-                        className={`w-12 h-12 text-sm font-black rounded-xl border-3 border-black flex items-center justify-center transition-all ${
-                          selectedSize === size
-                            ? 'bg-black text-[#EDE0D0] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]'
-                            : 'bg-white text-black hover:bg-black/5'
-                        }`}
-                      >
-                        {size}
-                      </button>
-                    ))}
+                    {product.available_sizes.map((size) => {
+                      const qty = product.stock_quantities?.[size] ?? 10;
+                      const isOutOfStock = qty <= 0;
+                      return (
+                        <button
+                          key={size}
+                          disabled={isOutOfStock}
+                          onClick={() => setSelectedSize(size)}
+                          className={`w-12 h-12 text-sm font-black rounded-xl border-3 border-black flex items-center justify-center transition-all relative ${
+                            isOutOfStock
+                              ? 'bg-zinc-100 text-zinc-400 border-zinc-300 opacity-40 cursor-not-allowed line-through'
+                              : selectedSize === size
+                              ? 'bg-black text-[#EDE0D0] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]'
+                              : 'bg-white text-black hover:bg-black/5 hover:scale-[1.03]'
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Size Stock Status */}
+                  <div className="mt-2.5 min-h-[1.5rem] flex items-center">
+                    {(() => {
+                      const qty = product.stock_quantities?.[selectedSize] ?? 10;
+                      if (qty <= 0) {
+                        return (
+                          <span className="text-xs font-black text-red-600 flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
+                            {locale === 'ar' ? `⚠️ المقاس ${selectedSize} غير متوفر حالياً` : `⚠️ Size ${selectedSize} is Out of Stock`}
+                          </span>
+                        );
+                      } else if (qty <= 3) {
+                        return (
+                          <span className="text-xs font-black text-amber-600 animate-pulse flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-full bg-amber-500"></span>
+                            {locale === 'ar' ? `🔥 متبقي ${qty} قطع فقط من المقاس ${selectedSize}!` : `🔥 Only ${qty} left in stock for size ${selectedSize}!`}
+                          </span>
+                        );
+                      } else {
+                        return (
+                          <span className="text-xs font-black text-green-600 flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+                            {locale === 'ar' ? `✅ متوفر (${qty} قطعة)` : `✅ In Stock (${qty} available)`}
+                          </span>
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
 
@@ -268,9 +317,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               <div className="mt-8 pt-6 border-t border-black/10 flex flex-col sm:flex-row gap-4">
                 
                 {/* Order Direct Web Checkout */}
-                {product.is_in_stock ? (
+                {product.is_in_stock && (product.stock_quantities?.[selectedSize] ?? 10) > 0 ? (
                   <button
-                    onClick={() => setCheckoutProduct(product)}
+                    onClick={() => setCheckoutProduct(product, { size: selectedSize, fabric: selectedFabric })}
                     className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
                   >
                     {tp('order_now')}
@@ -280,7 +329,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     disabled
                     className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase bg-zinc-400 text-zinc-100 border-3 border-zinc-500 rounded-xl cursor-not-allowed"
                   >
-                    {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
+                    {locale === 'ar' ? 'المقاس غير متوفر' : 'Size Out of Stock'}
                   </button>
                 )}
 

@@ -219,14 +219,21 @@ export default function ProductCard({ product }: ProductCardProps) {
           <div className="mt-3 flex items-center gap-2">
             <span className="text-[10px] font-extrabold uppercase text-black/50">{t('sizes')}:</span>
             <div className="flex gap-1 flex-wrap">
-              {product.available_sizes.map((size) => (
-                <span 
-                  key={size}
-                  className="text-[9px] font-black border border-black/25 px-1.5 py-0.5 rounded bg-black/5"
-                >
-                  {size}
-                </span>
-              ))}
+              {product.available_sizes.map((size) => {
+                const isOutOfStock = product.stock_quantities && product.stock_quantities[size] !== undefined && product.stock_quantities[size] <= 0;
+                return (
+                  <span 
+                    key={size}
+                    className={`text-[9px] font-black border px-1.5 py-0.5 rounded ${
+                      isOutOfStock
+                        ? 'border-zinc-300 bg-zinc-100 text-zinc-400 line-through opacity-50'
+                        : 'border-black/25 bg-black/5 text-black'
+                    }`}
+                  >
+                    {size}
+                  </span>
+                );
+              })}
             </div>
           </div>
 
@@ -243,7 +250,10 @@ export default function ProductCard({ product }: ProductCardProps) {
             <button
               onClick={() => {
                 const defaultFit = product.fit_type === 'regular' ? 'regular' : 'oversized';
-                addToCart(product, 'M', 'Standard Cotton', 1, defaultFit);
+                const firstInStockSize = product.available_sizes.find(
+                  (size) => (product.stock_quantities?.[size] ?? 10) > 0
+                ) || product.available_sizes?.[0] || 'M';
+                addToCart(product, firstInStockSize, 'Standard Cotton', 1, defaultFit);
               }}
               className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white transition-all duration-300 border-2 border-black rounded-lg cursor-pointer"
             >

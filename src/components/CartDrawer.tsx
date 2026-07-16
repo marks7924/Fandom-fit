@@ -230,16 +230,20 @@ export default function CartDrawer() {
                         {/* Size & Fabric Tagging Dropdowns */}
                         <div className="flex flex-wrap gap-2 mt-1.5 select-none">
                           {/* Size selector dropdown */}
-                          <select
+                           <select
                             value={item.size}
                             onChange={(e) => updateCartItemSpecs(item.id, e.target.value, item.fabric, item.fitType)}
                             className="text-[9px] font-black uppercase bg-[#EDE0D0] px-1 py-0.5 rounded border border-black focus:outline-none cursor-pointer"
                           >
-                            {(item.product.available_sizes || ['S', 'M', 'L', 'XL', 'XXL']).map((s) => (
-                              <option key={s} value={s}>
-                                {locale === 'ar' ? `مقاس ${s}` : `Size ${s}`}
-                              </option>
-                            ))}
+                            {(item.product.available_sizes || ['S', 'M', 'L', 'XL', 'XXL']).map((s) => {
+                              const qty = item.product.stock_quantities?.[s] ?? 10;
+                              const isOutOfStock = qty <= 0;
+                              return (
+                                <option key={s} value={s} disabled={isOutOfStock}>
+                                  {locale === 'ar' ? `مقاس ${s}` : `Size ${s}`} {isOutOfStock ? `(${locale === 'ar' ? 'غير متوفر' : 'Out of stock'})` : ''}
+                                </option>
+                              );
+                            })}
                           </select>
 
                           {/* Fabric selector dropdown */}

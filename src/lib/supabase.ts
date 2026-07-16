@@ -24,6 +24,20 @@ const getMockDb = () => {
 
   let categories = JSON.parse(localStorage.getItem(categoriesKey) || '[]');
   let products = JSON.parse(localStorage.getItem(productsKey) || '[]');
+  
+  // Ensure mock products have default stock quantities populated
+  let productsUpdated = false;
+  products = products.map((p: any) => {
+    if (!p.stock_quantities) {
+      p.stock_quantities = { S: 10, M: 15, L: 8, XL: 2, XXL: 0 };
+      productsUpdated = true;
+    }
+    return p;
+  });
+  if (productsUpdated && products.length > 0) {
+    localStorage.setItem(productsKey, JSON.stringify(products));
+  }
+
   let offers = JSON.parse(localStorage.getItem(offersKey) || '[]');
   let custom_requests = JSON.parse(localStorage.getItem(customKey) || '[]');
   let settings = JSON.parse(localStorage.getItem(settingsKey) || '{}');
@@ -603,6 +617,7 @@ export const mockSupabase = {
       if (table === 'categories') return db.categories.sort((a: any, b: any) => a.display_order - b.display_order);
       if (table === 'products') return db.products.sort((a: any, b: any) => a.display_order - b.display_order);
       if (table === 'offers') return db.offers;
+      if (table === 'product_designs') return JSON.parse(localStorage.getItem('ff_product_designs') || '[]');
       if (table === 'orders') return db.orders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       if (table === 'custom_requests') return db.custom_requests.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       if (table === 'settings' || table === 'homepage_sections') {
@@ -650,10 +665,19 @@ export const mockSupabase = {
             id: Math.random().toString(36).substring(7),
             created_at: new Date().toISOString(),
             images: r.images || ['/placeholders/arcade_front.jpg'],
+            stock_quantities: r.stock_quantities || { S: 10, M: 15, L: 8, XL: 2, XXL: 0 },
             ...r
           }));
           const updated = [...data, ...newRows];
           saveMockDb('ff_products_v3', updated);
+        } else if (table === 'product_designs') {
+          newRows = rowsArray.map(r => ({
+            id: Math.random().toString(36).substring(7),
+            created_at: new Date().toISOString(),
+            ...r
+          }));
+          const updated = [...data, ...newRows];
+          saveMockDb('ff_product_designs', updated);
         } else if (table === 'categories') {
           newRows = rowsArray.map(r => ({
             id: Math.random().toString(36).substring(7),
@@ -704,7 +728,8 @@ export const mockSupabase = {
               categories: 'ff_categories',
               offers: 'ff_offers',
               custom_requests: 'ff_custom_requests',
-              orders: 'ff_orders'
+              orders: 'ff_orders',
+              product_designs: 'ff_product_designs'
             };
 
             const dbKey = mockDbKeys[table];
@@ -727,7 +752,8 @@ export const mockSupabase = {
               products: 'ff_products_v3',
               categories: 'ff_categories',
               offers: 'ff_offers',
-              orders: 'ff_orders'
+              orders: 'ff_orders',
+              product_designs: 'ff_product_designs'
             };
 
             const dbKey = mockDbKeys[table];

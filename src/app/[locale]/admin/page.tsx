@@ -50,10 +50,21 @@ export default function AdminPage() {
     gives_cotton_reward: false,
     available_sizes: ['S', 'M', 'L', 'XL'], material_options: ['Standard Cotton', 'Premium Cotton'],
     images: [] as string[], display_order: 0,
-    fit_type: 'both'
+    fit_type: 'both',
+    stock_quantities: {} as Record<string, number>
   });
 
   const [imageLinkInput, setImageLinkInput] = useState('');
+
+  // Product Designs States (Admin Only)
+  const [allDesigns, setAllDesigns] = useState<any[]>([]);
+  const [queuedDesigns, setQueuedDesigns] = useState<Array<{ id?: string, design_url: string, notes: string }>>([]);
+  const [productDesigns, setProductDesigns] = useState<any[]>([]);
+  const [designUrlInput, setDesignUrlInput] = useState('');
+  const [designNotesInput, setDesignNotesInput] = useState('');
+  const [isUploadingDesign, setIsUploadingDesign] = useState(false);
+  const { fetchProductDesigns, addProductDesign, deleteProductDesign } = useStore();
+
 
   const [catForm, setCatForm] = useState({
     name_en: '', name_ar: '', slug: '', display_order: 0, is_hidden: false, show_in_browse: true,
@@ -136,6 +147,7 @@ export default function AdminPage() {
   const [bulkUpdateSalePriceEnabled, setBulkUpdateSalePriceEnabled] = useState(false);
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [designsSearchQuery, setDesignsSearchQuery] = useState('');
 
   // Sizing & Fabric dynamic options states
   const [sizeOptions, setSizeOptions] = useState(['S', 'M', 'L', 'XL', 'XXL', '3XL']);
@@ -179,6 +191,11 @@ export default function AdminPage() {
     if (isAuthenticated) {
       fetchAdminRequests();
       fetchOrders();
+
+      // Fetch all product designs for printing reference check
+      supabase.from('product_designs').select('*').then(({ data }: any) => {
+        if (data) setAllDesigns(data);
+      });
       // populate settings form once loaded
       const premiums = settings.fabric_premiums || {};
 
@@ -278,6 +295,106 @@ export default function AdminPage() {
       });
     }
   }, [isAuthenticated, settings]);
+
+  // Load designs when editing a product
+  useEffect(() => {
+    if (editingItem) {
+      fetchProductDesigns(editingItem.id).then((designs) => {
+        setProductDesigns(designs);
+      });
+    } else {
+      setProductDesigns([]);
+    }
+  }, [editingItem, fetchProductDesigns]);
+
+  // Design Upload/Link Handlers
+  const handleDesignUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const selectedFile = e.target.files[0];
+    setIsUploadingDesign(true);
+
+    try {
+      let designUrl = '';
+      if (isUsingMock) {
+        const base64 = await fileToBase64(selectedFile);
+        designUrl = base64;
+      } else {
+        const fileName = `${Date.now()}-${selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const { data, error } = await supabase.storage.from('designs').upload(fileName, selectedFile);
+        if (error) {
+          alert(`Design upload failed: ${error.message}`);
+          setIsUploadingDesign(false);
+          return;
+        }
+        if (data) {
+          const { data: { publicUrl } } = supabase.storage.from('designs').getPublicUrl(data.path);
+          designUrl = publicUrl;
+        }
+      }
+
+      if (designUrl) {
+        if (editingItem) {
+          const saved = await addProductDesign({
+            product_id: editingItem.id,
+            design_url: designUrl,
+            notes: designNotesInput || selectedFile.name
+          });
+          if (saved) {
+            setProductDesigns(prev => [...prev, saved]);
+            setAllDesigns(prev => [...prev, saved]);
+            setDesignNotesInput('');
+          }
+        } else {
+          setQueuedDesigns(prev => [...prev, {
+            design_url: designUrl,
+            notes: designNotesInput || selectedFile.name
+          }]);
+          setDesignNotesInput('');
+        }
+      }
+    } catch (err: any) {
+      console.error('Design upload error:', err);
+      alert('Failed to upload design file.');
+    } finally {
+      setIsUploadingDesign(false);
+    }
+  };
+
+  const handleAddDesignLink = async () => {
+    const trimmedUrl = designUrlInput.trim();
+    if (!trimmedUrl) return;
+
+    if (editingItem) {
+      const saved = await addProductDesign({
+        product_id: editingItem.id,
+        design_url: trimmedUrl,
+        notes: designNotesInput || 'External Link'
+      });
+      if (saved) {
+        setProductDesigns(prev => [...prev, saved]);
+        setAllDesigns(prev => [...prev, saved]);
+        setDesignUrlInput('');
+        setDesignNotesInput('');
+      }
+    } else {
+      setQueuedDesigns(prev => [...prev, {
+        design_url: trimmedUrl,
+        notes: designNotesInput || 'External Link'
+      }]);
+      setDesignUrlInput('');
+      setDesignNotesInput('');
+    }
+  };
+
+  const handleDeleteDesign = async (designId: string | undefined, idx: number) => {
+    if (editingItem && designId) {
+      await deleteProductDesign(designId);
+      setProductDesigns(prev => prev.filter(d => d.id !== designId));
+      setAllDesigns(prev => prev.filter(d => d.id !== designId));
+    } else {
+      setQueuedDesigns(prev => prev.filter((_, i) => i !== idx));
+    }
+  };
 
   const checkSession = async () => {
     setAuthLoading(true);
@@ -417,14 +534,28 @@ export default function AdminPage() {
       sale_price: prodForm.sale_price ? Number(prodForm.sale_price) : null,
       display_order: Number(prodForm.display_order),
       tags: splitTagsText(tagsText),
-      fit_type: prodForm.fit_type as 'regular' | 'oversized' | 'both'
+      fit_type: prodForm.fit_type as 'regular' | 'oversized' | 'both',
+      // Dynamically compute in-stock status based on size quantities
+      is_in_stock: (prodForm.stock_quantities && Object.keys(prodForm.stock_quantities).length > 0)
+        ? Object.values(prodForm.stock_quantities).some(q => Number(q) > 0)
+        : prodForm.is_in_stock
     };
 
     if (editingItem) {
       await updateProduct(editingItem.id, finalProduct);
     } else {
-      await addProduct(finalProduct);
+      const savedProd = await addProduct(finalProduct);
+      if (savedProd && queuedDesigns.length > 0) {
+        for (const design of queuedDesigns) {
+          await addProductDesign({
+            product_id: savedProd.id,
+            design_url: design.design_url,
+            notes: design.notes
+          });
+        }
+      }
     }
+    setQueuedDesigns([]);
     setIsFormOpen(false);
     setEditingItem(null);
   };
@@ -677,11 +808,20 @@ export default function AdminPage() {
               { id: 'discounts', name: locale === 'ar' ? 'حملات الخصم' : 'Discounts', icon: <Tag size={16} /> },
               { id: 'requests', name: t('sidebar.custom_requests'), icon: <Palette size={16} /> },
               { id: 'orders', name: locale === 'ar' ? 'الطلبات' : 'Orders', icon: <ShoppingCart size={16} /> },
+              { id: 'designs-explorer', name: locale === 'ar' ? 'التصاميم والطباعة' : 'Designs Explorer', icon: <Palette size={16} /> },
               { id: 'settings', name: t('sidebar.settings'), icon: <Settings size={16} /> },
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setIsFormOpen(false); }}
+                onClick={() => { 
+                  setActiveTab(tab.id); 
+                  setIsFormOpen(false); 
+                  if (tab.id === 'designs-explorer') {
+                    supabase.from('product_designs').select('*').then(({ data }: any) => {
+                      if (data) setAllDesigns(data);
+                    });
+                  }
+                }}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                   activeTab === tab.id 
                     ? 'bg-zinc-800 text-brand-accent border-l-3 border-brand-accent' 
@@ -788,6 +928,7 @@ export default function AdminPage() {
                 <button
                   onClick={() => {
                     setEditingItem(null);
+                    setQueuedDesigns([]);
                     setTagsText(settingsForm.default_tags || '');
                     const defaultSizes = settingsForm.default_sizes 
                       ? settingsForm.default_sizes.split(',').map(s => s.trim()) 
@@ -805,7 +946,8 @@ export default function AdminPage() {
                       available_sizes: defaultSizes,
                       material_options: defaultFabrics,
                       images: [], display_order: 0,
-                      fit_type: 'both'
+                      fit_type: 'both',
+                      stock_quantities: {}
                     });
                     setIsFormOpen(true);
                   }}
@@ -1031,6 +1173,34 @@ export default function AdminPage() {
                         Add
                       </button>
                     </div>
+
+                    {/* Size Stock Levels */}
+                    {prodForm.available_sizes.length > 0 && (
+                      <div className="pt-3 border-t border-zinc-900 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {prodForm.available_sizes.map((size) => (
+                          <div key={size} className="bg-zinc-900 p-2 rounded border border-zinc-850 flex items-center justify-between gap-1">
+                            <span className="text-xs font-mono font-bold text-zinc-400">{size}:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              placeholder="Qty"
+                              value={(prodForm.stock_quantities as any)?.[size] ?? 0}
+                              onChange={(e) => {
+                                const qty = Math.max(0, parseInt(e.target.value) || 0);
+                                setProdForm(prev => ({
+                                  ...prev,
+                                  stock_quantities: {
+                                    ...((prev.stock_quantities || {}) as any),
+                                    [size]: qty
+                                  }
+                                }));
+                              }}
+                              className="w-16 px-1.5 py-0.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs font-mono text-center focus:outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Fabrics Selection Menu */}
@@ -1303,6 +1473,108 @@ export default function AdminPage() {
                       ))}
                     </div>
                   )}
+                </div>
+
+                {/* Product Designs Section (Admin Only) */}
+                <div className="bg-zinc-950 p-4 border border-zinc-800 rounded-xl space-y-4">
+                  <div className="border-b border-zinc-900 pb-2 flex justify-between items-center">
+                    <label className="text-[10px] uppercase font-black text-brand-accent tracking-wider flex items-center gap-1.5">
+                      🔒 Product Designs (Admin Eye Only)
+                    </label>
+                    <span className="text-[8px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded font-mono uppercase">
+                      {isUsingMock ? 'Sandbox Storage' : 'Secure Private Bucket'}
+                    </span>
+                  </div>
+
+                  {/* Current designs list */}
+                  {((editingItem ? productDesigns : queuedDesigns) || []).length > 0 ? (
+                    <div className="space-y-2">
+                      {((editingItem ? productDesigns : queuedDesigns) || []).map((design, idx) => (
+                        <div key={design.id || idx} className="flex items-center justify-between p-2.5 bg-zinc-900 rounded border border-zinc-850 gap-4">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Visual Thumbnail if it's an image */}
+                            <div className="relative w-9 h-9 bg-zinc-950 border border-zinc-800 rounded overflow-hidden shrink-0 flex items-center justify-center">
+                              {design.design_url.startsWith('data:image') || design.design_url.includes('.jpg') || design.design_url.includes('.png') || design.design_url.includes('.webp') || design.design_url.startsWith('blob:') ? (
+                                <Image src={design.design_url} alt="design-thumb" fill className="object-cover" />
+                              ) : (
+                                <span className="text-[10px] text-zinc-500 font-black">FILE</span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-white block truncate">{design.notes}</span>
+                              <a 
+                                href={design.design_url} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="text-[9px] font-black text-brand-accent hover:underline block truncate max-w-[200px]"
+                              >
+                                View / Download Design Source File
+                              </a>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDesign(design.id, idx)}
+                            className="p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer shrink-0"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-zinc-600 font-semibold italic text-center py-2">No design mockups or print files uploaded yet.</p>
+                  )}
+
+                  {/* Add new design uploader */}
+                  <div className="bg-zinc-900/50 p-3 rounded-lg border border-zinc-850/70 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Design Label / Notes</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Front Chest Print PSD, Back Mockup"
+                          value={designNotesInput}
+                          onChange={(e) => setDesignNotesInput(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Add Design File Link (Optional)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Paste design URL or Google Drive link..."
+                            value={designUrlInput}
+                            onChange={(e) => setDesignUrlInput(e.target.value)}
+                            className="flex-1 px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddDesignLink}
+                            disabled={!designUrlInput.trim()}
+                            className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white rounded text-[10px] uppercase font-black cursor-pointer shrink-0 transition-colors border border-zinc-700"
+                          >
+                            Add Link
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* File uploader */}
+                    <div className="pt-2 border-t border-zinc-855 flex justify-between items-center gap-3">
+                      <span className="text-[9px] text-zinc-500 font-semibold">Or upload print files / mockups directly:</span>
+                      <label className="px-3 py-1.5 bg-brand-accent hover:bg-brand-accent/90 disabled:opacity-50 text-white rounded text-[10px] font-bold uppercase cursor-pointer flex items-center gap-1 transition-colors shrink-0">
+                        {isUploadingDesign ? 'Uploading...' : '⬆ Upload Design File'}
+                        <input 
+                          type="file" 
+                          disabled={isUploadingDesign}
+                          onChange={handleDesignUpload} 
+                          className="hidden" 
+                        />
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-4 border-t border-zinc-800 flex justify-end gap-3">
@@ -1610,25 +1882,34 @@ export default function AdminPage() {
                           {p.price} EGP
                         </td>
                         <td className="p-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                            p.is_in_stock 
-                              ? 'bg-green-950/50 text-green-400 border border-green-900' 
-                              : 'bg-red-950/50 text-red-400 border border-red-900'
-                          }`}>
-                            {p.is_in_stock ? t('products.fields.in_stock') : 'Out of Stock'}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className={`inline-block w-max px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                              p.is_in_stock 
+                                ? 'bg-green-950/50 text-green-400 border border-green-900' 
+                                : 'bg-red-950/50 text-red-400 border border-red-900'
+                            }`}>
+                              {p.is_in_stock ? t('products.fields.in_stock') : 'Out of Stock'}
+                            </span>
+                            {p.stock_quantities && Object.keys(p.stock_quantities).length > 0 && (
+                              <div className="text-[9px] text-zinc-500 font-semibold max-w-[150px] truncate" title={Object.entries(p.stock_quantities).map(([s, q]) => `${s}: ${q}`).join(', ')}>
+                                {Object.entries(p.stock_quantities).map(([s, q]) => `${s}: ${q}`).join(', ')}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="p-4 text-right flex justify-end gap-2">
                           <button
                             onClick={() => {
                               setEditingItem(p);
                               setTagsText((p.tags || []).join(', '));
+                              setQueuedDesigns([]);
                               setProdForm({ 
                                 ...p, 
                                 sale_price: p.sale_price || '', 
                                 is_pinned: p.is_pinned || false, 
                                 gives_cotton_reward: p.gives_cotton_reward || false,
-                                fit_type: p.fit_type || 'both'
+                                fit_type: p.fit_type || 'both',
+                                stock_quantities: p.stock_quantities || {}
                               });
                               setIsFormOpen(true);
                             }}
@@ -3444,17 +3725,41 @@ export default function AdminPage() {
                           <td className="p-4 max-w-sm">
                             <div className="text-white font-bold">{order.product_name} ({order.price} EGP)</div>
                             {order.items && Array.isArray(order.items) && (
-                              <div className="mt-1.5 space-y-1 bg-zinc-950 p-2 border border-zinc-800 rounded">
-                                {order.items.map((item: any, idx: number) => (
-                                  <div key={idx} className="text-[10px] flex items-center justify-between text-zinc-300">
-                                    <span>
-                                      • {item.product_name} ({item.size}) x{item.quantity}
-                                    </span>
-                                    <span className="text-[9px] text-zinc-500 font-bold">
-                                      ({item.fabric})
-                                    </span>
-                                  </div>
-                                ))}
+                              <div className="mt-1.5 space-y-2 bg-zinc-950 p-2.5 border border-zinc-800 rounded">
+                                {order.items.map((item: any, idx: number) => {
+                                  const itemDesigns = allDesigns.filter(d => d.product_id === item.product_id);
+                                  return (
+                                    <div key={idx} className="text-[10px] space-y-1 py-1 border-b border-zinc-900 last:border-b-0">
+                                      <div className="flex items-center justify-between text-zinc-300">
+                                        <span>
+                                          • {item.product_name} ({item.size}) x{item.quantity}
+                                        </span>
+                                        <span className="text-[9px] text-zinc-500 font-bold">
+                                          ({item.fabric})
+                                        </span>
+                                      </div>
+                                      
+                                      {itemDesigns.length > 0 && (
+                                        <div className="pl-3.5 pt-1 space-y-1 border-l-2 border-brand-accent/30">
+                                          <span className="text-[8px] text-zinc-500 block uppercase font-bold">Designs:</span>
+                                          {itemDesigns.map((d, dIdx) => (
+                                            <div key={d.id || dIdx} className="flex items-center gap-2 text-[9px] text-zinc-300">
+                                              <span>🎨 {d.notes || 'Design file'}</span>
+                                              <a 
+                                                href={d.design_url} 
+                                                target="_blank" 
+                                                rel="noreferrer" 
+                                                className="text-[8px] font-black text-brand-accent hover:underline bg-zinc-900 border border-zinc-800 px-1 py-0.5 rounded"
+                                              >
+                                                Open Reference
+                                              </a>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                             <div className="text-[10px] text-zinc-400 mt-1.5 font-bold space-y-0.5">
@@ -3504,6 +3809,100 @@ export default function AdminPage() {
               </table>
             </div>
           </div>
+          </div>
+        )}
+
+        {/* TAB 8: DESIGNS EXPLORER */}
+        {activeTab === 'designs-explorer' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-3xl font-black uppercase text-white">
+                {locale === 'ar' ? 'مستكشف التصاميم' : 'Designs Explorer'}
+              </h2>
+              <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-1 rounded font-mono uppercase">
+                🔒 {locale === 'ar' ? 'مشاهدة المدير فقط' : 'Admin Eye Only'}
+              </span>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4 font-mono">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-850 pb-4">
+                <p className="text-xs text-zinc-400 max-w-md">
+                  {locale === 'ar' 
+                    ? 'هنا يمكنك استعراض كافة ملفات الطباعة والسكيتشات المرفقة بجميع المنتجات وتنزيلها.'
+                    : 'Centralized gallery of all high-resolution print files, artwork, and production mockups attached to products.'}
+                </p>
+                <input
+                  type="text"
+                  value={designsSearchQuery}
+                  onChange={(e) => setDesignsSearchQuery(e.target.value)}
+                  placeholder={locale === 'ar' ? 'ابحث بالمنتج...' : 'Search by product name...'}
+                  className="w-full sm:max-w-xs px-3.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
+                />
+              </div>
+
+              {(() => {
+                const filteredDesigns = allDesigns.filter((design) => {
+                  const prod = products.find(p => p.id === design.product_id);
+                  const nameMatch = prod ? prod.name_en.toLowerCase().includes(designsSearchQuery.toLowerCase()) : false;
+                  const notesMatch = (design.notes || '').toLowerCase().includes(designsSearchQuery.toLowerCase());
+                  return nameMatch || notesMatch;
+                });
+
+                if (filteredDesigns.length > 0) {
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredDesigns.map((design) => {
+                        const prod = products.find(p => p.id === design.product_id);
+                        return (
+                          <div key={design.id} className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 flex flex-col justify-between gap-4">
+                        <div className="flex gap-3">
+                          {/* Visual Thumbnail */}
+                          <div className="relative w-16 h-16 bg-zinc-900 border border-zinc-800 rounded overflow-hidden shrink-0 flex items-center justify-center">
+                            {design.design_url.startsWith('data:image') || design.design_url.includes('.jpg') || design.design_url.includes('.png') || design.design_url.includes('.webp') || design.design_url.startsWith('blob:') ? (
+                              <Image src={design.design_url} alt="design" fill className="object-cover" />
+                            ) : (
+                              <span className="text-xs text-zinc-500 font-black">PSD / RAR</span>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] font-black uppercase text-brand-accent tracking-wider block truncate">
+                              {prod ? prod.name_en : 'Unknown Product'}
+                            </span>
+                            <h4 className="text-xs font-bold text-white mt-1 leading-tight break-words">
+                              {design.notes || 'No notes added'}
+                            </h4>
+                            <span className="text-[9px] text-zinc-500 font-semibold block mt-1">
+                              {new Date(design.created_at).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 border-t border-zinc-900 pt-3">
+                          <a
+                            href={design.design_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded text-[10px] uppercase cursor-pointer transition-colors text-center"
+                          >
+                            {locale === 'ar' ? 'تحميل الملف' : 'Get Design File'}
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="text-center py-12 bg-zinc-950 rounded-xl border border-zinc-850">
+                      <p className="text-sm text-zinc-500 font-semibold italic">
+                        {locale === 'ar' ? 'لا توجد أي نتائج مطابقة لبحثك.' : 'No matching design files found.'}
+                      </p>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
           </div>
         )}
 
