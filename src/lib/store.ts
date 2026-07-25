@@ -451,8 +451,17 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   toggleFavorite: async (productId) => {
-    const { user, profile } = get();
-    if (!user || !profile) return;
+    const { user } = get();
+    let { profile } = get();
+    if (!user) return;
+    
+    // Auto-sync profile if missing (e.g. after page refresh before syncUserProfile runs)
+    if (!profile) {
+      await get().syncUserProfile();
+      profile = get().profile;
+      if (!profile) return;
+    }
+    
     const favorites = profile.favorites || [];
     let updatedFavs;
     if (favorites.includes(productId)) {

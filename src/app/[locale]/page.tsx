@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
 import AnnouncementBar from '@/components/AnnouncementBar';
 import Navbar from '@/components/Navbar';
@@ -10,6 +10,7 @@ import Showcase from '@/components/Showcase';
 import CustomDesignForm from '@/components/CustomDesignForm';
 import Offers from '@/components/Offers';
 import ReferralBanner from '@/components/ReferralBanner';
+import ReferralWelcomeBanner from '@/components/ReferralWelcomeBanner';
 import WhyChooseUs from '@/components/WhyChooseUs';
 import AboutUs from '@/components/AboutUs';
 import Shipping from '@/components/Shipping';
@@ -36,9 +37,10 @@ export default function Home({
   const products = useStore((state) => state.products);
   const isSizeChartOpen = useStore((state) => state.isSizeChartOpen);
   const setIsSizeChartOpen = useStore((state) => state.setIsSizeChartOpen);
-
-  const trackReferralClick = useStore((state) => state.trackReferralClick);
   const logAnalyticsEvent = useStore((state) => state.logAnalyticsEvent);
+
+  // Referral welcome banner state
+  const [activeRefCode, setActiveRefCode] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInitialData();
@@ -51,6 +53,7 @@ export default function Home({
     }
   }, [fetchInitialData, logAnalyticsEvent]);
 
+  // Detect referral link in URL and show welcome banner instead of silently tracking
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
@@ -58,16 +61,18 @@ export default function Home({
       if (ref) {
         const cleanRef = ref.trim();
         if (cleanRef.startsWith('REF-') || /^01[0-25]\d{8}$/.test(cleanRef)) {
+          // Save the referrer for later (order attribution)
           localStorage.setItem('ff_referrer_phone', cleanRef);
+          // Show welcome banner — the banner's CTA button calls trackReferralClick
           const sessionTracked = sessionStorage.getItem('ff_referral_tracked');
           if (sessionTracked !== cleanRef) {
-            trackReferralClick(cleanRef);
+            setActiveRefCode(cleanRef);
             sessionStorage.setItem('ff_referral_tracked', cleanRef);
           }
         }
       }
     }
-  }, [trackReferralClick]);
+  }, []);
 
   // Show branded loading screen on first load
   if (isLoading && products.length === 0) {
@@ -135,6 +140,8 @@ export default function Home({
       <AuthModal />
       {/* Size Chart Modal overlay */}
       <SizeChartModal isOpen={isSizeChartOpen} onClose={() => setIsSizeChartOpen(false)} />
+      {/* Referral welcome banner (shown when arriving via ?ref= link) */}
+      {activeRefCode && <ReferralWelcomeBanner refCode={activeRefCode} />}
     </>
   );
 }

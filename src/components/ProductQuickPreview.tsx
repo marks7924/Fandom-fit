@@ -304,7 +304,7 @@ export default function ProductQuickPreview() {
                       })}
                     </div>
 
-                    {/* Size Stock Status */}
+                    {/* Size Stock Status — only show warnings, not counts */}
                     <div className="mt-2 min-h-[1.25rem] flex items-center">
                       {(() => {
                         const qty = previewProduct.stock_quantities?.[selectedSize] ?? 10;
@@ -323,12 +323,7 @@ export default function ProductQuickPreview() {
                             </span>
                           );
                         } else {
-                          return (
-                            <span className="text-[10px] font-black text-green-600 flex items-center gap-1.5">
-                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                              {locale === 'ar' ? `✅ متوفر (${qty} قطعة)` : `✅ In Stock (${qty} available)`}
-                            </span>
-                          );
+                          return null; // Don't show count for normal stock items
                         }
                       })()}
                     </div>
