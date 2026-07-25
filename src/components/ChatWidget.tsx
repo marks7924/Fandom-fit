@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { useLocale } from 'next-intl';
-import { MessageSquare, X, Send, Phone, Lock, Circle, Trash2, ArrowRight, ShieldCheck } from 'lucide-react';
+import { MessageSquare, X, Send, Phone, Lock, Circle, Trash2, ArrowRight, ShieldOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ChatWidget() {
@@ -14,8 +14,10 @@ export default function ChatWidget() {
   const [typedMessage, setTypedMessage] = useState('');
   const [chatError, setChatError] = useState('');
   const [isLoadingChat, setIsLoadingChat] = useState(false);
+  const [closingCountdown, setClosingCountdown] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Destructure Zustand chat actions
   const {
@@ -45,6 +47,40 @@ export default function ChatWidget() {
     return () => clearInterval(timer);
   }, [isOpen, isConnected, fetchUserChat]);
 
+  // Watch for admin closing the chat — start 5s countdown then close on user side
+  useEffect(() => {
+    if (!isConnected || !activeChat) return;
+
+    if (activeChat.status === 'closed' && closingCountdown === null) {
+      // Admin closed the chat — start countdown
+      setClosingCountdown(5);
+      countdownRef.current = setInterval(() => {
+        setClosingCountdown(prev => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            // Time's up — close the chat on user side
+            clearInterval(countdownRef.current!);
+            countdownRef.current = null;
+            endUserChat(activeChat.id).catch(() => {});
+            setIsConnected(false);
+            setIsOpen(false);
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('ff_chat_phone');
+            }
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+      }
+    };
+  }, [activeChat?.status, isConnected]);
+
   // If user logs in/out, re-verify connection
   useEffect(() => {
     if (user && profile?.phone) {
@@ -70,12 +106,11 @@ export default function ChatWidget() {
   // Trigger greeting if chat is empty
   useEffect(() => {
     if (activeChat && activeChatMessages.length === 0 && !isLoadingChat) {
-      const greeting = settings.chat_greeting_message || 
-        (locale === 'ar' 
-          ? 'مرحباً بك في دعم فاندوم فيت! كيف يمكننا مساعدتك اليوم؟' 
+      const greeting = settings.chat_greeting_message ||
+        (locale === 'ar'
+          ? 'مرحباً بك في دعم فاندوم فيت! كيف يمكننا مساعدتك اليوم؟'
           : 'Welcome to Fandom Fit Support! How can we help you today?');
-          
-      // Trigger a system greeting message
+
       sendChatMessage(activeChat.id, greeting, 'system');
     }
   }, [activeChat, activeChatMessages.length, isLoadingChat]);
@@ -99,6 +134,16 @@ export default function ChatWidget() {
     try {
       const chat = await fetchUserChat(phoneInput.trim());
       if (chat) {
+        // Prevent blocked users from entering chat
+        if (chat.is_blocked) {
+          setChatError(
+            locale === 'ar'
+              ? 'تم حظر هذا الرقم من المحادثة. تواصل معنا عبر وسائل أخرى.'
+              : 'This number has been blocked from chat. Please contact us through other means.'
+          );
+          setIsLoadingChat(false);
+          return;
+        }
         setIsConnected(true);
         if (typeof window !== 'undefined') {
           localStorage.setItem('ff_chat_phone', phoneInput.trim());
@@ -134,7 +179,7 @@ export default function ChatWidget() {
 
   const handleEndChat = async () => {
     if (!activeChat) return;
-    if (confirm(locale === 'ar' ? 'هل أنت متأكد من رغبتك في حذف وحذف المحادثة؟' : 'Are you sure you want to end and delete this chat?')) {
+    if (confirm(locale === 'ar' ? 'هل أنت متأكد من رغبتك في إنهاء وحذف المحادثة؟' : 'Are you sure you want to end and delete this chat?')) {
       await endUserChat(activeChat.id);
       setIsConnected(false);
       if (typeof window !== 'undefined') {
@@ -142,6 +187,9 @@ export default function ChatWidget() {
       }
     }
   };
+
+  // If blocked, show blocked state in the toggle button
+  const isUserBlocked = isConnected && activeChat?.is_blocked;
 
   return (
     <div className="fixed bottom-6 right-6 z-[999] font-sans text-black">
@@ -156,19 +204,21 @@ export default function ChatWidget() {
             {/* Chat Window Header */}
             <div className="bg-black text-[#EDE0D0] p-4 flex items-center justify-between border-b-4 border-black">
               <div className="flex items-center gap-2">
-                <Circle size={10} className="fill-green-500 text-green-500 animate-pulse" />
+                <Circle size={10} className={`fill-current animate-pulse ${isUserBlocked ? 'text-red-500' : 'text-green-500'}`} />
                 <div>
                   <h4 className="text-xs font-black uppercase tracking-wider">
                     {locale === 'ar' ? 'دعم فاندوم فيت' : 'Fandom Fit Support'}
                   </h4>
                   <span className="text-[8px] font-black text-[#EDE0D0]/60 uppercase">
-                    {locale === 'ar' ? 'مباشر الآن' : 'Live Chat Agent'}
+                    {isUserBlocked
+                      ? (locale === 'ar' ? 'محظور' : 'Blocked')
+                      : (locale === 'ar' ? 'مباشر الآن' : 'Live Chat Agent')}
                   </span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                {isConnected && activeChat && (
+                {isConnected && activeChat && !isUserBlocked && (
                   <button
                     onClick={handleEndChat}
                     title={locale === 'ar' ? 'إنهاء وحذف المحادثة' : 'End & Delete Chat'}
@@ -185,6 +235,22 @@ export default function ChatWidget() {
                 </button>
               </div>
             </div>
+
+            {/* Countdown Banner */}
+            {closingCountdown !== null && (
+              <div className="bg-red-500 text-white text-center py-2 text-[11px] font-black uppercase animate-pulse border-b-2 border-black">
+                {locale === 'ar'
+                  ? `تم إغلاق المحادثة من قبل الدعم. ستُغلق خلال ${closingCountdown} ثوانٍ...`
+                  : `Chat closed by support. Closing in ${closingCountdown}s...`}
+              </div>
+            )}
+
+            {/* Blocked Banner */}
+            {isUserBlocked && (
+              <div className="bg-red-50 border-b-2 border-red-300 text-red-700 text-center py-2 px-4 text-[10px] font-black">
+                🚫 {locale === 'ar' ? 'تم حظرك من هذه المحادثة.' : 'You have been blocked from this chat.'}
+              </div>
+            )}
 
             {/* Chat Body */}
             <div className="flex-1 p-4 overflow-y-auto space-y-3 flex flex-col">
@@ -284,25 +350,19 @@ export default function ChatWidget() {
             </div>
 
             {/* Chat Footer Input */}
-            {isConnected && !isLoadingChat && (
+            {isConnected && !isLoadingChat && !isUserBlocked && closingCountdown === null && (
               <form onSubmit={handleSendMessage} className="p-3 bg-white border-t-4 border-black flex gap-2">
                 <input
                   type="text"
                   required
-                  placeholder={
-                    activeChat?.is_blocked
-                      ? (locale === 'ar' ? 'تم حظرك من المحادثة...' : 'You have been blocked...')
-                      : (locale === 'ar' ? 'اكتب رسالة...' : 'Type your message...')
-                  }
-                  disabled={activeChat?.is_blocked}
+                  placeholder={locale === 'ar' ? 'اكتب رسالة...' : 'Type your message...'}
                   value={typedMessage}
                   onChange={(e) => setTypedMessage(e.target.value)}
                   className="flex-1 px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-semibold focus:outline-none focus:bg-white placeholder-zinc-400"
                 />
                 <button
                   type="submit"
-                  disabled={activeChat?.is_blocked}
-                  className="p-2 bg-black hover:bg-brand-accent text-[#EDE0D0] hover:text-white border-2 border-black rounded-xl cursor-pointer disabled:opacity-50"
+                  className="p-2 bg-black hover:bg-brand-accent text-[#EDE0D0] hover:text-white border-2 border-black rounded-xl cursor-pointer"
                 >
                   <Send size={14} />
                 </button>
@@ -317,10 +377,10 @@ export default function ChatWidget() {
         whileHover={{ scale: 1.05, y: -2 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-14 h-14 bg-brand-accent hover:bg-brand-accent/95 text-white border-4 border-black rounded-full flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
+        className={`w-14 h-14 text-white border-4 border-black rounded-full flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] cursor-pointer ${isUserBlocked ? 'bg-red-500' : 'bg-brand-accent hover:bg-brand-accent/95'}`}
         aria-label="Toggle Live Chat"
       >
-        {isOpen ? <X size={24} /> : <MessageSquare size={24} />}
+        {isUserBlocked ? <ShieldOff size={22} /> : isOpen ? <X size={24} /> : <MessageSquare size={24} />}
       </motion.button>
     </div>
   );

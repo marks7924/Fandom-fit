@@ -38,13 +38,18 @@ export default function Navbar() {
     router.replace(pathname, { locale: nextLocale });
   };
 
+  const isHomepage = pathname === '/' || pathname === '';
+  const getNavLink = (hash: string) => {
+    return isHomepage ? hash : `/${locale}${hash}`;
+  };
+
   const navItems = [
-    { name: t('home'), href: '#home' },
-    { name: t('collections'), href: '#collections' },
-    { name: t('custom_design'), href: '#custom-design' },
-    { name: t('about'), href: '#about' },
-    { name: t('faq'), href: '#faq' },
-    { name: t('contact'), href: '#contact' },
+    { name: t('home'), href: getNavLink('#home') },
+    { name: t('collections'), href: getNavLink('#collections') },
+    { name: t('custom_design'), href: getNavLink('#custom-design') },
+    { name: t('about'), href: getNavLink('#about') },
+    { name: t('faq'), href: getNavLink('#faq') },
+    { name: t('contact'), href: getNavLink('#contact') },
   ];
 
   const { 
@@ -72,7 +77,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <a href="#home">
+            <a href={getNavLink('#home')}>
               <BrandLogo color="black" textSize={1.6} />
             </a>
           </div>
@@ -137,8 +142,8 @@ export default function Navbar() {
 
             {/* Shop Now CTA */}
             <a
-              href="#showcase"
-              className="flex items-center gap-2 px-4 py-2 text-xs font-black uppercase text-[#EDE0D0] bg-black hover:bg-brand-accent hover:text-white border-2 border-black rounded-lg transition-all duration-300 hover:translate-y-[-2px]"
+              href={getNavLink('#showcase')}
+              className="flex-items-center gap-2 px-4 py-2 text-xs font-black uppercase text-[#EDE0D0] bg-black hover:bg-brand-accent hover:text-white border-2 border-black rounded-lg transition-all duration-300 hover:translate-y-[-2px]"
             >
               {t('order_instagram')}
             </a>
@@ -215,7 +220,7 @@ export default function Navbar() {
               {locale === 'ar' ? 'تتبع طلبي' : 'Track Order'}
             </button>
             <a
-              href="#showcase"
+              href={getNavLink('#showcase')}
               onClick={() => setIsOpen(false)}
               className="flex items-center justify-center gap-2 py-3 text-sm font-black uppercase text-[#EDE0D0] bg-black hover:bg-brand-accent hover:text-white border-3 border-black rounded-xl transition-all duration-300"
             >

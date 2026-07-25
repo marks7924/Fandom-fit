@@ -23,6 +23,8 @@ export default function AccountPage() {
     profile, 
     orders,
     settings,
+    fetchInitialData,
+    syncUserProfile,
     signUpUser, 
     signInUser, 
     signInUserWithGoogle,
@@ -93,6 +95,13 @@ export default function AccountPage() {
     { en: 'South Sinai', ar: 'جنوب سيناء' }
   ];
 
+  // Initial load to restore session
+  useEffect(() => {
+    fetchInitialData().then(() => {
+      syncUserProfile();
+    });
+  }, [fetchInitialData, syncUserProfile]);
+
   // Fetch logged in orders
   useEffect(() => {
     if (user && profile?.phone) {
@@ -111,7 +120,7 @@ export default function AccountPage() {
     } else {
       setUserOrders([]);
     }
-  }, [user, profile?.phone]);
+  }, [user, profile, fetchOrdersByPhone]);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

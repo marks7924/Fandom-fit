@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import supabase, { isUsingMock } from './supabase';
 
+const filterHiddenProducts = (products: any[]) => {
+  if (typeof window === 'undefined') return products;
+  const isAdminRoute = window.location.pathname.includes('/admin');
+  const isAdminUser = sessionStorage.getItem('ff_admin_user') !== null;
+  if (isAdminRoute || isAdminUser) {
+    return products;
+  }
+  return products.filter((p: any) => !p.is_hidden);
+};
+
 export interface Category {
   id: string;
   slug: string;
@@ -393,7 +403,13 @@ export const useStore = create<StoreState>((set, get) => ({
     try {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (data && !error) {
-        set({ profile: data });
+        // Patch missing fields on older profiles
+        const patched = {
+          referral_clicks: 0,
+          referral_orders: 0,
+          ...data
+        };
+        set({ profile: patched });
       } else {
         // Create profile if missing
         const referralCode = `REF-${user.id.replace('u-', '').substring(0, 5).toUpperCase()}`;
@@ -402,6 +418,8 @@ export const useStore = create<StoreState>((set, get) => ({
           email: user.email || '',
           phone: '',
           loyalty_points: 0,
+          referral_clicks: 0,
+          referral_orders: 0,
           favorites: [],
           referral_code: referralCode,
           address_data: {}
@@ -422,6 +440,8 @@ export const useStore = create<StoreState>((set, get) => ({
           email: user.email || '',
           phone: '',
           loyalty_points: 0,
+          referral_clicks: 0,
+          referral_orders: 0,
           favorites: [],
           referral_code: referralCode,
           address_data: {}
@@ -636,7 +656,12 @@ export const useStore = create<StoreState>((set, get) => ({
           currentUser = userData.user;
           const { data: profData } = await supabase.from('profiles').select('*').eq('id', userData.user.id).maybeSingle();
           if (profData) {
-            currentProfile = profData;
+            // Patch any missing referral fields for older profiles
+            currentProfile = {
+              referral_clicks: 0,
+              referral_orders: 0,
+              ...profData
+            };
           }
         }
       } catch (authErr) {
@@ -645,7 +670,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
       set({
         categories: categories || [],
-        products: products || [],
+        products: filterHiddenProducts(products || []),
         offers: offers || [],
         discountCampaigns: discountCampaigns || [],
         settings: settingsMap,
@@ -818,20 +843,28 @@ export const useStore = create<StoreState>((set, get) => ({
 
         await supabase.from('offers').insert([newOffer]);
 
-        // Increment referrer's orders count
-        let origRefCode = typeof window !== 'undefined' ? localStorage.getItem('ff_referrer_phone') : null;
-        if (origRefCode) {
+        // Increment referrer's orders count using already-resolved referrerPhone
+        if (referrerPhone && referrerPhone.trim()) {
           try {
-            const { data: refProf } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('referral_code', origRefCode.trim())
-              .maybeSingle();
+            // Try by phone first, then by referral_code
+            let refProf: any = null;
+            const byPhone = await supabase.from('profiles').select('*').eq('phone', referrerPhone.trim()).maybeSingle();
+            if (byPhone.data) {
+              refProf = byPhone.data;
+            } else {
+              const byCode = await supabase.from('profiles').select('*').eq('referral_code', referrerPhone.trim()).maybeSingle();
+              if (byCode.data) refProf = byCode.data;
+            }
             if (refProf) {
               await supabase
                 .from('profiles')
                 .update({ referral_orders: (refProf.referral_orders || 0) + 1 })
                 .eq('id', refProf.id);
+              // Re-sync if current user is the referrer
+              const currentUser = get().user;
+              if (currentUser && currentUser.id === refProf.id) {
+                await get().syncUserProfile();
+              }
             }
           } catch (e) {
             console.warn('Could not increment referrer orders count:', e);
@@ -1046,6 +1079,11 @@ export const useStore = create<StoreState>((set, get) => ({
             .eq('id', targetProfile.id);
         }
       }
+        // Re-sync the current user's profile if they're logged in (to show updated counter)
+        const currentUser = get().user;
+        if (currentUser) {
+          await get().syncUserProfile();
+        }
     } catch (e) {
       console.error('Error tracking referral click:', e);
     }
@@ -1485,7 +1523,24 @@ export const useStore = create<StoreState>((set, get) => ({
         }
       }
       
-      // 3. If still not found and we are logged in, create a new chat linked to user
+      // 3. Also check if there's a BLOCKED chat for this user (even if user_deleted)
+      // to prevent bypassing block by "deleting" and starting fresh
+      if (!chat && (userId || userPhone)) {
+        let blockedQuery = supabase.from('chats').select('*');
+        if (userId) {
+          blockedQuery = blockedQuery.eq('user_id', userId);
+        } else {
+          blockedQuery = blockedQuery.eq('customer_phone', userPhone);
+        }
+        const { data: blockedChat } = await blockedQuery.eq('is_blocked', true).maybeSingle();
+        if (blockedChat) {
+          // Return the blocked chat — user will see blocked state
+          set({ activeChat: blockedChat, activeChatMessages: [] });
+          return blockedChat;
+        }
+      }
+
+      // 4. If still not found and we are logged in, create a new chat linked to user
       if (!chat && userId) {
         const namePrefix = user.email?.split('@')[0] || 'User';
         const { data: newChat, error: createError } = await supabase
