@@ -481,10 +481,11 @@ const saveMockDb = (key: string, data: any) => {
 // Mock Client Interface mimicking Supabase js calls
 // Helper to generate chainable promises mimicking Supabase Client query builders
 const makeChainable = (data: any, singleItem: any = null) => {
-  const result = { data, error: null };
+  const result = { data, error: null, count: Array.isArray(data) ? data.length : 0 };
   const chain: any = {
     data,
     error: null,
+    count: Array.isArray(data) ? data.length : 0,
     single: () => {
       const item = singleItem || (Array.isArray(data) ? data[0] : data) || null;
       return makeChainable(item, item);
@@ -496,6 +497,22 @@ const makeChainable = (data: any, singleItem: any = null) => {
     eq: (field: string, value: any) => {
       if (Array.isArray(data)) {
         const filtered = data.filter((item: any) => item[field] === value);
+        return makeChainable(filtered, filtered[0] || null);
+      }
+      return makeChainable(data, singleItem);
+    },
+    or: (filters: string) => {
+      if (Array.isArray(data)) {
+        const parts = filters.split(',');
+        const filtered = data.filter((item: any) => {
+          return parts.some(part => {
+            const [field, op, val] = part.split('.');
+            if (op === 'eq') {
+              return String(item[field]) === String(val);
+            }
+            return false;
+          });
+        });
         return makeChainable(filtered, filtered[0] || null);
       }
       return makeChainable(data, singleItem);
@@ -537,7 +554,7 @@ export const mockSupabase = {
         const adminUser = JSON.parse(sessionStorage.getItem('ff_admin_user') || 'null');
         if (adminUser) return { data: { user: adminUser } };
       }
-      const regularUser = JSON.parse(sessionStorage.getItem('ff_current_user') || 'null');
+      const regularUser = JSON.parse(localStorage.getItem('ff_current_user') || 'null');
       return { data: { user: regularUser } };
     },
     signUp: async ({ email, password, options }: any) => {
@@ -561,6 +578,8 @@ export const mockSupabase = {
         email: email,
         phone: phoneInput,
         loyalty_points: 0,
+        referral_clicks: 0,
+        referral_orders: 0,
         favorites: [],
         referral_code: `REF-${newUser.id.replace('u-', '').toUpperCase()}`,
         address_data: {},
@@ -569,7 +588,7 @@ export const mockSupabase = {
       dbProfiles.push(newProfile);
       localStorage.setItem(profilesKey, JSON.stringify(dbProfiles));
 
-      sessionStorage.setItem('ff_current_user', JSON.stringify(newUser));
+      localStorage.setItem('ff_current_user', JSON.stringify(newUser));
       return { data: { user: newUser }, error: null };
     },
     signInWithPassword: async ({ email, password }: any) => {
@@ -584,7 +603,7 @@ export const mockSupabase = {
       const found = users.find((u: any) => u.email === email && u.password === password);
       if (found) {
         const user = { id: found.id, email: found.email };
-        sessionStorage.setItem('ff_current_user', JSON.stringify(user));
+        localStorage.setItem('ff_current_user', JSON.stringify(user));
         return { data: { user }, error: null };
       }
       return { data: null, error: { message: 'Invalid credentials' } };
@@ -593,7 +612,7 @@ export const mockSupabase = {
       if (typeof window === 'undefined') return { data: null, error: null };
       // mock Google Auth
       const user = { id: 'google-user-id', email: 'google_user@gmail.com' };
-      sessionStorage.setItem('ff_current_user', JSON.stringify(user));
+      localStorage.setItem('ff_current_user', JSON.stringify(user));
       
       // Ensure profile exists
       const profilesKey = 'ff_profiles';
@@ -604,6 +623,8 @@ export const mockSupabase = {
           email: user.email,
           phone: '',
           loyalty_points: 0,
+          referral_clicks: 0,
+          referral_orders: 0,
           favorites: [],
           referral_code: `REF-GOOGLE`,
           address_data: {},
@@ -616,7 +637,7 @@ export const mockSupabase = {
     },
     signOut: async () => {
       sessionStorage.removeItem('ff_admin_user');
-      sessionStorage.removeItem('ff_current_user');
+      localStorage.removeItem('ff_current_user');
       return { error: null };
     }
   },

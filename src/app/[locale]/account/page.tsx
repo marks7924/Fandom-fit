@@ -25,6 +25,7 @@ export default function AccountPage() {
     settings,
     signUpUser, 
     signInUser, 
+    signInUserWithGoogle,
     signOutUser, 
     updateProfile, 
     fetchOrdersByPhone,
@@ -141,6 +142,21 @@ export default function AccountPage() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setAuthError('');
+    setIsSubmitting(true);
+    try {
+      const res = await signInUserWithGoogle();
+      if (!res.success) {
+        setAuthError(res.error || 'Google Login failed');
+      }
+    } catch (err: any) {
+      setAuthError(err.message || 'Google Login failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleGuestLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
@@ -235,7 +251,7 @@ export default function AccountPage() {
     <div className="min-h-screen bg-[#EDE0D0] flex flex-col font-sans text-black">
       <Navbar />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8 select-none">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-28 pb-12 select-none">
         <AnimatePresence mode="wait">
           {!user ? (
             /* ================= GUEST / AUTH ENTRIES ================= */
@@ -328,6 +344,41 @@ export default function AccountPage() {
                     {isSubmitting ? (locale === 'ar' ? 'جاري التحميل...' : 'Loading...') : (locale === 'ar' ? 'تسجيل الدخول' : 'Sign In')}
                     <ArrowRight size={14} />
                   </button>
+
+                  <div className="relative flex py-2 items-center">
+                    <div className="flex-grow border-t border-black/10"></div>
+                    <span className="flex-shrink mx-3 text-[9px] font-black uppercase text-black/45">
+                      {locale === 'ar' ? 'أو' : 'Or'}
+                    </span>
+                    <div className="flex-grow border-t border-black/10"></div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={isSubmitting}
+                    className="w-full py-3 bg-white hover:bg-black/5 text-black border-2 border-black rounded-xl font-black uppercase text-xs tracking-wider transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none active:translate-y-0.5 cursor-pointer flex justify-center items-center gap-2"
+                  >
+                    <svg className="w-4 h-4 mr-1 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.04c1.62 0 3.08.56 4.22 1.64l3.15-3.15C17.45 1.7 14.93 1 12 1 7.37 1 3.4 3.66 1.48 7.55l3.8 2.95C6.18 7.15 8.87 5.04 12 5.04z"
+                      />
+                      <path
+                        fill="#4285F4"
+                        d="M23.45 12.3c0-.82-.07-1.6-.22-2.3H12v4.4h6.42c-.28 1.47-1.12 2.7-2.38 3.54l3.7 2.87c2.16-2 3.4-4.94 3.4-8.5z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.28 14.5c-.23-.68-.36-1.42-.36-2.18s.13-1.5.36-2.18l-3.8-2.95C.52 9.07 0 10.48 0 12s.52 2.93 1.48 4.82l3.8-2.95z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c3.24 0 5.97-1.07 7.96-2.92l-3.7-2.87c-1.03.69-2.35 1.1-4.26 1.1-3.13 0-5.82-2.11-6.77-5.07l-3.8 2.95C3.4 20.34 7.37 23 12 23z"
+                      />
+                    </svg>
+                    {locale === 'ar' ? 'متابعة باستخدام Google' : 'Google Account'}
+                  </button>
                 </form>
               )}
 
@@ -415,6 +466,41 @@ export default function AccountPage() {
                   >
                     {isSubmitting ? (locale === 'ar' ? 'جاري إنشاء الحساب...' : 'Signing Up...') : (locale === 'ar' ? 'تسجيل كعضو' : 'Register Account')}
                     <ShieldCheck size={15} />
+                  </button>
+
+                  <div className="relative flex py-2 items-center">
+                    <div className="flex-grow border-t border-black/10"></div>
+                    <span className="flex-shrink mx-3 text-[9px] font-black uppercase text-black/45">
+                      {locale === 'ar' ? 'أو' : 'Or'}
+                    </span>
+                    <div className="flex-grow border-t border-black/10"></div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={isSubmitting}
+                    className="w-full py-3 bg-white hover:bg-black/5 text-black border-2 border-black rounded-xl font-black uppercase text-xs tracking-wider transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none active:translate-y-0.5 cursor-pointer flex justify-center items-center gap-2"
+                  >
+                    <svg className="w-4 h-4 mr-1 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.04c1.62 0 3.08.56 4.22 1.64l3.15-3.15C17.45 1.7 14.93 1 12 1 7.37 1 3.4 3.66 1.48 7.55l3.8 2.95C6.18 7.15 8.87 5.04 12 5.04z"
+                      />
+                      <path
+                        fill="#4285F4"
+                        d="M23.45 12.3c0-.82-.07-1.6-.22-2.3H12v4.4h6.42c-.28 1.47-1.12 2.7-2.38 3.54l3.7 2.87c2.16-2 3.4-4.94 3.4-8.5z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.28 14.5c-.23-.68-.36-1.42-.36-2.18s.13-1.5.36-2.18l-3.8-2.95C.52 9.07 0 10.48 0 12s.52 2.93 1.48 4.82l3.8-2.95z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c3.24 0 5.97-1.07 7.96-2.92l-3.7-2.87c-1.03.69-2.35 1.1-4.26 1.1-3.13 0-5.82-2.11-6.77-5.07l-3.8 2.95C3.4 20.34 7.37 23 12 23z"
+                      />
+                    </svg>
+                    {locale === 'ar' ? 'متابعة باستخدام Google' : 'Google Account'}
                   </button>
                 </form>
               )}
@@ -618,6 +704,58 @@ export default function AccountPage() {
                             )}
                           </button>
                         </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-black/10 space-y-3">
+                        <span className="text-[10px] font-black text-black/50 uppercase block">
+                          {locale === 'ar' ? 'مؤشر تقدم المكافأة (٥ زيارات أو ١ طلب مكتمل):' : 'Referral Reward Progress (5 clicks OR 1 order):'}
+                        </span>
+
+                        {/* Progress visual metrics */}
+                        <div className="grid grid-cols-2 gap-3 text-center">
+                          <div className="bg-[#EDE0D0]/30 border border-black rounded-xl p-2">
+                            <span className="text-sm font-black text-brand-accent block">
+                              {activeProfile.referral_clicks || 0} / 5
+                            </span>
+                            <span className="text-[8px] font-bold text-black/60 uppercase block mt-0.5">
+                              {locale === 'ar' ? 'زيارات الرابط' : 'Clicks (Entries)'}
+                            </span>
+                          </div>
+                          
+                          <div className="bg-[#EDE0D0]/30 border border-black rounded-xl p-2">
+                            <span className="text-sm font-black text-brand-accent block">
+                              {activeProfile.referral_orders || 0} / 1
+                            </span>
+                            <span className="text-[8px] font-bold text-black/60 uppercase block mt-0.5">
+                              {locale === 'ar' ? 'طلبات مكتملة' : 'Referred Orders'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar (clicks) */}
+                        <div>
+                          <div className="flex justify-between text-[8px] font-black text-black/50 uppercase mb-1">
+                            <span>{locale === 'ar' ? 'هدف الزيارات (٥ زيارات)' : 'Clicks Target (5 Clicks)'}</span>
+                            <span>{Math.round(Math.min(100, ((activeProfile.referral_clicks || 0) / 5) * 100))}%</span>
+                          </div>
+                          <div className="w-full bg-[#EDE0D0] border border-black rounded-full h-3 overflow-hidden p-0.5">
+                            <div 
+                              className="bg-brand-accent h-full rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(100, ((activeProfile.referral_clicks || 0) / 5) * 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        {/* Unlocked banner if either is achieved */}
+                        {((activeProfile.referral_clicks || 0) >= 5 || (activeProfile.referral_orders || 0) >= 1) ? (
+                          <div className="p-2 bg-green-50 border border-green-500 rounded-xl text-center text-[9px] font-black text-green-800 animate-pulse">
+                            🎉 {locale === 'ar' ? 'تم فتح المكافأة! تفقد قائمة كوبونات الهاتف عند الدفع.' : 'Goal met! 15% OFF reward coupon bound to your phone number!'}
+                          </div>
+                        ) : (
+                          <p className="text-[8px] font-extrabold text-[#E07A5F] leading-tight text-center">
+                            {locale === 'ar' ? '💡 احصل على ٥ زيارات أو طلب صديق واحد لتفعيل الخصم الخاص بك!' : '💡 Unlock 15% off once you hit 5 link clicks OR 1 referred purchase!'}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

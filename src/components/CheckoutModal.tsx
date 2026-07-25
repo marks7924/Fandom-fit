@@ -253,25 +253,21 @@ export default function CheckoutModal() {
 
     // Validate stock levels before proceeding
     if (isSingle && checkoutProduct) {
-      const sizeStock = checkoutProduct.stock_quantities?.[selectedSize] ?? 10;
-      if (sizeStock <= 0) {
-        alert(locale === 'ar' ? `المقاس ${selectedSize} نفد من المخزن للتو. يرجى اختيار مقاس آخر.` : `Size ${selectedSize} just went out of stock. Please select another size.`);
+      if (checkoutProduct.is_in_stock === false) {
+        alert(locale === 'ar' ? 'عذراً، هذا المنتج غير متوفر حالياً.' : 'Sorry, this product is currently out of stock.');
         return;
       }
     } else {
-      // For multi-item cart orders, check each item's stock
+      // For multi-item cart orders, check if any product is marked out of stock
       const { products } = useStore.getState();
       for (const item of cart) {
         const prod = products.find(p => p.id === item.product.id);
-        if (prod) {
-          const qty = prod.stock_quantities?.[item.size] ?? 10;
-          if (qty < item.quantity) {
-            alert(locale === 'ar' 
-              ? `عذراً، المنتج "${prod.name_ar}" (مقاس ${item.size}) لم يعد متوفراً بالكمية المطلوبة. المتاح حالياً: ${qty} قطع.`
-              : `Sorry, product "${prod.name_en}" (Size ${item.size}) does not have enough stock. Available: ${qty} items.`
-            );
-            return;
-          }
+        if (prod && prod.is_in_stock === false) {
+          alert(locale === 'ar' 
+            ? `عذراً، المنتج "${locale === 'ar' ? prod.name_ar : prod.name_en}" غير متوفر حالياً بالمخزن.`
+            : `Sorry, product "${prod.name_en}" is currently out of stock.`
+          );
+          return;
         }
       }
     }
@@ -475,15 +471,11 @@ export default function CheckoutModal() {
                           onChange={(e) => setSelectedSize(e.target.value)}
                           className="text-[10px] font-bold border-2 border-black rounded px-1.5 py-0.5 bg-white text-black w-full"
                         >
-                          {checkoutProduct.available_sizes.map((s) => {
-                            const qty = checkoutProduct.stock_quantities?.[s] ?? 10;
-                            const isOutOfStock = qty <= 0;
-                            return (
-                              <option key={s} value={s} disabled={isOutOfStock}>
-                                {s} {isOutOfStock ? `(${locale === 'ar' ? 'غير متوفر' : 'Out of stock'})` : ''}
-                              </option>
-                            );
-                          })}
+                          {checkoutProduct.available_sizes.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
@@ -524,12 +516,23 @@ export default function CheckoutModal() {
                     {/* Real-time stock alerts for checkout product */}
                     <div className="mt-3">
                       {(() => {
-                        const qty = checkoutProduct.stock_quantities?.[selectedSize] ?? 10;
-                        if (qty <= 0) {
+                        if (!checkoutProduct.is_in_stock) {
                           return (
                             <span className="text-[10px] font-black text-red-600 flex items-center gap-1.5">
                               <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-600 animate-ping"></span>
-                              {locale === 'ar' ? `⚠️ المقاس ${selectedSize} غير متوفر حالياً` : `⚠️ Size ${selectedSize} is Out of Stock`}
+                              {locale === 'ar' ? '⚠️ المنتج غير متوفر حالياً' : '⚠️ Out of Stock'}
+                            </span>
+                          );
+                        }
+                        const qty = checkoutProduct.stock_quantities?.[selectedSize] ?? 10;
+                        const showStockCounts = settings.show_stock_quantities !== false;
+                        if (qty <= 0) {
+                          return (
+                            <span className="text-[10px] font-black text-green-600 flex items-center gap-1.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                              {locale === 'ar' 
+                                ? (showStockCounts ? `✅ متوفر عند الطلب (المخزن: ٠)` : `✅ متوفر في المخزن`) 
+                                : (showStockCounts ? `✅ Available on order (0 in stock)` : `✅ In Stock`)}
                             </span>
                           );
                         } else if (qty <= 3) {

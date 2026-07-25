@@ -270,6 +270,8 @@ CREATE TABLE IF NOT EXISTS profiles (
     email VARCHAR(255),
     phone VARCHAR(50),
     loyalty_points INT DEFAULT 0,
+    referral_clicks INT DEFAULT 0,
+    referral_orders INT DEFAULT 0,
     favorites UUID[] DEFAULT ARRAY[]::UUID[],
     referral_code VARCHAR(50) UNIQUE,
     address_data JSONB DEFAULT '{}'::JSONB,

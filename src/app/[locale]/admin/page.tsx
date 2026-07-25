@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store';
 import supabase, { isUsingMock } from '@/lib/supabase';
 import { 
   LayoutDashboard, ShoppingBag, FolderOpen, Ticket, Palette, Settings, 
-  LogOut, Plus, Edit, Trash2, Copy, Eye, ToggleLeft, ToggleRight, Check, Save, X, ShoppingCart, Tag,
+  LogOut, Plus, Edit, Trash2, Copy, Eye, EyeOff, ToggleLeft, ToggleRight, Check, Save, X, ShoppingCart, Tag,
   MessageSquare, Users, BarChart3, Bot, Trophy, ShieldAlert
 } from 'lucide-react';
 import Image from 'next/image';
@@ -24,7 +24,8 @@ export default function AdminPage() {
     addOffer, updateOffer, deleteOffer,
     fetchAdminRequests, updateRequestStatus, saveSettings,
     fetchOrders, completeOrder, updateAnnouncement, updateAnnouncementAr,
-    adminChats, activeChat, activeChatMessages, autoResponses, usersList, analyticsEvents
+    adminChats, activeChat, activeChatMessages, autoResponses, usersList, analyticsEvents,
+    fetchAdminChats, fetchUserChat
   } = useStore();
 
   // Auth States
@@ -138,7 +139,8 @@ export default function AdminPage() {
     loyalty_discount_percent: 20,
     referral_clicks_threshold: 5,
     good_stock_threshold: 10,
-    low_stock_threshold: 3
+    low_stock_threshold: 3,
+    favicon_url: ''
   });
 
   const [sizeTable, setSizeTable] = useState<{ headers: string[]; rows: string[][] }>({
@@ -214,6 +216,22 @@ export default function AdminPage() {
     fetchInitialData();
     checkSession();
   }, [fetchInitialData]);
+
+  // Poll for admin chats updates
+  useEffect(() => {
+    if (!isAuthenticated || activeTab !== 'chats') return;
+    const timer = setInterval(() => {
+      fetchAdminChats();
+      const currentSelectedId = selectedChatId;
+      if (currentSelectedId) {
+        const currentChatObj = useStore.getState().adminChats.find((c: any) => c.id === currentSelectedId);
+        if (currentChatObj) {
+          fetchUserChat(currentChatObj.customer_phone || undefined);
+        }
+      }
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [isAuthenticated, activeTab, selectedChatId, fetchAdminChats, fetchUserChat]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -322,7 +340,8 @@ export default function AdminPage() {
         loyalty_discount_percent: settings.loyalty_discount_percent ?? 20,
         referral_clicks_threshold: settings.referral_clicks_threshold ?? 5,
         good_stock_threshold: Number(settings.good_stock_threshold ?? 10),
-        low_stock_threshold: Number(settings.low_stock_threshold ?? 3)
+        low_stock_threshold: Number(settings.low_stock_threshold ?? 3),
+        favicon_url: settings.favicon_url || ''
       });
     }
   }, [isAuthenticated, settings]);
@@ -2018,7 +2037,7 @@ export default function AdminPage() {
                         ? 'border-l-4 border-l-amber-400'
                         : 'border-l-4 border-l-emerald-500';
                       return (
-                        <tr key={p.id} className={`hover:bg-zinc-800/20 text-zinc-300 ${rowBorder}`}>
+                        <tr key={p.id} className={`hover:bg-zinc-800/20 text-zinc-300 ${rowBorder} ${p.is_hidden ? 'opacity-40 select-none' : ''}`}>
                           {/* Product name + image */}
                           <td className="p-4 font-bold">
                             <div className="flex items-center gap-3">
@@ -2030,7 +2049,16 @@ export default function AdminPage() {
                                   className="object-cover"
                                 />
                               </div>
-                              <span>{p.name_en}</span>
+                              <div className="flex flex-col">
+                                <span className="flex items-center gap-1.5">
+                                  {p.name_en}
+                                  {p.is_hidden && (
+                                    <span className="px-1 py-0.5 bg-red-950/80 text-red-400 border border-red-900 rounded text-[8px] font-black uppercase tracking-wider shrink-0 font-sans">
+                                      Hidden / مخفي
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
                               {p.gives_cotton_reward && (
                                 <span className="px-1.5 py-0.5 bg-[#E07A5F]/20 text-[#E07A5F] border border-[#E07A5F]/40 rounded text-[9px] font-black uppercase tracking-wide shrink-0">
                                   🧶 Cotton
@@ -2082,6 +2110,18 @@ export default function AdminPage() {
                           {/* Actions */}
                           <td className="p-4 text-right">
                             <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await updateProduct(p.id, { is_hidden: !p.is_hidden });
+                                }}
+                                className={`p-1.5 hover:bg-zinc-800 rounded cursor-pointer transition-colors ${
+                                  p.is_hidden ? 'text-rose-500 hover:text-rose-400' : 'text-zinc-400 hover:text-white'
+                                }`}
+                                title={p.is_hidden ? 'Unhide Product / إظهار المنتج' : 'Hide Product / إخفاء المنتج'}
+                              >
+                                {p.is_hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                              </button>
                               <button
                                 onClick={() => {
                                   setEditingItem(p);
@@ -3314,6 +3354,13 @@ export default function AdminPage() {
                     <textarea rows={2} value={settingsForm.seo_desc}
                       onChange={(e) => setSettingsForm({ ...settingsForm, seo_desc: e.target.value })}
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent resize-none" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Website Tab Icon URL / رابط أيقونة التبويب (Favicon)</label>
+                    <input type="text" value={settingsForm.favicon_url}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, favicon_url: e.target.value })}
+                      placeholder="e.g. /icon.png or https://example.com/logo.ico"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
                   </div>
                 </div>
               </details>

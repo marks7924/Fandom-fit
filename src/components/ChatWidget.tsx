@@ -35,6 +35,16 @@ export default function ChatWidget() {
     fetchAutoResponses();
   }, [fetchAutoResponses]);
 
+  // Fast poll for new messages in ChatWidget when open
+  useEffect(() => {
+    if (!isOpen || !isConnected) return;
+    const timer = setInterval(() => {
+      const savedPhone = typeof window !== 'undefined' ? localStorage.getItem('ff_chat_phone') : null;
+      fetchUserChat(savedPhone || undefined);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [isOpen, isConnected, fetchUserChat]);
+
   // If user logs in/out, re-verify connection
   useEffect(() => {
     if (user && profile?.phone) {

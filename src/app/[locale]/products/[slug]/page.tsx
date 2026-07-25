@@ -229,8 +229,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                   </label>
                   <div className="flex gap-2.5 flex-wrap">
                     {product.available_sizes.map((size) => {
-                      const qty = product.stock_quantities?.[size] ?? 10;
-                      const isOutOfStock = qty <= 0;
+                      const isOutOfStock = !product.is_in_stock;
                       return (
                         <button
                           key={size}
@@ -253,13 +252,23 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                   {/* Size Stock Status */}
                   <div className="mt-2.5 min-h-[1.5rem] flex items-center">
                     {(() => {
+                      if (!product.is_in_stock) {
+                        return (
+                          <span className="text-xs font-black text-red-600 flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
+                            {locale === 'ar' ? '⚠️ غير متوفر حالياً' : '⚠️ Out of Stock'}
+                          </span>
+                        );
+                      }
                       const qty = product.stock_quantities?.[selectedSize] ?? 10;
                       const showStockCounts = settings.show_stock_quantities !== false;
                       if (qty <= 0) {
                         return (
-                          <span className="text-xs font-black text-red-600 flex items-center gap-1.5">
-                            <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
-                            {locale === 'ar' ? `⚠️ المقاس ${selectedSize} غير متوفر حالياً` : `⚠️ Size ${selectedSize} is Out of Stock`}
+                          <span className="text-xs font-black text-green-600 flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+                            {locale === 'ar' 
+                              ? (showStockCounts ? `✅ متوفر عند الطلب (المخزن: ٠)` : `✅ متوفر في المخزن`) 
+                              : (showStockCounts ? `✅ Available on order (0 in stock)` : `✅ In Stock`)}
                           </span>
                         );
                       } else if (qty <= 3) {
@@ -323,7 +332,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
               <div className="mt-8 pt-6 border-t border-black/10 flex flex-col sm:flex-row gap-4">
                 
                 {/* Order Direct Web Checkout */}
-                {product.is_in_stock && (product.stock_quantities?.[selectedSize] ?? 10) > 0 ? (
+                {product.is_in_stock ? (
                   <button
                     onClick={() => setCheckoutProduct(product, { size: selectedSize, fabric: selectedFabric })}
                     className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
@@ -335,7 +344,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                     disabled
                     className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase bg-zinc-400 text-zinc-100 border-3 border-zinc-500 rounded-xl cursor-not-allowed"
                   >
-                    {locale === 'ar' ? 'المقاس غير متوفر' : 'Size Out of Stock'}
+                    {locale === 'ar' ? 'غير متوفر بالمخزن' : 'Out of Stock'}
                   </button>
                 )}
 

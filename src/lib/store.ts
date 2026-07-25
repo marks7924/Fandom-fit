@@ -33,6 +33,7 @@ export interface Product {
   images: string[];
   is_pinned?: boolean;
   gives_cotton_reward?: boolean;
+  is_hidden?: boolean;
   tags?: string[];
   fit_type?: 'regular' | 'oversized' | 'both';
   stock_quantities?: Record<string, number>;
@@ -816,6 +817,26 @@ export const useStore = create<StoreState>((set, get) => ({
         };
 
         await supabase.from('offers').insert([newOffer]);
+
+        // Increment referrer's orders count
+        let origRefCode = typeof window !== 'undefined' ? localStorage.getItem('ff_referrer_phone') : null;
+        if (origRefCode) {
+          try {
+            const { data: refProf } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('referral_code', origRefCode.trim())
+              .maybeSingle();
+            if (refProf) {
+              await supabase
+                .from('profiles')
+                .update({ referral_orders: (refProf.referral_orders || 0) + 1 })
+                .eq('id', refProf.id);
+            }
+          } catch (e) {
+            console.warn('Could not increment referrer orders count:', e);
+          }
+        }
       }
 
       // 3. Save order with pre-generated reward coupon code linked
@@ -1419,68 +1440,91 @@ export const useStore = create<StoreState>((set, get) => ({
   chatGreeting: '',
 
   fetchUserChat: async (phone) => {
-    const { user } = get();
+    const { user, profile } = get();
     let chat = null;
     
     try {
-      if (user) {
-        // Logged-in user: find chat by user_id
+      const userId = user?.id;
+      const userPhone = (phone || profile?.phone || '').trim();
+      
+      // 1. Try to find existing chat by user_id first
+      if (userId) {
         const { data, error } = await supabase
           .from('chats')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .eq('user_deleted', false)
           .maybeSingle();
-        
         if (data && !error) {
           chat = data;
-        } else {
-          // Create chat for logged-in user if missing
+        }
+      }
+      
+      // 2. If not found by user_id, but we have a phone number, search by customer_phone
+      if (!chat && userPhone) {
+        const { data, error } = await supabase
+          .from('chats')
+          .select('*')
+          .eq('customer_phone', userPhone)
+          .eq('user_deleted', false)
+          .maybeSingle();
+        if (data && !error) {
+          chat = data;
+          // Link this guest chat to the logged-in user!
+          if (userId && !chat.user_id) {
+            const { data: updatedChat } = await supabase
+              .from('chats')
+              .update({ user_id: userId, customer_name: profile?.full_name || chat.customer_name })
+              .eq('id', chat.id)
+              .select()
+              .maybeSingle();
+            if (updatedChat) {
+              chat = updatedChat;
+            }
+          }
+        }
+      }
+      
+      // 3. If still not found and we are logged in, create a new chat linked to user
+      if (!chat && userId) {
+        const namePrefix = user.email?.split('@')[0] || 'User';
+        const { data: newChat, error: createError } = await supabase
+          .from('chats')
+          .insert([{ 
+            user_id: userId, 
+            customer_phone: userPhone || undefined, 
+            customer_name: profile?.full_name || namePrefix 
+          }])
+          .select()
+          .single();
+        if (!createError && newChat) {
+          chat = newChat;
+        }
+      }
+      
+      // 4. If not logged in but guest phone is provided, verify guest order history and create
+      if (!chat && !userId && userPhone) {
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('customer_name')
+          .eq('customer_phone', userPhone)
+          .limit(1);
+          
+        const { data: customData } = await supabase
+          .from('custom_requests')
+          .select('customer_name')
+          .eq('customer_phone', userPhone)
+          .limit(1);
+          
+        if ((orderData && orderData.length > 0) || (customData && customData.length > 0)) {
+          const guestName = (orderData?.[0]?.customer_name || customData?.[0]?.customer_name || 'Guest');
           const { data: newChat, error: createError } = await supabase
             .from('chats')
-            .insert([{ user_id: user.id, customer_name: user.email?.split('@')[0] || 'User' }])
+            .insert([{ customer_phone: userPhone, customer_name: guestName }])
             .select()
             .single();
           if (!createError && newChat) {
             chat = newChat;
-          }
-        }
-      } else if (phone && phone.trim()) {
-        // Guest user: find by phone
-        const cleanPhone = phone.trim();
-        const { data, error } = await supabase
-          .from('chats')
-          .select('*')
-          .eq('customer_phone', cleanPhone)
-          .eq('user_deleted', false)
-          .maybeSingle();
-        
-        if (data && !error) {
-          chat = data;
-        } else {
-          // Verify if guest has any order or custom request with this phone
-          const { data: orderData } = await supabase
-            .from('orders')
-            .select('customer_name')
-            .eq('customer_phone', cleanPhone)
-            .limit(1);
-            
-          const { data: customData } = await supabase
-            .from('custom_requests')
-            .select('customer_name')
-            .eq('customer_phone', cleanPhone)
-            .limit(1);
-            
-          if ((orderData && orderData.length > 0) || (customData && customData.length > 0)) {
-            const guestName = (orderData?.[0]?.customer_name || customData?.[0]?.customer_name || 'Guest');
-            const { data: newChat, error: createError } = await supabase
-              .from('chats')
-              .insert([{ customer_phone: cleanPhone, customer_name: guestName }])
-              .select()
-              .single();
-            if (!createError && newChat) {
-              chat = newChat;
-            }
           }
         }
       }
