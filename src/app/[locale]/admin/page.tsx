@@ -6,7 +6,8 @@ import { useStore } from '@/lib/store';
 import supabase, { isUsingMock } from '@/lib/supabase';
 import { 
   LayoutDashboard, ShoppingBag, FolderOpen, Ticket, Palette, Settings, 
-  LogOut, Plus, Edit, Trash2, Copy, Eye, ToggleLeft, ToggleRight, Check, Save, X, ShoppingCart, Tag
+  LogOut, Plus, Edit, Trash2, Copy, Eye, ToggleLeft, ToggleRight, Check, Save, X, ShoppingCart, Tag,
+  MessageSquare, Users, BarChart3, Bot, Trophy, ShieldAlert
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -22,7 +23,8 @@ export default function AdminPage() {
     addCategory, updateCategory, deleteCategory,
     addOffer, updateOffer, deleteOffer,
     fetchAdminRequests, updateRequestStatus, saveSettings,
-    fetchOrders, completeOrder, updateAnnouncement, updateAnnouncementAr
+    fetchOrders, completeOrder, updateAnnouncement, updateAnnouncementAr,
+    adminChats, activeChat, activeChatMessages, autoResponses, usersList, analyticsEvents
   } = useStore();
 
   // Auth States
@@ -91,6 +93,29 @@ export default function AdminPage() {
 
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
+  // Live Chat admin panel states
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const [adminChatInput, setAdminChatInput] = useState('');
+  const [chatListFilter, setChatListFilter] = useState<'all' | 'open' | 'closed' | 'blocked'>('open');
+  const [isStartChatOpen, setIsStartChatOpen] = useState(false);
+  const [startChatPhone, setStartChatPhone] = useState('');
+  const [startChatName, setStartChatName] = useState('');
+  const [autoResponseTrigger, setAutoResponseTrigger] = useState('');
+  const [autoResponseText, setAutoResponseText] = useState('');
+  const [chatGreetingInput, setChatGreetingInput] = useState('');
+
+  // Users Management states
+  const [searchUserQuery, setSearchUserQuery] = useState('');
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<any | null>(null);
+  const [editUserForm, setEditUserForm] = useState({
+    full_name: '', email: '', phone: '', loyalty_points: 0, password: '',
+    address_governorate: '', address_city: '', address_street: ''
+  });
+
+  // Analytics states
+  const [analyticsFilter, setAnalyticsFilter] = useState<'day' | 'week' | 'month' | 'year' | 'total'>('total');
+
+
   const [settingsForm, setSettingsForm] = useState({
     brand_name: '', tagline: '', instagram_url: '', tiktok_url: '', facebook_url: '',
     seo_title: '', seo_desc: '', shipping_info_en: '', shipping_info_ar: '',
@@ -101,6 +126,7 @@ export default function AdminPage() {
     fabric_premium_oversized: 150,
     cotton_reward_system_enabled: true,
     referral_reward_system_enabled: true,
+    show_stock_quantities: true,
     size_chart_img_en: '',
     size_chart_img_ar: '',
     size_chart_table: '',
@@ -110,7 +136,9 @@ export default function AdminPage() {
     default_tags: 'New Drop',
     loyalty_orders_threshold: 5,
     loyalty_discount_percent: 20,
-    referral_clicks_threshold: 5
+    referral_clicks_threshold: 5,
+    good_stock_threshold: 10,
+    low_stock_threshold: 3
   });
 
   const [sizeTable, setSizeTable] = useState<{ headers: string[]; rows: string[][] }>({
@@ -282,6 +310,7 @@ export default function AdminPage() {
         fabric_premium_oversized: Number(premiums.oversized ?? 150),
         cotton_reward_system_enabled: settings.cotton_reward_system_enabled !== false,
         referral_reward_system_enabled: settings.referral_reward_system_enabled !== false,
+        show_stock_quantities: settings.show_stock_quantities !== false,
         size_chart_img_en: settings.size_chart_img_en || '',
         size_chart_img_ar: settings.size_chart_img_ar || '',
         size_chart_table: typeof settings.size_chart_table === 'string' ? settings.size_chart_table : JSON.stringify(settings.size_chart_table || ''),
@@ -291,7 +320,9 @@ export default function AdminPage() {
         default_tags: settings.default_tags || 'New Drop',
         loyalty_orders_threshold: settings.loyalty_orders_threshold ?? 5,
         loyalty_discount_percent: settings.loyalty_discount_percent ?? 20,
-        referral_clicks_threshold: settings.referral_clicks_threshold ?? 5
+        referral_clicks_threshold: settings.referral_clicks_threshold ?? 5,
+        good_stock_threshold: Number(settings.good_stock_threshold ?? 10),
+        low_stock_threshold: Number(settings.low_stock_threshold ?? 3)
       });
     }
   }, [isAuthenticated, settings]);
@@ -809,6 +840,9 @@ export default function AdminPage() {
               { id: 'requests', name: t('sidebar.custom_requests'), icon: <Palette size={16} /> },
               { id: 'orders', name: locale === 'ar' ? 'الطلبات' : 'Orders', icon: <ShoppingCart size={16} /> },
               { id: 'designs-explorer', name: locale === 'ar' ? 'التصاميم والطباعة' : 'Designs Explorer', icon: <Palette size={16} /> },
+              { id: 'chats', name: locale === 'ar' ? 'المحادثات المباشرة' : 'Live Chat', icon: <MessageSquare size={16} /> },
+              { id: 'users', name: locale === 'ar' ? 'إدارة المستخدمين' : 'Users Management', icon: <Users size={16} /> },
+              { id: 'analytics', name: locale === 'ar' ? 'تحليلات الموقع' : 'Web Analytics', icon: <BarChart3 size={16} /> },
               { id: 'settings', name: t('sidebar.settings'), icon: <Settings size={16} /> },
             ].map((tab) => (
               <button
@@ -820,6 +854,13 @@ export default function AdminPage() {
                     supabase.from('product_designs').select('*').then(({ data }: any) => {
                       if (data) setAllDesigns(data);
                     });
+                  } else if (tab.id === 'chats') {
+                    useStore.getState().fetchAdminChats();
+                    useStore.getState().fetchAutoResponses();
+                  } else if (tab.id === 'users') {
+                    useStore.getState().fetchUsersList();
+                  } else if (tab.id === 'analytics') {
+                    useStore.getState().fetchAnalyticsEvents();
                   }
                 }}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
@@ -853,7 +894,93 @@ export default function AdminPage() {
         {activeTab === 'dashboard' && (
           <div className="space-y-8">
             <h2 className="text-3xl font-black uppercase text-white">{t('sidebar.dashboard')}</h2>
-            
+
+            {/* ────── OUT-OF-STOCK & LOW STOCK ALERTS ────── */}
+            {(() => {
+              const goodThresh = Number(settings.good_stock_threshold ?? settingsForm.good_stock_threshold ?? 10);
+              const lowThresh  = Number(settings.low_stock_threshold  ?? settingsForm.low_stock_threshold  ?? 3);
+              const oosProducts = products.filter(p => {
+                const hasSizes = (p.available_sizes || []).length > 0;
+                const total = (p.available_sizes || []).reduce((s, sz) => s + ((p.stock_quantities as any)?.[sz] ?? 0), 0);
+                return !p.is_in_stock || (hasSizes && total === 0);
+              });
+              const lowStockProducts = products.filter(p => {
+                const hasSizes = (p.available_sizes || []).length > 0;
+                const total = (p.available_sizes || []).reduce((s, sz) => s + ((p.stock_quantities as any)?.[sz] ?? 0), 0);
+                const isOOS = !p.is_in_stock || (hasSizes && total === 0);
+                return !isOOS && total < lowThresh;
+              });
+              return (
+                <>
+                  {oosProducts.length > 0 && (
+                    <div className="bg-zinc-900 border border-zinc-700 border-l-4 border-l-zinc-500 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-base">⬛</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-zinc-300">
+                          {oosProducts.length} Product{oosProducts.length !== 1 ? 's' : ''} Out of Stock
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {oosProducts.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              setActiveTab('products');
+                              setEditingItem(p);
+                              setTagsText((p.tags || []).join(', '));
+                              setQueuedDesigns([]);
+                              setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false, gives_cotton_reward: p.gives_cotton_reward || false, fit_type: p.fit_type || 'both', stock_quantities: p.stock_quantities || {} });
+                              setIsFormOpen(true);
+                            }}
+                            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-full text-[10px] font-bold text-zinc-300 cursor-pointer transition-colors"
+                          >
+                            {p.name_en}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {lowStockProducts.length > 0 && (
+                    <div className="bg-rose-950/20 border border-rose-900/40 border-l-4 border-l-rose-500 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-base">🔴</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-rose-300">
+                          {lowStockProducts.length} Product{lowStockProducts.length !== 1 ? 's' : ''} Running Low (below {lowThresh} units)
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {lowStockProducts.map(p => {
+                          const total = (p.available_sizes || []).reduce((s, sz) => s + ((p.stock_quantities as any)?.[sz] ?? 0), 0);
+                          return (
+                            <button
+                              key={p.id}
+                              onClick={() => {
+                                setActiveTab('products');
+                                setEditingItem(p);
+                                setTagsText((p.tags || []).join(', '));
+                                setQueuedDesigns([]);
+                                setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false, gives_cotton_reward: p.gives_cotton_reward || false, fit_type: p.fit_type || 'both', stock_quantities: p.stock_quantities || {} });
+                                setIsFormOpen(true);
+                              }}
+                              className="px-2.5 py-1 bg-rose-950/40 hover:bg-rose-950/60 border border-rose-900/60 rounded-full text-[10px] font-bold text-rose-300 cursor-pointer transition-colors"
+                            >
+                              {p.name_en} <span className="text-rose-500">({total})</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {oosProducts.length === 0 && lowStockProducts.length === 0 && products.length > 0 && (
+                    <div className="bg-emerald-950/20 border border-emerald-900/40 border-l-4 border-l-emerald-500 rounded-xl p-3 flex items-center gap-2">
+                      <span>🟢</span>
+                      <span className="text-xs font-bold text-emerald-300">All products are well stocked!</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
             {/* Stats list */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl shadow-sm">
@@ -1176,29 +1303,47 @@ export default function AdminPage() {
 
                     {/* Size Stock Levels */}
                     {prodForm.available_sizes.length > 0 && (
-                      <div className="pt-3 border-t border-zinc-900 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {prodForm.available_sizes.map((size) => (
-                          <div key={size} className="bg-zinc-900 p-2 rounded border border-zinc-850 flex items-center justify-between gap-1">
-                            <span className="text-xs font-mono font-bold text-zinc-400">{size}:</span>
-                            <input
-                              type="number"
-                              min={0}
-                              placeholder="Qty"
-                              value={(prodForm.stock_quantities as any)?.[size] ?? 0}
-                              onChange={(e) => {
-                                const qty = Math.max(0, parseInt(e.target.value) || 0);
-                                setProdForm(prev => ({
-                                  ...prev,
-                                  stock_quantities: {
-                                    ...((prev.stock_quantities || {}) as any),
-                                    [size]: qty
-                                  }
-                                }));
-                              }}
-                              className="w-16 px-1.5 py-0.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs font-mono text-center focus:outline-none"
-                            />
-                          </div>
-                        ))}
+                      <div className="pt-3 border-t border-zinc-900">
+                        <p className="text-[9px] uppercase font-bold text-zinc-500 mb-2">Stock per Size</p>
+                        <div className="flex flex-wrap gap-2">
+                          {prodForm.available_sizes.map((size) => {
+                            const qty = (prodForm.stock_quantities as any)?.[size] ?? 0;
+                            const goodThresh = settingsForm.good_stock_threshold || 10;
+                            const lowThresh = settingsForm.low_stock_threshold || 3;
+                            const dotColor = qty === 0
+                              ? 'bg-zinc-500'
+                              : qty < lowThresh
+                              ? 'bg-rose-500'
+                              : qty < goodThresh
+                              ? 'bg-amber-400'
+                              : 'bg-emerald-500';
+                            return (
+                              <div key={size} className="bg-zinc-900 px-2.5 py-2 rounded-lg border border-zinc-800 flex flex-col items-center gap-1.5 min-w-[60px]">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                                  <span className="text-[10px] font-mono font-black text-zinc-300">{size}</span>
+                                </div>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  placeholder="0"
+                                  value={qty}
+                                  onChange={(e) => {
+                                    const newQty = Math.max(0, parseInt(e.target.value) || 0);
+                                    setProdForm(prev => ({
+                                      ...prev,
+                                      stock_quantities: {
+                                        ...((prev.stock_quantities || {}) as any),
+                                        [size]: newQty
+                                      }
+                                    }));
+                                  }}
+                                  className="w-14 px-1.5 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-xs font-mono text-center focus:outline-none focus:border-brand-accent"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1857,75 +2002,117 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800 text-xs">
-                    {products.map((p) => (
-                      <tr key={p.id} className="hover:bg-zinc-800/20 text-zinc-300">
-                        <td className="p-4 font-bold flex items-center gap-3">
-                          <div className="relative w-8 h-8 rounded border border-zinc-800 bg-zinc-950 overflow-hidden shrink-0">
-                            <Image 
-                              src={p.images?.[0] || '/placeholders/arcade_front.jpg'} 
-                              alt={p.name_en} 
-                              fill 
-                              className="object-cover"
-                            />
-                          </div>
-                          {p.name_en}
-                          {p.gives_cotton_reward && (
-                            <span className="ml-2 px-1.5 py-0.5 bg-[#E07A5F]/20 text-[#E07A5F] border border-[#E07A5F]/40 rounded text-[9px] font-black uppercase tracking-wide shrink-0">
-                              🧶 Cotton
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          {categories.find(c => c.id === p.category_id)?.name_en || 'Uncategorized'}
-                        </td>
-                        <td className="p-4">
-                          {p.price} EGP
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-col gap-1">
-                            <span className={`inline-block w-max px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                              p.is_in_stock 
-                                ? 'bg-green-950/50 text-green-400 border border-green-900' 
-                                : 'bg-red-950/50 text-red-400 border border-red-900'
-                            }`}>
-                              {p.is_in_stock ? t('products.fields.in_stock') : 'Out of Stock'}
-                            </span>
-                            {p.stock_quantities && Object.keys(p.stock_quantities).length > 0 && (
-                              <div className="text-[9px] text-zinc-500 font-semibold max-w-[150px] truncate" title={Object.entries(p.stock_quantities).map(([s, q]) => `${s}: ${q}`).join(', ')}>
-                                {Object.entries(p.stock_quantities).map(([s, q]) => `${s}: ${q}`).join(', ')}
+                    {products.map((p) => {
+                      const totalStock = (p.available_sizes || []).reduce(
+                        (sum, sz) => sum + ((p.stock_quantities as any)?.[sz] ?? 0), 0
+                      );
+                      const goodThresh = Number(settings.good_stock_threshold ?? settingsForm.good_stock_threshold ?? 10);
+                      const lowThresh  = Number(settings.low_stock_threshold  ?? settingsForm.low_stock_threshold  ?? 3);
+                      const hasSizes = (p.available_sizes || []).length > 0;
+                      const isOOS = !p.is_in_stock || (hasSizes && totalStock === 0);
+                      const rowBorder = isOOS
+                        ? 'border-l-4 border-l-zinc-600'
+                        : totalStock < lowThresh
+                        ? 'border-l-4 border-l-rose-500'
+                        : totalStock < goodThresh
+                        ? 'border-l-4 border-l-amber-400'
+                        : 'border-l-4 border-l-emerald-500';
+                      return (
+                        <tr key={p.id} className={`hover:bg-zinc-800/20 text-zinc-300 ${rowBorder}`}>
+                          {/* Product name + image */}
+                          <td className="p-4 font-bold">
+                            <div className="flex items-center gap-3">
+                              <div className="relative w-8 h-8 rounded border border-zinc-800 bg-zinc-950 overflow-hidden shrink-0">
+                                <Image
+                                  src={p.images?.[0] || '/placeholders/arcade_front.jpg'}
+                                  alt={p.name_en}
+                                  fill
+                                  className="object-cover"
+                                />
                               </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-4 text-right flex justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingItem(p);
-                              setTagsText((p.tags || []).join(', '));
-                              setQueuedDesigns([]);
-                              setProdForm({ 
-                                ...p, 
-                                sale_price: p.sale_price || '', 
-                                is_pinned: p.is_pinned || false, 
-                                gives_cotton_reward: p.gives_cotton_reward || false,
-                                fit_type: p.fit_type || 'both',
-                                stock_quantities: p.stock_quantities || {}
-                              });
-                              setIsFormOpen(true);
-                            }}
-                            className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirmId(p.id)}
-                            className="p-1.5 hover:bg-red-950/30 rounded text-zinc-400 hover:text-red-400"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                              <span>{p.name_en}</span>
+                              {p.gives_cotton_reward && (
+                                <span className="px-1.5 py-0.5 bg-[#E07A5F]/20 text-[#E07A5F] border border-[#E07A5F]/40 rounded text-[9px] font-black uppercase tracking-wide shrink-0">
+                                  🧶 Cotton
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          {/* Category */}
+                          <td className="p-4">
+                            {categories.find(c => c.id === p.category_id)?.name_en || 'Uncategorized'}
+                          </td>
+                          {/* Price */}
+                          <td className="p-4">
+                            {p.price} EGP
+                          </td>
+                          {/* Stock status */}
+                          <td className="p-4">
+                            <div className="flex flex-col gap-1.5">
+                              <span className={`inline-block w-max px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                isOOS
+                                  ? 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                                  : totalStock < lowThresh
+                                  ? 'bg-rose-950/50 text-rose-400 border border-rose-900'
+                                  : totalStock < goodThresh
+                                  ? 'bg-amber-950/50 text-amber-400 border border-amber-900'
+                                  : 'bg-emerald-950/50 text-emerald-400 border border-emerald-900'
+                              }`}>
+                                {isOOS ? '⬛ Out of Stock' : totalStock < lowThresh ? '🔴 Low' : totalStock < goodThresh ? '🟡 Medium' : '🟢 Good'}
+                              </span>
+                              {hasSizes && p.stock_quantities && (
+                                <div className="flex flex-wrap gap-1">
+                                  {(p.available_sizes || []).map(sz => {
+                                    const q = (p.stock_quantities as any)?.[sz] ?? 0;
+                                    return (
+                                      <span key={sz} className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                                        q === 0 ? 'border-zinc-700 text-zinc-500 bg-zinc-900' :
+                                        q < lowThresh ? 'border-rose-900/60 text-rose-400 bg-rose-950/20' :
+                                        q < goodThresh ? 'border-amber-900/60 text-amber-400 bg-amber-950/20' :
+                                        'border-emerald-900/60 text-emerald-400 bg-emerald-950/20'
+                                      }`}>
+                                        {sz}:{q}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          {/* Actions */}
+                          <td className="p-4 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingItem(p);
+                                  setTagsText((p.tags || []).join(', '));
+                                  setQueuedDesigns([]);
+                                  setProdForm({
+                                    ...p,
+                                    sale_price: p.sale_price || '',
+                                    is_pinned: p.is_pinned || false,
+                                    gives_cotton_reward: p.gives_cotton_reward || false,
+                                    fit_type: p.fit_type || 'both',
+                                    stock_quantities: p.stock_quantities || {}
+                                  });
+                                  setIsFormOpen(true);
+                                }}
+                                className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white cursor-pointer"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirmId(p.id)}
+                                className="p-1.5 hover:bg-red-950/30 rounded text-zinc-400 hover:text-red-400 cursor-pointer"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
                   </tbody>
                 </table>
               </div>
@@ -3009,8 +3196,30 @@ export default function AdminPage() {
 
         {/* TAB 6: SETTINGS — Card-Based Accordion Layout */}
         {activeTab === 'settings' && (
-          <div className="space-y-4 max-w-3xl">
+          <div className="space-y-6 max-w-3xl">
             <h2 className="text-3xl font-black uppercase text-white">{t('sidebar.settings')}</h2>
+
+            {/* Visual Editor Mode trigger */}
+            <div className="bg-zinc-900 border-2 border-brand-accent p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-lg font-mono">
+              <div>
+                <h4 className="text-sm font-black text-brand-accent uppercase flex items-center gap-2">
+                  ✨ Homepage Visual Editor
+                </h4>
+                <p className="text-[10px] text-zinc-400 mt-1">
+                  Toggle visual editor overlay on the homepage to edit texts, sections and products in-place.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.setItem('ff_admin_view_mode', 'true');
+                  window.location.href = `/${locale}`;
+                }}
+                className="px-5 py-2.5 bg-brand-accent hover:bg-brand-accent/90 text-white border-2 border-black rounded-xl font-black uppercase text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all active:translate-y-0.5 cursor-pointer flex items-center gap-2 shrink-0"
+              >
+                Launch Admin View
+              </button>
+            </div>
 
             <form onSubmit={handleSaveSettings} className="space-y-3">
 
@@ -3207,6 +3416,16 @@ export default function AdminPage() {
                       <p className="text-[9px] text-zinc-500">Referral sharing with 15% OFF coupon</p>
                     </div>
                   </label>
+                  <label className="flex items-center gap-3 cursor-pointer group/toggle">
+                    <div className={`relative w-10 h-5 rounded-full border-2 border-zinc-700 transition-colors ${settingsForm.show_stock_quantities ? 'bg-brand-accent border-brand-accent' : 'bg-zinc-800'}`}
+                      onClick={() => setSettingsForm({ ...settingsForm, show_stock_quantities: !settingsForm.show_stock_quantities })}>
+                      <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-all shadow-sm ${settingsForm.show_stock_quantities ? 'left-5' : 'left-0.5'}`} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-zinc-200">📦 Show Stock Quantities</p>
+                      <p className="text-[9px] text-zinc-500">Show exact product stock counts to visitors</p>
+                    </div>
+                  </label>
                 </div>
               </details>
 
@@ -3249,6 +3468,44 @@ export default function AdminPage() {
                   <p className="text-[9px] text-zinc-500 mt-2">
                     ✅ Every {settingsForm.loyalty_orders_threshold || 5} orders → customer gets {settingsForm.loyalty_discount_percent || 20}% off their next order | Referral Link Click Goal: {settingsForm.referral_clicks_threshold || 5} clicks to earn 15% coupon code
                   </p>
+                </div>
+              </details>
+
+              {/* ── CARD: Stock Status Config ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📦</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Stock Status Config</p>
+                      <p className="text-[10px] text-zinc-500">Set thresholds for green / yellow / red product status</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800">
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">🟢 Good Stock — units ≥</label>
+                      <input type="number" min={1}
+                        value={settingsForm.good_stock_threshold || 10}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, good_stock_threshold: Number(e.target.value) })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">🔴 Low Stock — units &lt;</label>
+                      <input type="number" min={1}
+                        value={settingsForm.low_stock_threshold || 3}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, low_stock_threshold: Number(e.target.value) })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[9px] font-bold uppercase">
+                    <span className="px-2.5 py-1 bg-emerald-950/40 text-emerald-400 border border-emerald-900/50 rounded-full">🟢 ≥ {settingsForm.good_stock_threshold || 10} units → Green</span>
+                    <span className="px-2.5 py-1 bg-amber-950/40 text-amber-400 border border-amber-900/50 rounded-full">🟡 {settingsForm.low_stock_threshold || 3}–{(settingsForm.good_stock_threshold || 10) - 1} units → Yellow</span>
+                    <span className="px-2.5 py-1 bg-rose-950/40 text-rose-400 border border-rose-900/50 rounded-full">🔴 &lt; {settingsForm.low_stock_threshold || 3} units → Red</span>
+                    <span className="px-2.5 py-1 bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-full">⬛ 0 units → Gray (Out of Stock)</span>
+                  </div>
                 </div>
               </details>
 
@@ -3903,6 +4160,793 @@ export default function AdminPage() {
                 }
               })()}
             </div>
+          </div>
+        )}
+
+        {/* TAB: LIVE CHATS */}
+        {activeTab === 'chats' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-white font-mono">
+            {/* Sidebar Chat List (4 cols) */}
+            <div className="lg:col-span-4 bg-zinc-900 border border-zinc-800 rounded-3xl p-5 flex flex-col h-[650px]">
+              <div className="flex items-center justify-between border-b border-zinc-850 pb-3 mb-4">
+                <h3 className="text-sm font-black uppercase text-brand-accent flex items-center gap-1.5">
+                  <MessageSquare size={16} />
+                  {locale === 'ar' ? 'المحادثات' : 'Conversations'}
+                </h3>
+                <button
+                  onClick={() => setIsStartChatOpen(true)}
+                  className="px-2.5 py-1 bg-brand-accent hover:bg-brand-accent/95 text-white text-[9px] font-black uppercase border border-black rounded-lg shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] cursor-pointer"
+                >
+                  {locale === 'ar' ? '+ محادثة جديدة' : '+ New Chat'}
+                </button>
+              </div>
+
+              {/* Chat Filters */}
+              <div className="flex gap-1 bg-zinc-950 p-1 border border-zinc-855 rounded-xl mb-4 text-[9px] font-bold">
+                {['all', 'open', 'closed', 'blocked'].map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setChatListFilter(f as any)}
+                    className={`flex-1 py-1.5 rounded-lg uppercase transition-colors ${chatListFilter === f ? 'bg-zinc-800 text-brand-accent' : 'text-zinc-400 hover:text-white'}`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+
+              {/* Chats List */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {(() => {
+                  const filtered = adminChats.filter((c: any) => {
+                    if (chatListFilter === 'all') return true;
+                    if (chatListFilter === 'open') return c.status === 'open' && !c.is_blocked;
+                    if (chatListFilter === 'closed') return c.status === 'closed' && !c.is_blocked;
+                    if (chatListFilter === 'blocked') return c.is_blocked;
+                    return true;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <p className="text-[10px] text-zinc-500 text-center py-8">
+                        No conversations found.
+                      </p>
+                    );
+                  }
+
+                  return filtered.map((c: any) => {
+                    const isSelected = selectedChatId === c.id;
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={async () => {
+                          setSelectedChatId(c.id);
+                          useStore.getState().fetchUserChat(c.customer_phone || undefined);
+                        }}
+                        className={`p-3 border rounded-xl text-left cursor-pointer transition-all ${
+                          isSelected
+                            ? 'bg-zinc-800 border-brand-accent text-brand-accent shadow-[3px_3px_0px_rgba(0,0,0,1)]'
+                            : 'bg-zinc-950 border-zinc-850 hover:bg-zinc-900 text-zinc-300'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="text-xs font-black truncate">{c.customer_name || 'Guest User'}</span>
+                          <span className={`text-[8px] font-black px-1.5 py-0.5 border border-zinc-800 rounded uppercase ${
+                            c.is_blocked ? 'bg-red-950/40 text-red-400' : c.status === 'open' ? 'bg-green-950/40 text-green-400' : 'bg-zinc-900 text-zinc-500'
+                          }`}>
+                            {c.is_blocked ? 'blocked' : c.status}
+                          </span>
+                        </div>
+                        <p className="text-[9px] text-zinc-400 truncate mt-1">{c.customer_phone || 'Logged In Account'}</p>
+                        <span className="text-[8px] text-zinc-600 block mt-1 font-mono">{new Date(c.updated_at).toLocaleString()}</span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Start Chat Modal inside sidebar */}
+              {isStartChatOpen && (
+                <div className="mt-4 p-3 bg-zinc-950 border border-zinc-850 rounded-2xl space-y-3">
+                  <div className="flex justify-between items-center border-b border-zinc-900 pb-1.5">
+                    <span className="text-[10px] font-black uppercase text-brand-accent">Start Guest Chat</span>
+                    <button onClick={() => setIsStartChatOpen(false)} className="text-zinc-500 hover:text-white"><X size={12} /></button>
+                  </div>
+                  <div className="space-y-2">
+                    <input
+                      type="tel"
+                      placeholder="Guest Phone Number"
+                      value={startChatPhone}
+                      onChange={(e) => setStartChatPhone(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Guest Display Name"
+                      value={startChatName}
+                      onChange={(e) => setStartChatName(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!/^01[0-25]\d{8}$/.test(startChatPhone.trim())) {
+                          alert('Invalid phone number.');
+                          return;
+                        }
+                        const chat = await useStore.getState().adminStartChat(startChatPhone.trim(), startChatName.trim() || 'Guest');
+                        if (chat) {
+                          setSelectedChatId(chat.id);
+                          useStore.getState().fetchUserChat(chat.customer_phone);
+                          setIsStartChatOpen(false);
+                          setStartChatPhone('');
+                          setStartChatName('');
+                        }
+                      }}
+                      className="w-full py-1.5 bg-brand-accent hover:bg-brand-accent/90 text-white rounded text-[10px] font-black uppercase cursor-pointer"
+                    >
+                      Initialize Chat
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Transcript Area (5 cols) */}
+            <div className="lg:col-span-5 bg-zinc-900 border border-zinc-800 rounded-3xl p-5 flex flex-col h-[650px]">
+              {activeChat ? (
+                <>
+                  <div className="flex items-center justify-between border-b border-zinc-855 pb-3 mb-4">
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                        {activeChat.customer_name}
+                      </h4>
+                      <span className="text-[8px] text-zinc-500 font-mono">{activeChat.customer_phone || 'Auth User Account'}</span>
+                    </div>
+
+                    <div className="flex gap-1.5">
+                      {activeChat.status === 'open' ? (
+                        <button
+                          onClick={() => useStore.getState().adminCloseChat(activeChat.id)}
+                          className="px-2 py-1 bg-zinc-850 hover:bg-zinc-800 text-[8px] font-black uppercase rounded border border-zinc-750 cursor-pointer text-white"
+                        >
+                          Close Chat
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => useStore.getState().adminReopenChat(activeChat.id)}
+                          className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-[8px] font-black uppercase rounded border border-black shadow-[1px_1px_0px_rgba(0,0,0,1)] cursor-pointer"
+                        >
+                          Reopen
+                        </button>
+                      )}
+
+                      {activeChat.is_blocked ? (
+                        <button
+                          onClick={() => useStore.getState().adminUnblockUser(activeChat.id)}
+                          className="px-2 py-1 bg-zinc-800 hover:bg-zinc-755 text-green-400 text-[8px] font-black uppercase rounded border border-zinc-750 cursor-pointer"
+                        >
+                          Unblock
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => useStore.getState().adminBlockUser(activeChat.id)}
+                          className="px-2 py-1 bg-red-950 hover:bg-red-900 text-red-400 text-[8px] font-black uppercase rounded border border-red-900 cursor-pointer"
+                        >
+                          Block User
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Messages list */}
+                  <div className="flex-1 overflow-y-auto space-y-3 p-2 bg-zinc-950 border border-zinc-850 rounded-2xl mb-4 flex flex-col">
+                    {activeChatMessages.map((m: any) => {
+                      const isUser = m.sender === 'user';
+                      const isSystem = m.sender === 'system';
+                      return (
+                        <div
+                          key={m.id}
+                          className={`flex flex-col max-w-[85%] ${isUser ? 'self-start items-start' : 'self-end items-end'}`}
+                        >
+                          <div
+                            className={`p-2.5 rounded-xl border text-xs font-semibold leading-relaxed ${
+                              isUser
+                                ? 'bg-zinc-900 border-zinc-850 text-zinc-300 rounded-tl-none'
+                                : isSystem
+                                ? 'bg-zinc-900/50 border-dashed border-zinc-800 text-zinc-500 rounded-tr-none'
+                                : 'bg-brand-accent border-black text-white rounded-tr-none shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                            }`}
+                          >
+                            {m.message}
+                          </div>
+                          <span className="text-[7px] text-zinc-600 block mt-0.5 uppercase font-mono">
+                            {isSystem ? 'Auto response' : m.sender} • {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Send Form */}
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!adminChatInput.trim()) return;
+                      const msg = adminChatInput.trim();
+                      setAdminChatInput('');
+                      await useStore.getState().adminSendChatMessage(activeChat.id, msg);
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      type="text"
+                      placeholder="Type admin response..."
+                      value={adminChatInput}
+                      onChange={(e) => setAdminChatInput(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-855 rounded-xl text-xs focus:outline-none focus:border-brand-accent text-white"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-brand-accent text-white font-black uppercase text-xs rounded-xl cursor-pointer border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all"
+                    >
+                      Send
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center text-zinc-500 py-12">
+                  <span className="text-3xl">💬</span>
+                  <p className="text-xs font-black uppercase mt-2">Select a conversation to start chatting</p>
+                </div>
+              )}
+            </div>
+
+            {/* Selected User details & Auto Responses Settings (3 cols) */}
+            <div className="lg:col-span-3 space-y-6">
+              
+              {/* User details card */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+                <h4 className="text-xs font-black uppercase text-brand-accent border-b border-zinc-850 pb-2 mb-3">
+                  👤 Customer Profile
+                </h4>
+
+                {(() => {
+                  if (!activeChat) return <p className="text-[10px] text-zinc-500">No active chat selected.</p>;
+                  
+                  const phone = activeChat.customer_phone;
+                  const userId = activeChat.user_id;
+
+                  const userOrdersList = orders.filter((o: any) => {
+                    if (phone) return o.customer_phone === phone;
+                    if (userId) return o.user_id === userId;
+                    return false;
+                  });
+
+                  const totalMoneySpent = userOrdersList
+                    .filter((o: any) => o.status === 'completed')
+                    .reduce((sum: number, o: any) => sum + Number(o.price || 0), 0);
+
+                  const activeOrder = userOrdersList.find((o: any) => o.status === 'pending' || o.status === 'processing' || o.status === 'shipped');
+
+                  return (
+                    <div className="space-y-4 text-[10px] font-bold">
+                      <div className="bg-zinc-950 p-2.5 border border-zinc-850 rounded-xl space-y-1.5 text-zinc-400">
+                        <div>
+                          <span className="text-[8px] font-black uppercase text-zinc-500 block">Name</span>
+                          <span className="text-white text-xs">{activeChat.customer_name || 'Guest User'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] font-black uppercase text-zinc-500 block">Phone</span>
+                          <span className="text-white font-mono">{phone || 'N/A (Logged In)'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] font-black uppercase text-zinc-500 block">Total Spent</span>
+                          <span className="text-brand-accent font-black text-sm">{totalMoneySpent} EGP</span>
+                        </div>
+                      </div>
+
+                      {/* Active Order Details */}
+                      <div>
+                        <span className="text-[9px] uppercase font-black text-zinc-400 block mb-1">Active Order</span>
+                        {activeOrder ? (
+                          <div className="p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl">
+                            <div className="flex justify-between items-center text-[9px] font-black uppercase">
+                              <span className="text-brand-accent">ID: {activeOrder.id.substring(0,8)}</span>
+                              <span className="bg-amber-950/40 text-amber-400 px-1.5 rounded">{activeOrder.status}</span>
+                            </div>
+                            <p className="text-white truncate mt-1">{activeOrder.items?.map((i: any) => i.product_name || i.product?.name_en).join(', ')}</p>
+                            <span className="text-zinc-500 mt-1 block font-mono">{activeOrder.price} EGP</span>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-500 italic block">No current active orders.</span>
+                        )}
+                      </div>
+
+                      {/* Orders history list */}
+                      <div>
+                        <span className="text-[9px] uppercase font-black text-zinc-400 block mb-1">Past Orders ({userOrdersList.length})</span>
+                        <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                          {userOrdersList.map((o: any) => (
+                            <div key={o.id} className="p-2 bg-zinc-950 border border-zinc-855 rounded-lg flex justify-between items-center">
+                              <div>
+                                <span className="text-[8px] font-black text-zinc-400 uppercase font-mono block">ID: {o.id.substring(0,8)}</span>
+                                <span className="text-zinc-600 text-[8px]">{new Date(o.created_at).toLocaleDateString()}</span>
+                              </div>
+                              <span className="text-white font-black">{o.price} EGP</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Auto Response config Card */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                <h4 className="text-xs font-black uppercase text-brand-accent border-b border-zinc-850 pb-2">
+                  🤖 Auto-responses Trigger
+                </h4>
+
+                {/* Add Trigger words Form */}
+                <div className="space-y-3 bg-zinc-950 p-3 border border-zinc-850 rounded-2xl">
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Trigger Keywords (comma separated)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. shipping, delivery, شحن"
+                      value={autoResponseTrigger}
+                      onChange={(e) => setAutoResponseTrigger(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">Response Message</label>
+                    <textarea
+                      placeholder="Type automated reply..."
+                      value={autoResponseText}
+                      onChange={(e) => setAutoResponseText(e.target.value)}
+                      rows={2}
+                      className="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none resize-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const triggers = autoResponseTrigger.split(',').map(s => s.trim()).filter(Boolean);
+                      const text = autoResponseText.trim();
+                      if (triggers.length === 0 || !text) return;
+                      await useStore.getState().saveAutoResponse({ trigger_words: triggers, response_text: text });
+                      setAutoResponseTrigger('');
+                      setAutoResponseText('');
+                    }}
+                    className="w-full py-1.5 bg-brand-accent hover:bg-brand-accent/90 text-white rounded text-[10px] font-black uppercase cursor-pointer"
+                  >
+                    Add Trigger Word
+                  </button>
+                </div>
+
+                {/* List Auto Responses triggers */}
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {autoResponses.map((r: any) => (
+                    <div key={r.id} className="p-2 bg-zinc-950 border border-zinc-850 rounded-lg flex justify-between items-start gap-2 text-[9px]">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-zinc-500 block uppercase font-black truncate">Triggers: {r.trigger_words.join(', ')}</span>
+                        <p className="text-white mt-0.5 truncate">{r.response_text}</p>
+                      </div>
+                      <button
+                        onClick={() => useStore.getState().deleteAutoResponse(r.id)}
+                        className="text-red-400 hover:text-red-300 p-0.5 cursor-pointer shrink-0"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* TAB: USERS ACCOUNTS MANAGEMENT */}
+        {activeTab === 'users' && (
+          <div className="space-y-6 text-white font-mono">
+            <div className="flex justify-between items-center">
+              <h2 className="text-3xl font-black uppercase text-white">
+                {locale === 'ar' ? 'إدارة حسابات المستخدمين' : 'Users Accounts'}
+              </h2>
+              <input
+                type="text"
+                value={searchUserQuery}
+                onChange={(e) => setSearchUserQuery(e.target.value)}
+                placeholder={locale === 'ar' ? 'بحث بالاسم، الإيميل، أو الهاتف...' : 'Search by name, email, phone...'}
+                className="w-full max-w-xs px-3.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+              />
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs select-text">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-[10px] font-black uppercase text-zinc-500 bg-zinc-950/40">
+                      <th className="p-4">Customer Name</th>
+                      <th className="p-4">Email</th>
+                      <th className="p-4">Phone Number</th>
+                      <th className="p-4">Loyalty Points</th>
+                      <th className="p-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const filtered = usersList.filter((u: any) => {
+                        const nameMatch = (u.full_name || '').toLowerCase().includes(searchUserQuery.toLowerCase());
+                        const emailMatch = (u.email || '').toLowerCase().includes(searchUserQuery.toLowerCase());
+                        const phoneMatch = (u.phone || '').toLowerCase().includes(searchUserQuery.toLowerCase());
+                        return nameMatch || emailMatch || phoneMatch;
+                      });
+
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={5} className="p-8 text-center text-zinc-500 font-bold uppercase">
+                              No customer profiles found.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return filtered.map((u: any) => (
+                        <tr key={u.id} className="border-b border-zinc-800 hover:bg-zinc-800/20">
+                          <td className="p-4 font-black">{u.full_name || 'N/A'}</td>
+                          <td className="p-4 font-mono">{u.email || 'N/A'}</td>
+                          <td className="p-4 font-mono">{u.phone || 'N/A'}</td>
+                          <td className="p-4 text-brand-accent font-black">{u.loyalty_points || 0} pts</td>
+                          <td className="p-4 text-right">
+                            <button
+                              onClick={() => {
+                                setSelectedUserForEdit(u);
+                                const ad = u.address_data || {};
+                                setEditUserForm({
+                                  full_name: u.full_name || '',
+                                  email: u.email || '',
+                                  phone: u.phone || '',
+                                  loyalty_points: u.loyalty_points || 0,
+                                  password: u.password || '********',
+                                  address_governorate: ad.governorate || '',
+                                  address_city: ad.city || '',
+                                  address_street: ad.street || ''
+                                });
+                              }}
+                              className="px-2.5 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded text-[10px] uppercase border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] cursor-pointer"
+                            >
+                              Edit Profile
+                            </button>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Profile editing drawer/overlay */}
+            {selectedUserForEdit && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 font-mono select-none">
+                <div className="bg-zinc-900 border-4 border-black p-6 rounded-3xl max-w-lg w-full text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-center border-b border-zinc-850 pb-3 mb-4">
+                    <h3 className="text-sm font-black uppercase text-brand-accent flex items-center gap-1.5">
+                      <Users size={16} />
+                      Edit Customer Profile
+                    </h3>
+                    <button onClick={() => setSelectedUserForEdit(null)} className="text-zinc-400 hover:text-white"><X size={16} /></button>
+                  </div>
+
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const address_data = {
+                        governorate: editUserForm.address_governorate,
+                        city: editUserForm.address_city,
+                        street: editUserForm.address_street
+                      };
+                      await useStore.getState().adminUpdateUserProfile(selectedUserForEdit.id, {
+                        full_name: editUserForm.full_name,
+                        email: editUserForm.email,
+                        phone: editUserForm.phone,
+                        loyalty_points: Number(editUserForm.loyalty_points),
+                        password: editUserForm.password,
+                        address_data
+                      });
+                      setSelectedUserForEdit(null);
+                    }}
+                    className="space-y-4"
+                  >
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={editUserForm.full_name}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, full_name: e.target.value })}
+                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Email</label>
+                        <input
+                          type="email"
+                          required
+                          value={editUserForm.email}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Phone Number</label>
+                        <input
+                          type="text"
+                          required
+                          value={editUserForm.phone}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, phone: e.target.value })}
+                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Password</label>
+                        <input
+                          type="text"
+                          required
+                          value={editUserForm.password}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, password: e.target.value })}
+                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-855 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Loyalty Points Balance</label>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        value={editUserForm.loyalty_points}
+                        onChange={(e) => setEditUserForm({ ...editUserForm, loyalty_points: Number(e.target.value) })}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono"
+                      />
+                    </div>
+
+                    {/* Address settings */}
+                    <div className="border-t border-zinc-800 pt-3">
+                      <span className="text-[10px] font-black uppercase text-zinc-500 block mb-2">Default Shipping Address</span>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Governorate</label>
+                          <input
+                            type="text"
+                            value={editUserForm.address_governorate}
+                            onChange={(e) => setEditUserForm({ ...editUserForm, address_governorate: e.target.value })}
+                            className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">City / Area</label>
+                          <input
+                            type="text"
+                            value={editUserForm.address_city}
+                            onChange={(e) => setEditUserForm({ ...editUserForm, address_city: e.target.value })}
+                            className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Street Details</label>
+                        <input
+                          type="text"
+                          value={editUserForm.address_street}
+                          onChange={(e) => setEditUserForm({ ...editUserForm, address_street: e.target.value })}
+                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-3 border-t border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedUserForEdit(null)}
+                        className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-lg uppercase cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex-1 py-2 bg-brand-accent hover:bg-brand-accent/95 text-white text-xs font-black rounded-lg uppercase border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all cursor-pointer"
+                      >
+                        Save Profile Updates
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB: WEB & ITEMS ANALYTICS */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-6 text-white font-mono">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h2 className="text-3xl font-black uppercase text-white">
+                  {locale === 'ar' ? 'التحليلات والمبيعات' : 'Web & Items Analytics'}
+                </h2>
+                <p className="text-[10px] text-zinc-500 uppercase mt-0.5 tracking-wider">
+                  Real-time events tracking metrics & user interaction statistics
+                </p>
+              </div>
+
+              {/* Scale timeframe selection */}
+              <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 text-[10px] font-black uppercase">
+                {(['total', 'year', 'month', 'week', 'day'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setAnalyticsFilter(filter)}
+                    className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                      analyticsFilter === filter ? 'bg-brand-accent text-white' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Calculations and analysis based on timeframe */}
+            {(() => {
+              const filterByTimeframe = (evtDate: Date) => {
+                const now = new Date();
+                const diffTime = Math.abs(now.getTime() - evtDate.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                if (analyticsFilter === 'day') return diffDays <= 1;
+                if (analyticsFilter === 'week') return diffDays <= 7;
+                if (analyticsFilter === 'month') return diffDays <= 30;
+                if (analyticsFilter === 'year') return diffDays <= 365;
+                return true; // total
+              };
+
+              const filteredEvents = analyticsEvents.filter((e: any) => filterByTimeframe(new Date(e.created_at)));
+              const filteredOrders = orders.filter((o: any) => filterByTimeframe(new Date(o.created_at)));
+
+              // 1. Web metrics
+              const visitorsCount = new Set(filteredEvents.filter((e: any) => e.event_type === 'visit').map((e: any) => e.session_id)).size;
+              const signupsCount = filteredEvents.filter((e: any) => e.event_type === 'account_created').length;
+              const cartAddsCount = new Set(filteredEvents.filter((e: any) => e.event_type === 'cart_add').map((e: any) => e.session_id)).size;
+              
+              const orderCompletedCount = filteredOrders.length;
+              
+              const orderedSessions = new Set(filteredEvents.filter((e: any) => e.event_type === 'order_completed').map((e: any) => e.session_id));
+              const abandonedCartsCount = Math.max(0, cartAddsCount - orderedSessions.size);
+
+              const conversionRate = visitorsCount > 0 ? ((orderCompletedCount / visitorsCount) * 100).toFixed(1) : '0.0';
+
+              // 2. Items Metrics Rankings
+              const soldCounts: Record<string, number> = {};
+              filteredOrders.forEach((o: any) => {
+                if (o.items) {
+                  o.items.forEach((item: any) => {
+                    const name = item.product_name || item.product?.name_en || 'Unknown Item';
+                    soldCounts[name] = (soldCounts[name] || 0) + Number(item.quantity || 1);
+                  });
+                }
+              });
+              const mostSold = Object.entries(soldCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
+
+              const viewCounts: Record<string, number> = {};
+              filteredEvents.filter((e: any) => e.event_type === 'item_view').forEach((e: any) => {
+                if (e.product_name) {
+                  viewCounts[e.product_name] = (viewCounts[e.product_name] || 0) + 1;
+                }
+              });
+              const mostViewed = Object.entries(viewCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
+
+              const addCounts: Record<string, number> = {};
+              filteredEvents.filter((e: any) => e.event_type === 'cart_add').forEach((e: any) => {
+                if (e.product_name) {
+                  addCounts[e.product_name] = (addCounts[e.product_name] || 0) + 1;
+                }
+              });
+              const mostAdded = Object.entries(addCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
+
+              return (
+                <>
+                  {/* Grid Web Analytics cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    {[
+                      { label: 'Unique Visitors', value: visitorsCount, icon: '👁️', color: 'text-blue-400' },
+                      { label: 'Signups Created', value: signupsCount, icon: '📝', color: 'text-purple-400' },
+                      { label: 'Carts Filled', value: cartAddsCount, icon: '🛒', color: 'text-amber-400' },
+                      { label: 'Abandoned Carts', value: abandonedCartsCount, icon: '🗑️', color: 'text-red-400' },
+                      { label: 'Completed Orders', value: orderCompletedCount, icon: '📦', color: 'text-green-400' },
+                      { label: 'Conversion Rate', value: `${conversionRate}%`, icon: '📈', color: 'text-brand-accent' },
+                    ].map((card, i) => (
+                      <div key={i} className="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl flex flex-col justify-between shadow">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="text-[10px] font-black uppercase text-zinc-500 tracking-tight leading-tight">{card.label}</span>
+                          <span className="text-sm">{card.icon}</span>
+                        </div>
+                        <span className={`text-xl font-black mt-3 block ${card.color}`}>{card.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Items Analytics Grid */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4">
+                    {/* MOST VIEWED */}
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-3">
+                      <h4 className="text-xs font-black uppercase text-brand-accent tracking-wider border-b border-zinc-850 pb-2 flex items-center gap-1.5">
+                        👁️ Most Viewed Items
+                      </h4>
+                      <div className="space-y-2">
+                        {mostViewed.length === 0 ? (
+                          <p className="text-[10px] text-zinc-500 italic py-4">No view metrics logged.</p>
+                        ) : (
+                          mostViewed.map(([name, count], idx) => (
+                            <div key={idx} className="p-2.5 bg-zinc-950 border border-zinc-850 rounded-xl flex justify-between items-center text-[10px]">
+                              <span className="font-bold truncate pr-2 text-white">{idx+1}. {name}</span>
+                              <span className="text-zinc-500 shrink-0 font-mono">{count} views</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* MOST ADDED TO CART */}
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-3">
+                      <h4 className="text-xs font-black uppercase text-brand-accent tracking-wider border-b border-zinc-850 pb-2 flex items-center gap-1.5">
+                        🛒 Most Added to Cart
+                      </h4>
+                      <div className="space-y-2">
+                        {mostAdded.length === 0 ? (
+                          <p className="text-[10px] text-zinc-500 italic py-4">No cart additions logged.</p>
+                        ) : (
+                          mostAdded.map(([name, count], idx) => (
+                            <div key={idx} className="p-2.5 bg-zinc-950 border border-zinc-850 rounded-xl flex justify-between items-center text-[10px]">
+                              <span className="font-bold truncate pr-2 text-white">{idx+1}. {name}</span>
+                              <span className="text-zinc-500 shrink-0 font-mono">{count} times</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* MOST SOLD */}
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-3">
+                      <h4 className="text-xs font-black uppercase text-brand-accent tracking-wider border-b border-zinc-850 pb-2 flex items-center gap-1.5">
+                        📦 Most Sold Items
+                      </h4>
+                      <div className="space-y-2">
+                        {mostSold.length === 0 ? (
+                          <p className="text-[10px] text-zinc-500 italic py-4">No sales records logged.</p>
+                        ) : (
+                          mostSold.map(([name, count], idx) => (
+                            <div key={idx} className="p-2.5 bg-zinc-950 border border-zinc-850 rounded-xl flex justify-between items-center text-[10px]">
+                              <span className="font-bold truncate pr-2 text-white">{idx+1}. {name}</span>
+                              <span className="text-brand-accent font-black shrink-0 font-mono">{count} sold</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 

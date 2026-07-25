@@ -22,8 +22,9 @@ import InviteFriendsModal from '@/components/InviteFriendsModal';
 import Footer from '@/components/Footer';
 import LoadingScreen from '@/components/LoadingScreen';
 import AuthModal from '@/components/AuthModal';
-import UserProfileModal from '@/components/UserProfileModal';
 import SizeChartModal from '@/components/SizeChartModal';
+
+import VisualSectionWrapper from '@/components/VisualSectionWrapper';
 
 export default function Home({
   params,
@@ -37,10 +38,18 @@ export default function Home({
   const setIsSizeChartOpen = useStore((state) => state.setIsSizeChartOpen);
 
   const trackReferralClick = useStore((state) => state.trackReferralClick);
+  const logAnalyticsEvent = useStore((state) => state.logAnalyticsEvent);
 
   useEffect(() => {
     fetchInitialData();
-  }, [fetchInitialData]);
+    if (typeof window !== 'undefined') {
+      const logged = sessionStorage.getItem('ff_logged_visit');
+      if (!logged) {
+        logAnalyticsEvent('visit');
+        sessionStorage.setItem('ff_logged_visit', 'true');
+      }
+    }
+  }, [fetchInitialData, logAnalyticsEvent]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -70,16 +79,45 @@ export default function Home({
       <AnnouncementBar />
       <Navbar />
       <main className="flex-1">
-        <Hero />
-        <Collections />
-        <Showcase />
-        <CustomDesignForm />
-        <Offers />
-        <ReferralBanner />
-        <WhyChooseUs />
-        <AboutUs />
-        <Shipping />
-        <FAQ />
+        <VisualSectionWrapper sectionId="hero" labelEn="Hero Section" labelAr="شريط البداية">
+          <Hero />
+        </VisualSectionWrapper>
+        
+        <VisualSectionWrapper sectionId="collections" labelEn="Category Collections" labelAr="أقسام الفئات">
+          <Collections />
+        </VisualSectionWrapper>
+        
+        <VisualSectionWrapper sectionId="showcase" labelEn="Featured Showcase" labelAr="معرض المنتجات">
+          <Showcase />
+        </VisualSectionWrapper>
+        
+        <VisualSectionWrapper sectionId="custom_design" labelEn="Custom Requests" labelAr="التصميم الخاص">
+          <CustomDesignForm />
+        </VisualSectionWrapper>
+        
+        <VisualSectionWrapper sectionId="offers" labelEn="Special Offers" labelAr="العروض والخصومات">
+          <Offers />
+        </VisualSectionWrapper>
+        
+        <VisualSectionWrapper sectionId="referral" labelEn="Referral Program" labelAr="نظام الإحالة">
+          <ReferralBanner />
+        </VisualSectionWrapper>
+        
+        <VisualSectionWrapper sectionId="why_choose_us" labelEn="Why Choose Us" labelAr="لماذا تختارنا">
+          <WhyChooseUs />
+        </VisualSectionWrapper>
+        
+        <VisualSectionWrapper sectionId="about_us" labelEn="About Brand" labelAr="من نحن">
+          <AboutUs />
+        </VisualSectionWrapper>
+        
+        <VisualSectionWrapper sectionId="shipping" labelEn="Shipping Banner" labelAr="تفاصيل الشحن">
+          <Shipping />
+        </VisualSectionWrapper>
+        
+        <VisualSectionWrapper sectionId="faq" labelEn="Frequently Asked Questions" labelAr="الأسئلة الشائعة">
+          <FAQ />
+        </VisualSectionWrapper>
       </main>
       <Footer />
       
@@ -95,8 +133,6 @@ export default function Home({
       <InviteFriendsModal />
       {/* Auth Modal overlay */}
       <AuthModal />
-      {/* Profile Modal overlay */}
-      <UserProfileModal />
       {/* Size Chart Modal overlay */}
       <SizeChartModal isOpen={isSizeChartOpen} onClose={() => setIsSizeChartOpen(false)} />
     </>

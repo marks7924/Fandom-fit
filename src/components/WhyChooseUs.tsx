@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { 
   Heart, Truck, Shirt, Compass, Sparkles, Scissors, Layers, CheckSquare 
 } from 'lucide-react';
+import EditableText from './EditableText';
 
 export default function WhyChooseUs() {
   const t = useTranslations('why_choose_us');
@@ -75,10 +76,10 @@ export default function WhyChooseUs() {
         {/* Title */}
         <div className="text-center max-w-2xl mx-auto mb-16">
           <h2 className="text-5xl font-black uppercase tracking-tight text-black">
-            {t('title')}
+            <EditableText textKey="why_choose_us_title" defaultEn="Why Choose Us?" defaultAr="لماذا تختارنا؟" />
           </h2>
           <p className="mt-4 text-lg font-semibold text-black/70 font-handwriting">
-            {t('subtitle')}
+            <EditableText textKey="why_choose_us_subtitle" defaultEn="Egyptian made premium statement apparel crafted just for you." defaultAr="ملابس عصرية مصممة ومنتجة محلياً بجودة عالية وخامة ممتازة لأجلك." />
           </p>
         </div>
 

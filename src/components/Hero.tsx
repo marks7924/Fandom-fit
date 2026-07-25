@@ -1,11 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import Image from 'next/image';
-import { useState } from 'react';
+import EditableText from './EditableText';
 
 // SVG Doodle Components for Scrapbook Style
 const GameControllerDoodle = () => (
@@ -103,14 +104,20 @@ export default function Hero() {
             
             {/* Animated Headline */}
             <h1 className="text-6xl sm:text-7xl lg:text-8xl font-black tracking-tight leading-none text-black select-none">
-              <span className="block">{t('title_part1')}</span>
+              <span className="block">
+                <EditableText textKey="hero_title_part1" defaultEn="Wear What You" defaultAr="ارتدِ ما" />
+              </span>
               <span className="font-handwriting block text-brand-accent transform rotate-[-2deg] my-2 select-text">
-                {t('title_part2')}
+                <EditableText textKey="hero_title_part2" defaultEn="Love." defaultAr="تحب." />
               </span>
             </h1>
 
             <p className="mt-6 text-lg sm:text-xl font-medium text-black/75 max-w-xl leading-relaxed">
-              {t('subtitle')}
+              <EditableText 
+                textKey="hero_subtitle" 
+                defaultEn="Premium Egyptian streetwear inspired by gaming, anime, movies, football, and music culture. Made in Egypt." 
+                defaultAr="تصاميم ملابس راقية ومريحة مستوحاة من الألعاب، الأنمي، الأفلام، كرة القدم، والموسيقى. صنع بفخر في مصر."
+              />
             </p>
 
             {/* CTAs */}
@@ -133,7 +140,11 @@ export default function Hero() {
 
             {/* Handwritten Tag */}
             <div className="mt-6 font-handwriting text-2xl text-black/60 rotate-[-1deg]">
-              ~ Egyptian crafted statement apparel. Ordered directly, delivered to your door.
+              <EditableText
+                textKey="hero_footer_note"
+                defaultEn="~ Egyptian crafted statement apparel. Ordered directly, delivered to your door."
+                defaultAr="~ ملابس كاجوال مصممة ومصنوعة في مصر. اطلب مباشرة وتصلك حتى باب البيت."
+              />
             </div>
           </div>
 

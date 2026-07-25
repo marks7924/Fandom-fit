@@ -69,6 +69,7 @@ export interface CustomRequest {
   id: string;
   customer_name: string;
   instagram_username: string;
+  customer_phone?: string;
   description: string;
   reference_images: string[];
   status: string;
@@ -225,6 +226,40 @@ interface StoreState {
   toggleFavorite: (productId: string) => Promise<void>;
   syncUserProfile: () => Promise<void>;
   updateCartItemSpecs: (cartItemId: string, newSize: string, newFabric: string, newFitType?: 'regular' | 'oversized') => void;
+
+  // Admin View Mode
+  isAdminViewMode: boolean;
+  setAdminViewMode: (active: boolean) => void;
+
+  // Chats & Messages State & Actions
+  activeChat: any | null;
+  activeChatMessages: any[];
+  adminChats: any[];
+  autoResponses: any[];
+  chatGreeting: string;
+  fetchUserChat: (phone?: string) => Promise<any>;
+  sendChatMessage: (chatId: string, message: string, sender: 'user' | 'admin' | 'system') => Promise<void>;
+  endUserChat: (chatId: string) => Promise<void>;
+  fetchAdminChats: () => Promise<void>;
+  adminSendChatMessage: (chatId: string, message: string) => Promise<void>;
+  adminCloseChat: (chatId: string) => Promise<void>;
+  adminReopenChat: (chatId: string) => Promise<void>;
+  adminBlockUser: (chatId: string) => Promise<void>;
+  adminUnblockUser: (chatId: string) => Promise<void>;
+  fetchAutoResponses: () => Promise<void>;
+  saveAutoResponse: (resp: { trigger_words: string[], response_text: string }) => Promise<void>;
+  deleteAutoResponse: (id: string) => Promise<void>;
+  adminStartChat: (phone: string, name: string) => Promise<any>;
+
+  // Users Accounts Section (Admin Panel)
+  usersList: any[];
+  fetchUsersList: () => Promise<void>;
+  adminUpdateUserProfile: (userId: string, patch: Record<string, any>) => Promise<void>;
+
+  // Analytics Events Section
+  analyticsEvents: any[];
+  logAnalyticsEvent: (type: string, details?: Record<string, any>) => Promise<void>;
+  fetchAnalyticsEvents: () => Promise<void>;
 }
 
 export interface DiscountCampaign {
@@ -298,6 +333,7 @@ export const useStore = create<StoreState>((set, get) => ({
           console.warn('Could not upsert profile:', e);
         }
         set({ profile: newProfile });
+        get().logAnalyticsEvent('account_created');
       }
       return { success: true };
     } catch (err: any) {
@@ -523,6 +559,7 @@ export const useStore = create<StoreState>((set, get) => ({
     
     set({ cart: updatedCart, isCartOpen: true });
     localStorage.setItem('ff_cart', JSON.stringify(updatedCart));
+    get().logAnalyticsEvent('cart_add', { product_id: product.id, product_name: product.name_en });
   },
 
   removeFromCart: (cartItemId) => {
@@ -624,7 +661,12 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   setActiveCategory: (slug) => set({ activeCategory: slug }),
-  setPreviewProduct: (product) => set({ previewProduct: product }),
+  setPreviewProduct: (product) => {
+    set({ previewProduct: product });
+    if (product) {
+      get().logAnalyticsEvent('item_view', { product_id: product.id, product_name: product.name_en });
+    }
+  },
   setCheckoutProduct: (product, options) => set({ 
     checkoutProduct: product,
     checkoutSelectedSize: options?.size || null,
@@ -708,10 +750,24 @@ export const useStore = create<StoreState>((set, get) => ({
 
         await supabase.from('offers').insert([newOffer]);
       }
-
-      // 2. Check if there is an invited referrer phone (from URL ref= or manual referral coupon)
+      // 2. Check if there is an invited referrer phone/code (from URL ref= or manual referral coupon)
       let referrerPhone = typeof window !== 'undefined' ? localStorage.getItem('ff_referrer_phone') : null;
       
+      if (referrerPhone && referrerPhone.trim().startsWith('REF-')) {
+        try {
+          const { data: refProfile } = await supabase
+            .from('profiles')
+            .select('phone')
+            .eq('referral_code', referrerPhone.trim())
+            .maybeSingle();
+          if (refProfile && refProfile.phone) {
+            referrerPhone = refProfile.phone;
+          }
+        } catch (e) {
+          console.warn('Could not resolve referrer phone from code:', e);
+        }
+      }
+
       if (order.referral_code) {
         const cleanRefCode = order.referral_code.trim().toLowerCase();
         const refCoupon = get().offers.find(
@@ -857,6 +913,8 @@ export const useStore = create<StoreState>((set, get) => ({
       // Sync local offers list to see the newly generated offers
       const { data: allOffers } = await supabase.from('offers').select('*');
       if (allOffers) set({ offers: allOffers });
+
+      get().logAnalyticsEvent('order_completed');
 
       return newOrder;
     } catch (error) {
@@ -1343,7 +1401,512 @@ export const useStore = create<StoreState>((set, get) => ({
       discountType: offer.discount_type || 'percentage',
       discountValue: offer.discount_value || 0
     };
-  }
+  },
+
+  isAdminViewMode: typeof window !== 'undefined' ? sessionStorage.getItem('ff_admin_view_mode') === 'true' : false,
+  setAdminViewMode: (active) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('ff_admin_view_mode', active ? 'true' : 'false');
+    }
+    set({ isAdminViewMode: active });
+  },
+
+  // Chat & Messages States
+  activeChat: null,
+  activeChatMessages: [],
+  adminChats: [],
+  autoResponses: [],
+  chatGreeting: '',
+
+  fetchUserChat: async (phone) => {
+    const { user } = get();
+    let chat = null;
+    
+    try {
+      if (user) {
+        // Logged-in user: find chat by user_id
+        const { data, error } = await supabase
+          .from('chats')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('user_deleted', false)
+          .maybeSingle();
+        
+        if (data && !error) {
+          chat = data;
+        } else {
+          // Create chat for logged-in user if missing
+          const { data: newChat, error: createError } = await supabase
+            .from('chats')
+            .insert([{ user_id: user.id, customer_name: user.email?.split('@')[0] || 'User' }])
+            .select()
+            .single();
+          if (!createError && newChat) {
+            chat = newChat;
+          }
+        }
+      } else if (phone && phone.trim()) {
+        // Guest user: find by phone
+        const cleanPhone = phone.trim();
+        const { data, error } = await supabase
+          .from('chats')
+          .select('*')
+          .eq('customer_phone', cleanPhone)
+          .eq('user_deleted', false)
+          .maybeSingle();
+        
+        if (data && !error) {
+          chat = data;
+        } else {
+          // Verify if guest has any order or custom request with this phone
+          const { data: orderData } = await supabase
+            .from('orders')
+            .select('customer_name')
+            .eq('customer_phone', cleanPhone)
+            .limit(1);
+            
+          const { data: customData } = await supabase
+            .from('custom_requests')
+            .select('customer_name')
+            .eq('customer_phone', cleanPhone)
+            .limit(1);
+            
+          if ((orderData && orderData.length > 0) || (customData && customData.length > 0)) {
+            const guestName = (orderData?.[0]?.customer_name || customData?.[0]?.customer_name || 'Guest');
+            const { data: newChat, error: createError } = await supabase
+              .from('chats')
+              .insert([{ customer_phone: cleanPhone, customer_name: guestName }])
+              .select()
+              .single();
+            if (!createError && newChat) {
+              chat = newChat;
+            }
+          }
+        }
+      }
+
+      if (chat) {
+        set({ activeChat: chat });
+        
+        // Fetch messages for this chat
+        const { data: messages } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('chat_id', chat.id)
+          .order('created_at', { ascending: true });
+          
+        set({ activeChatMessages: messages || [] });
+        return chat;
+      }
+      
+      set({ activeChat: null, activeChatMessages: [] });
+      return null;
+    } catch (err) {
+      console.error('Error fetching user chat:', err);
+      set({ activeChat: null, activeChatMessages: [] });
+      return null;
+    }
+  },
+
+  sendChatMessage: async (chatId, message, sender) => {
+    try {
+      const activeChat = get().activeChat;
+      if (activeChat?.is_blocked && sender === 'user') return;
+
+      const { data: newMsg, error } = await supabase
+        .from('chat_messages')
+        .insert([{ chat_id: chatId, message, sender }])
+        .select()
+        .single();
+
+      if (!error && newMsg) {
+        set(state => ({
+          activeChatMessages: [...state.activeChatMessages, newMsg]
+        }));
+
+        // Update chat's updated_at timestamp
+        await supabase
+          .from('chats')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', chatId);
+
+        // Check for Auto Responses
+        if (sender === 'user') {
+          const cleanMsg = message.toLowerCase().trim();
+          
+          // Arabic cleanup function (ignoring simple diacritics and letters variations)
+          const normalizeArabic = (text: string) => {
+            return text
+              .replace(/[\u064B-\u0652]/g, "") // remove diacritics
+              .replace(/[أإآا]/g, "ا")
+              .replace(/ة/g, "ه")
+              .replace(/ى/g, "ي")
+              .replace(/ؤ/g, "ء")
+              .replace(/ئ/g, "ء");
+          };
+
+          const normalizedMsg = normalizeArabic(cleanMsg);
+          const autoResps = get().autoResponses;
+          
+          const matchedResponse = autoResps.find(r => {
+            if (!r.is_active) return false;
+            return r.trigger_words.some((word: string) => {
+              const cleanWord = word.toLowerCase().trim();
+              const normWord = normalizeArabic(cleanWord);
+              return normalizedMsg.includes(normWord) || cleanMsg.includes(cleanWord);
+            });
+          });
+
+          if (matchedResponse) {
+            // Wait 600ms to simulate bot typing/processing
+            setTimeout(async () => {
+              const { data: botMsg } = await supabase
+                .from('chat_messages')
+                .insert([{
+                  chat_id: chatId,
+                  message: matchedResponse.response_text,
+                  sender: 'system'
+                }])
+                .select()
+                .single();
+                
+              if (botMsg) {
+                set(state => ({
+                  activeChatMessages: [...state.activeChatMessages, botMsg]
+                }));
+              }
+            }, 600);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error sending message:', err);
+    }
+  },
+
+  endUserChat: async (chatId) => {
+    try {
+      await supabase
+        .from('chats')
+        .update({ user_deleted: true, status: 'closed' })
+        .eq('id', chatId);
+      set({ activeChat: null, activeChatMessages: [] });
+    } catch (err) {
+      console.error('Error ending chat:', err);
+    }
+  },
+
+  fetchAdminChats: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chats')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      if (!error && data) {
+        set({ adminChats: data });
+      }
+    } catch (err) {
+      console.error('Error fetching admin chats:', err);
+    }
+  },
+
+  adminSendChatMessage: async (chatId, message) => {
+    try {
+      const { data: newMsg, error } = await supabase
+        .from('chat_messages')
+        .insert([{ chat_id: chatId, message, sender: 'admin' }])
+        .select()
+        .single();
+        
+      if (!error && newMsg) {
+        // Reopen the chat for user if it was deleted or closed
+        await supabase
+          .from('chats')
+          .update({ 
+            status: 'open', 
+            user_deleted: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', chatId);
+
+        // If the admin is actively viewing this chat, append it
+        const activeChat = get().activeChat;
+        if (activeChat && activeChat.id === chatId) {
+          set(state => ({
+            activeChatMessages: [...state.activeChatMessages, newMsg],
+            activeChat: { ...activeChat, status: 'open', user_deleted: false }
+          }));
+        }
+        
+        // Refresh admin chats list
+        await get().fetchAdminChats();
+      }
+    } catch (err) {
+      console.error('Error sending admin message:', err);
+    }
+  },
+
+  adminCloseChat: async (chatId) => {
+    try {
+      await supabase
+        .from('chats')
+        .update({ status: 'closed' })
+        .eq('id', chatId);
+        
+      const activeChat = get().activeChat;
+      if (activeChat && activeChat.id === chatId) {
+        set({ activeChat: { ...activeChat, status: 'closed' } });
+      }
+      await get().fetchAdminChats();
+    } catch (err) {
+      console.error('Error closing chat:', err);
+    }
+  },
+
+  adminReopenChat: async (chatId) => {
+    try {
+      await supabase
+        .from('chats')
+        .update({ status: 'open', user_deleted: false })
+        .eq('id', chatId);
+        
+      const activeChat = get().activeChat;
+      if (activeChat && activeChat.id === chatId) {
+        set({ activeChat: { ...activeChat, status: 'open', user_deleted: false } });
+      }
+      await get().fetchAdminChats();
+    } catch (err) {
+      console.error('Error reopening chat:', err);
+    }
+  },
+
+  adminBlockUser: async (chatId) => {
+    try {
+      await supabase
+        .from('chats')
+        .update({ is_blocked: true })
+        .eq('id', chatId);
+        
+      const activeChat = get().activeChat;
+      if (activeChat && activeChat.id === chatId) {
+        set({ activeChat: { ...activeChat, is_blocked: true } });
+      }
+      await get().fetchAdminChats();
+    } catch (err) {
+      console.error('Error blocking user:', err);
+    }
+  },
+
+  adminUnblockUser: async (chatId) => {
+    try {
+      await supabase
+        .from('chats')
+        .update({ is_blocked: false })
+        .eq('id', chatId);
+        
+      const activeChat = get().activeChat;
+      if (activeChat && activeChat.id === chatId) {
+        set({ activeChat: { ...activeChat, is_blocked: false } });
+      }
+      await get().fetchAdminChats();
+    } catch (err) {
+      console.error('Error unblocking user:', err);
+    }
+  },
+
+  fetchAutoResponses: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_auto_responses')
+        .select('*');
+      if (!error && data) {
+        set({ autoResponses: data });
+      }
+    } catch (err) {
+      console.error('Error fetching auto responses:', err);
+    }
+  },
+
+  saveAutoResponse: async (resp) => {
+    try {
+      const { error } = await supabase
+        .from('chat_auto_responses')
+        .insert([resp]);
+      if (!error) {
+        await get().fetchAutoResponses();
+      }
+    } catch (err) {
+      console.error('Error saving auto response:', err);
+    }
+  },
+
+  deleteAutoResponse: async (id) => {
+    try {
+      const { error } = await supabase
+        .from('chat_auto_responses')
+        .delete()
+        .eq('id', id);
+      if (!error) {
+        await get().fetchAutoResponses();
+      }
+    } catch (err) {
+      console.error('Error deleting auto response:', err);
+    }
+  },
+
+  adminStartChat: async (phone, name) => {
+    try {
+      const cleanPhone = phone.trim();
+      const { data: existingChat } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('customer_phone', cleanPhone)
+        .maybeSingle();
+
+      let chat = null;
+      if (existingChat) {
+        await supabase
+          .from('chats')
+          .update({ status: 'open', user_deleted: false })
+          .eq('id', existingChat.id);
+          
+        const { data: updatedChat } = await supabase
+          .from('chats')
+          .select('*')
+          .eq('id', existingChat.id)
+          .single();
+          
+        chat = updatedChat;
+      } else {
+        const { data: newChat } = await supabase
+          .from('chats')
+          .insert([{ customer_phone: cleanPhone, customer_name: name, status: 'open' }])
+          .select()
+          .single();
+        chat = newChat;
+      }
+
+      await get().fetchAdminChats();
+      return chat;
+    } catch (err) {
+      console.error('Error starting admin chat:', err);
+      return null;
+    }
+  },
+
+  usersList: [],
+  fetchUsersList: async () => {
+    try {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*');
+        
+      if (!error && profiles) {
+        const mockUsers = typeof window !== 'undefined' 
+          ? JSON.parse(localStorage.getItem('ff_mock_users') || '[]') 
+          : [];
+          
+        const users = profiles.map((prof: any) => {
+          const credentials = mockUsers.find((u: any) => u.id === prof.id || u.email === prof.email);
+          return {
+            ...prof,
+            email: prof.email || credentials?.email || '',
+            password: credentials?.password || '********'
+          };
+        });
+        set({ usersList: users });
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  },
+
+  adminUpdateUserProfile: async (userId, patch) => {
+    try {
+      const { password, email, full_name, phone, loyalty_points, address_data } = patch;
+      
+      const profileUpdates: Record<string, any> = {};
+      if (email !== undefined) profileUpdates.email = email;
+      if (full_name !== undefined) profileUpdates.full_name = full_name;
+      if (phone !== undefined) profileUpdates.phone = phone;
+      if (loyalty_points !== undefined) profileUpdates.loyalty_points = Number(loyalty_points);
+      if (address_data !== undefined) profileUpdates.address_data = address_data;
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update(profileUpdates)
+        .eq('id', userId);
+        
+      if (error) throw error;
+
+      if (typeof window !== 'undefined') {
+        const mockUsers = JSON.parse(localStorage.getItem('ff_mock_users') || '[]');
+        const updatedUsers = mockUsers.map((u: any) => {
+          if (u.id === userId) {
+            const updatedCreds = { ...u };
+            if (email !== undefined) updatedCreds.email = email;
+            if (password !== undefined) updatedCreds.password = password;
+            return updatedCreds;
+          }
+          return u;
+        });
+        localStorage.setItem('ff_mock_users', JSON.stringify(updatedUsers));
+      }
+
+      await get().fetchUsersList();
+    } catch (err) {
+      console.error('Error updating user profile:', err);
+      alert('Failed to update user details.');
+    }
+  },
+
+  analyticsEvents: [] as any[],
+  logAnalyticsEvent: async (type: string, details: Record<string, any> = {}) => {
+    try {
+      if (typeof window === 'undefined') return;
+      let sessionId = sessionStorage.getItem('ff_analytics_session');
+      if (!sessionId) {
+        sessionId = 'sess-' + Math.random().toString(36).substring(7);
+        sessionStorage.setItem('ff_analytics_session', sessionId);
+      }
+
+      const eventPayload = {
+        event_type: type,
+        session_id: sessionId,
+        product_id: details.product_id || null,
+        product_name: details.product_name || null
+      };
+
+      const { data: newEvt, error } = await supabase
+        .from('analytics_events')
+        .insert([eventPayload])
+        .select()
+        .single();
+
+      if (!error && newEvt) {
+        set(state => ({
+          analyticsEvents: [newEvt, ...state.analyticsEvents]
+        }));
+      }
+    } catch (err) {
+      console.error('Error logging analytics event:', err);
+    }
+  },
+
+  fetchAnalyticsEvents: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('analytics_events')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (!error && data) {
+        set({ analyticsEvents: data });
+      }
+    } catch (err) {
+      console.error('Error fetching analytics events:', err);
+    }
+  },
 }));
 
 export const getFabricPremium = (fabric: string): number => {

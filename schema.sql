@@ -346,5 +346,112 @@ CREATE POLICY "Allow admin delete on designs bucket" ON storage.objects
     FOR DELETE USING (bucket_id = 'designs' AND EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
 
 
+-- ==========================================
+-- New migrations for Account, Visual Editor, and Chat system
+-- ==========================================
+
+-- 1. Add is_hidden flag to products
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT FALSE;
+
+-- 2. Add customer_phone to custom_requests
+ALTER TABLE custom_requests ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+
+-- 3. Create Chats table
+CREATE TABLE IF NOT EXISTS chats (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    customer_phone VARCHAR(50),
+    customer_name VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'open', -- 'open', 'closed'
+    user_deleted BOOLEAN DEFAULT FALSE,
+    is_blocked BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 4. Create Chat Messages table
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    chat_id UUID REFERENCES chats(id) ON DELETE CASCADE NOT NULL,
+    sender VARCHAR(50) NOT NULL, -- 'user', 'admin', 'system'
+    message TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 5. Create Chat Auto Responses table
+CREATE TABLE IF NOT EXISTS chat_auto_responses (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    trigger_words TEXT[] NOT NULL,
+    response_text TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 6. Enable RLS and setup policies for Chats and Messages
+ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_auto_responses ENABLE ROW LEVEL SECURITY;
+
+-- Chats Policies
+DROP POLICY IF EXISTS "Allow users/guests to read own chats" ON chats;
+CREATE POLICY "Allow users/guests to read own chats" ON chats
+    FOR SELECT USING (
+        user_id = auth.uid() 
+        OR EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid())
+        -- Guests can read via local possession of ID/phone, checked at API layer, 
+        -- but allow simple SELECT for matching session or phone
+        OR TRUE
+    );
+
+DROP POLICY IF EXISTS "Allow users/guests to insert chats" ON chats;
+CREATE POLICY "Allow users/guests to insert chats" ON chats
+    FOR INSERT WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "Allow admin all on chats" ON chats;
+CREATE POLICY "Allow admin all on chats" ON chats
+    FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
+-- Messages Policies
+DROP POLICY IF EXISTS "Allow insert on chat_messages" ON chat_messages;
+CREATE POLICY "Allow insert on chat_messages" ON chat_messages
+    FOR INSERT WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "Allow select on chat_messages" ON chat_messages;
+CREATE POLICY "Allow select on chat_messages" ON chat_messages
+    FOR SELECT USING (TRUE); -- Checked at client/API layer for security
+
+-- Auto Responses Policies (Public read, admin write)
+DROP POLICY IF EXISTS "Allow public read on auto_responses" ON chat_auto_responses;
+CREATE POLICY "Allow public read on auto_responses" ON chat_auto_responses
+    FOR SELECT USING (TRUE);
+
+DROP POLICY IF EXISTS "Allow admin all on auto_responses" ON chat_auto_responses;
+CREATE POLICY "Allow admin all on auto_responses" ON chat_auto_responses
+    FOR ALL USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
+
+-- 7. Create Analytics Events table
+CREATE TABLE IF NOT EXISTS analytics_events (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL, -- 'visit', 'account_created', 'item_view', 'cart_add', 'order_completed'
+    product_id UUID REFERENCES products(id) ON DELETE SET NULL,
+    product_name VARCHAR(255),
+    session_id VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public insert on analytics_events" ON analytics_events;
+CREATE POLICY "Allow public insert on analytics_events" ON analytics_events 
+    FOR INSERT WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "Allow admin select on analytics_events" ON analytics_events;
+CREATE POLICY "Allow admin select on analytics_events" ON analytics_events 
+    FOR SELECT USING (EXISTS (SELECT 1 FROM admins WHERE admins.id = auth.uid()));
+
+
+
+
 
 

@@ -15,6 +15,7 @@ export default function CustomDesignForm() {
 
   const [name, setName] = useState('');
   const [instagram, setInstagram] = useState('');
+  const [phone, setPhone] = useState('');
   const [description, setDescription] = useState('');
   const [selectedTopic, setSelectedTopic] = useState('Anime');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,7 +43,16 @@ export default function CustomDesignForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !instagram || !description) return;
+    if (!name || !instagram || !phone || !description) return;
+
+    if (!/^01[0-25]\d{8}$/.test(phone.trim())) {
+      alert(
+        locale === 'ar'
+          ? 'الرجاء إدخال رقم هاتف مصري صحيح (مثال: 01012345678)'
+          : 'Please enter a valid Egyptian phone number (e.g. 01012345678)'
+      );
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -72,12 +82,17 @@ export default function CustomDesignForm() {
     const success = await addCustomRequest({
       customer_name: name,
       instagram_username: instagram,
+      customer_phone: phone,
       description: `[Topic: ${selectedTopic}] ${description}`,
       reference_images: uploadedUrls
-    });
+    } as any);
     setIsSubmitting(false);
 
     if (success) {
+      // Save phone locally for guest chat identification
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ff_chat_phone', phone.trim());
+      }
       setShowSuccess(true);
     }
   };
@@ -93,6 +108,7 @@ export default function CustomDesignForm() {
     setShowSuccess(false);
     setName('');
     setInstagram('');
+    setPhone('');
     setDescription('');
     setFiles([]);
     setFilePreviews([]);
@@ -192,6 +208,21 @@ export default function CustomDesignForm() {
                     placeholder={t('insta_placeholder')}
                     value={instagram}
                     onChange={(e) => setInstagram(e.target.value)}
+                    className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div>
+                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
+                    {locale === 'ar' ? 'رقم الهاتف *' : 'Phone Number *'}
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder={locale === 'ar' ? 'مثال: 01012345678' : 'e.g. 01012345678'}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
                   />
                 </div>

@@ -449,7 +449,27 @@ const getMockDb = () => {
     localStorage.setItem(settingsKey, JSON.stringify(settings));
   }
 
-  return { categories, products, offers, custom_requests, settings, orders };
+  const chatsKey = 'ff_chats';
+  const messagesKey = 'ff_chat_messages';
+  const autoResponsesKey = 'ff_chat_auto_responses';
+  const analyticsKey = 'ff_analytics_events';
+
+  let chats = JSON.parse(localStorage.getItem(chatsKey) || '[]');
+  let chat_messages = JSON.parse(localStorage.getItem(messagesKey) || '[]');
+  let chat_auto_responses = JSON.parse(localStorage.getItem(autoResponsesKey) || '[]');
+  let analytics_events = JSON.parse(localStorage.getItem(analyticsKey) || '[]');
+
+  if (chat_auto_responses.length === 0) {
+    chat_auto_responses = [
+      { id: 'ar-1', trigger_words: ['hello', 'hi', 'hey'], response_text: 'Hello! Welcome to Fandom Fit. How can we help you today?', is_active: true },
+      { id: 'ar-2', trigger_words: ['مرحبا', 'السلام', 'أهلا'], response_text: 'مرحباً بك في فاندوم فيت! كيف يمكننا مساعدتك اليوم؟', is_active: true },
+      { id: 'ar-3', trigger_words: ['shipping', 'delivery', 'شحن', 'توصيل'], response_text: 'Standard shipping takes 3-5 business days across Egypt. / الشحن يستغرق من ٣ إلى ٥ أيام عمل لجميع المحافظات.', is_active: true },
+      { id: 'ar-4', trigger_words: ['size', 'chart', 'مقاس', 'مقاسات'], response_text: 'You can check our size chart directly on any product page, or under your Account profile. / يمكنك مراجعة جدول المقاسات في صفحة أي منتج أو من حسابك الشخصي.', is_active: true }
+    ];
+    localStorage.setItem(autoResponsesKey, JSON.stringify(chat_auto_responses));
+  }
+
+  return { categories, products, offers, custom_requests, settings, orders, chats, chat_messages, chat_auto_responses, analytics_events };
 };
 
 const saveMockDb = (key: string, data: any) => {
@@ -615,7 +635,14 @@ export const mockSupabase = {
       if (typeof window === 'undefined') return [];
       if (table === 'profiles') return JSON.parse(localStorage.getItem('ff_profiles') || '[]');
       if (table === 'categories') return db.categories.sort((a: any, b: any) => a.display_order - b.display_order);
-      if (table === 'products') return db.products.sort((a: any, b: any) => a.display_order - b.display_order);
+      if (table === 'products') {
+        let list = db.products.sort((a: any, b: any) => a.display_order - b.display_order);
+        const isAdmin = sessionStorage.getItem('ff_admin_user') !== null;
+        if (!isAdmin) {
+          list = list.filter((p: any) => !p.is_hidden);
+        }
+        return list;
+      }
       if (table === 'offers') return db.offers;
       if (table === 'product_designs') return JSON.parse(localStorage.getItem('ff_product_designs') || '[]');
       if (table === 'orders') return db.orders.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -623,6 +650,10 @@ export const mockSupabase = {
       if (table === 'settings' || table === 'homepage_sections') {
         return Object.entries(db.settings).map(([key, value]) => ({ key, value }));
       }
+      if (table === 'chats') return JSON.parse(localStorage.getItem('ff_chats') || '[]');
+      if (table === 'chat_messages') return JSON.parse(localStorage.getItem('ff_chat_messages') || '[]');
+      if (table === 'chat_auto_responses') return JSON.parse(localStorage.getItem('ff_chat_auto_responses') || '[]');
+      if (table === 'analytics_events') return JSON.parse(localStorage.getItem('ff_analytics_events') || '[]');
       return [];
     };
 
@@ -666,6 +697,7 @@ export const mockSupabase = {
             created_at: new Date().toISOString(),
             images: r.images || ['/placeholders/arcade_front.jpg'],
             stock_quantities: r.stock_quantities || { S: 10, M: 15, L: 8, XL: 2, XXL: 0 },
+            is_hidden: false,
             ...r
           }));
           const updated = [...data, ...newRows];
@@ -704,6 +736,43 @@ export const mockSupabase = {
           }));
           const updated = [...data, ...newRows];
           saveMockDb('ff_orders', updated);
+        } else if (table === 'chats') {
+          newRows = rowsArray.map(r => ({
+            id: 'chat-' + Math.random().toString(36).substring(7),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            status: 'open',
+            user_deleted: false,
+            is_blocked: false,
+            ...r
+          }));
+          const updated = [...data, ...newRows];
+          saveMockDb('ff_chats', updated);
+        } else if (table === 'chat_messages') {
+          newRows = rowsArray.map(r => ({
+            id: 'msg-' + Math.random().toString(36).substring(7),
+            created_at: new Date().toISOString(),
+            ...r
+          }));
+          const updated = [...data, ...newRows];
+          saveMockDb('ff_chat_messages', updated);
+        } else if (table === 'chat_auto_responses') {
+          newRows = rowsArray.map(r => ({
+            id: 'ar-' + Math.random().toString(36).substring(7),
+            created_at: new Date().toISOString(),
+            is_active: true,
+            ...r
+          }));
+          const updated = [...data, ...newRows];
+          saveMockDb('ff_chat_auto_responses', updated);
+        } else if (table === 'analytics_events') {
+          newRows = rowsArray.map(r => ({
+            id: 'evt-' + Math.random().toString(36).substring(7),
+            created_at: new Date().toISOString(),
+            ...r
+          }));
+          const updated = [...data, ...newRows];
+          saveMockDb('ff_analytics_events', updated);
         } else {
           newRows = rowsArray;
         }
@@ -729,7 +798,11 @@ export const mockSupabase = {
               offers: 'ff_offers',
               custom_requests: 'ff_custom_requests',
               orders: 'ff_orders',
-              product_designs: 'ff_product_designs'
+              product_designs: 'ff_product_designs',
+              chats: 'ff_chats',
+              chat_messages: 'ff_chat_messages',
+              chat_auto_responses: 'ff_chat_auto_responses',
+              analytics_events: 'ff_analytics_events'
             };
 
             const dbKey = mockDbKeys[table];
@@ -753,7 +826,11 @@ export const mockSupabase = {
               categories: 'ff_categories',
               offers: 'ff_offers',
               orders: 'ff_orders',
-              product_designs: 'ff_product_designs'
+              product_designs: 'ff_product_designs',
+              chats: 'ff_chats',
+              chat_messages: 'ff_chat_messages',
+              chat_auto_responses: 'ff_chat_auto_responses',
+              analytics_events: 'ff_analytics_events'
             };
 
             const dbKey = mockDbKeys[table];

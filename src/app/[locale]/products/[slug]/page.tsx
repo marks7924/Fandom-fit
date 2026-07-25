@@ -20,7 +20,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
   const t = useTranslations('product_detail');
   const tp = useTranslations('products');
   const locale = useLocale();
-  const { products, categories, fetchInitialData, setCheckoutProduct, isLoading } = useStore();
+  const { products, categories, fetchInitialData, setCheckoutProduct, isLoading, logAnalyticsEvent, settings } = useStore();
   
   const resolvedParams = use(params);
   const { slug } = resolvedParams;
@@ -49,8 +49,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
       } else if (product.available_sizes.length > 0) {
         setSelectedSize(product.available_sizes[0]);
       }
+      logAnalyticsEvent('item_view', { product_id: product.id, product_name: product.name_en });
     }
-  }, [product]);
+  }, [product, logAnalyticsEvent]);
 
   // Still fetching — show branded loader instead of premature "not found"
   if (isLoading && !product) {
@@ -253,6 +254,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                   <div className="mt-2.5 min-h-[1.5rem] flex items-center">
                     {(() => {
                       const qty = product.stock_quantities?.[selectedSize] ?? 10;
+                      const showStockCounts = settings.show_stock_quantities !== false;
                       if (qty <= 0) {
                         return (
                           <span className="text-xs font-black text-red-600 flex items-center gap-1.5">
@@ -264,14 +266,18 @@ export default function ProductDetailPage({ params }: { params: Promise<{ slug: 
                         return (
                           <span className="text-xs font-black text-amber-600 animate-pulse flex items-center gap-1.5">
                             <span className="inline-block w-2 h-2 rounded-full bg-amber-500"></span>
-                            {locale === 'ar' ? `🔥 متبقي ${qty} قطع فقط من المقاس ${selectedSize}!` : `🔥 Only ${qty} left in stock for size ${selectedSize}!`}
+                            {locale === 'ar' 
+                              ? (showStockCounts ? `🔥 متبقي ${qty} قطع فقط من المقاس ${selectedSize}!` : `🔥 كمية محدودة جداً متوفرة من المقاس ${selectedSize}!`) 
+                              : (showStockCounts ? `🔥 Only ${qty} left in stock for size ${selectedSize}!` : `🔥 Low Stock available for size ${selectedSize}!`)}
                           </span>
                         );
                       } else {
                         return (
                           <span className="text-xs font-black text-green-600 flex items-center gap-1.5">
                             <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
-                            {locale === 'ar' ? `✅ متوفر (${qty} قطعة)` : `✅ In Stock (${qty} available)`}
+                            {locale === 'ar' 
+                              ? (showStockCounts ? `✅ متوفر (${qty} قطعة)` : `✅ متوفر في المخزن`) 
+                              : (showStockCounts ? `✅ In Stock (${qty} available)` : `✅ In Stock`)}
                           </span>
                         );
                       }

@@ -4,8 +4,9 @@ import "../globals.css";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { routing } from '@/i18n/routing';
-import { notFound } from "next/navigation";
 import ScrollRestorer from '@/components/ScrollRestorer';
+import ChatWidget from '@/components/ChatWidget';
+import { notFound } from 'next/navigation';
 
 const inter = Inter({
   subsets: ["latin"],
@@ -134,6 +135,7 @@ export default async function LocaleLayout({
         <ScrollRestorer />
         <NextIntlClientProvider messages={messages}>
           {children}
+          <ChatWidget />
         </NextIntlClientProvider>
       </body>
     </html>

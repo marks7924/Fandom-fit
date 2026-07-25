@@ -113,10 +113,10 @@ export default function Navbar() {
 
             {/* Profile Button */}
             <button
-              onClick={() => user ? setIsProfileModalOpen(true) : setIsAuthModalOpen(true)}
+              onClick={() => router.push('/account')}
               className="p-2 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer text-black"
               aria-label="Profile"
-              title={user ? (locale === 'ar' ? 'الملف الشخصي' : 'My Profile') : (locale === 'ar' ? 'تسجيل الدخول / إنشاء حساب' : 'Login / Sign Up')}
+              title={locale === 'ar' ? 'حسابي' : 'My Account'}
             >
               <User size={16} className={user ? 'text-brand-accent' : 'text-black'} />
             </button>
@@ -156,7 +156,7 @@ export default function Navbar() {
 
             {/* Mobile Profile Button */}
             <button
-              onClick={() => user ? setIsProfileModalOpen(true) : setIsAuthModalOpen(true)}
+              onClick={() => router.push('/account')}
               className="p-2 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer text-black"
               aria-label="Profile"
             >
