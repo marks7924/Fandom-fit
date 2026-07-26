@@ -209,5 +209,6 @@ export default function Hero() {
       </div>
     </section>
 
+    </div>
   );
 }
