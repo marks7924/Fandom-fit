@@ -5,7 +5,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useStore, getFabricPremium, getCartTotals } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import { X, Ticket, CheckCircle, MapPin, Phone, User, HelpCircle, Mail, Copy, Check, Tag, Share2 } from 'lucide-react';
+import { X, Ticket, CheckCircle, MapPin, Phone, User, HelpCircle, Mail, Copy, Check, Tag, Share2, Gift } from 'lucide-react';
 
 export default function CheckoutModal() {
   const t = useTranslations('checkout');
@@ -774,12 +774,6 @@ export default function CheckoutModal() {
                     <span>{t('price_subtotal')}</span>
                     <span>{tp('price_egp', { price: subtotal })}</span>
                   </div>
-                  {cottonDiscount > 0 && (
-                    <div className="flex justify-between items-center text-green-600 font-bold">
-                      <span>{locale === 'ar' ? 'عرض القطن (خصم ٢٥٪ على القطعة الثانية)' : 'Cotton Promo (25% off 2nd Item)'}</span>
-                      <span>-{tp('price_egp', { price: cottonDiscount })}</span>
-                    </div>
-                  )}
                   {autoAppliedDiscount > 0 && (
                     <div className="flex justify-between items-center text-green-600 font-bold">
                       <span>
@@ -869,13 +863,8 @@ export default function CheckoutModal() {
                     <div className="divide-y divide-black/10 space-y-3">
                       {rewardCouponCode.split(',').map((codeSegment, index) => {
                         const code = codeSegment.trim();
-                        const isCotton = code.startsWith('COTTON-');
-                        const rewardText = isCotton 
-                          ? (locale === 'ar' ? 'خصم ٢٥٪ على طلبك القادم!' : '25% OFF next purchase!')
-                          : (locale === 'ar' ? 'خصم ١٥٪ على طلبك القادم!' : '15% OFF next purchase!');
-                        const rewardTitle = isCotton 
-                          ? tc('cotton_reward') 
-                          : tc('referral_reward');
+                        const rewardText = locale === 'ar' ? 'خصم ١٥٪ على طلبك القادم!' : '15% OFF next purchase!';
+                        const rewardTitle = tc('referral_reward');
 
                         return (
                           <div key={index} className="pt-2">
@@ -909,8 +898,8 @@ export default function CheckoutModal() {
                   </div>
                 )}
 
-                {/* REFERRAL LINK SHARING TICKET */}
-                {phone.trim() && (
+                {/* REFERRAL LINK SHARING TICKET FOR SIGNED-IN USERS OR SIGN-IN INCENTIVE FOR GUESTS */}
+                {user && profile?.referral_code ? (
                   <div className="bg-white border-4 border-black p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] max-w-sm mx-auto relative overflow-hidden rotate-[1deg] space-y-2">
                     <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#457B9D]"></div>
                     <div className="flex justify-center items-center gap-1.5 text-[#457B9D]">
@@ -925,23 +914,37 @@ export default function CheckoutModal() {
                         : 'Share your referral link. When they place an order, you will instantly earn a 15% OFF coupon!'}
                     </p>
                     <div className="flex items-center justify-between bg-[#EDE0D0] border-2 border-black rounded-lg px-3 py-1.5 font-mono text-[9px] font-black text-black">
-                      <span className="truncate flex-1 text-left">{`fandom-fit.vercel.app/?ref=${phone.trim()}`}</span>
+                      <span className="truncate flex-1 text-left">{`fandom-fit.vercel.app/?ref=${profile.referral_code}`}</span>
                       <button
                         onClick={() => {
-                          const link = `${window.location.origin}/?ref=${phone.trim()}`;
+                          const link = `${window.location.origin}/?ref=${profile.referral_code}`;
                           navigator.clipboard.writeText(link);
-                          setCopiedCoupon(`link-${phone}`);
+                          setCopiedCoupon(`link-${profile.referral_code}`);
                           setTimeout(() => setCopiedCoupon(''), 2000);
                         }}
                         className="p-1 border border-black/15 hover:bg-black/5 rounded cursor-pointer transition-colors shrink-0 ml-1.5"
                       >
-                        {copiedCoupon === `link-${phone}` ? (
+                        {copiedCoupon === `link-${profile.referral_code}` ? (
                           <Check size={12} className="text-green-600" />
                         ) : (
                           <Copy size={12} />
                         )}
                       </button>
                     </div>
+                  </div>
+                ) : (
+                  <div className="bg-[#FFFDF9] border-4 border-dashed border-black/40 p-4 rounded-2xl max-w-sm mx-auto relative overflow-hidden space-y-2">
+                    <div className="flex justify-center items-center gap-1.5 text-brand-accent">
+                      <Gift size={14} className="animate-bounce" />
+                      <span className="text-[10px] font-black uppercase tracking-wider">
+                        {locale === 'ar' ? 'كافئ نفسك وأصدقائك!' : 'Refer Friends & Save!'}
+                      </span>
+                    </div>
+                    <p className="text-[9.5px] font-semibold text-black/75 leading-relaxed">
+                      {locale === 'ar'
+                        ? 'إذا قمت بإنشاء حساب أو تسجيل الدخول، ستحصل على رابط إحالة خاص بك لمشاركته مع أصدقائك لكسب كوبونات خصم ١٥٪ لكل طلب مكتمل!'
+                        : 'If you sign in or create an account, you will get a personalized referral link to invite friends. You both earn 15% OFF rewards!'}
+                    </p>
                   </div>
                 )}
 

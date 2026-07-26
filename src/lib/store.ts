@@ -171,6 +171,7 @@ interface StoreState {
   fetchOrders: () => Promise<void>;
   addOrder: (order: Omit<Order, 'id' | 'created_at' | 'status'>) => Promise<Order | null>;
   fetchOrdersByPhone: (phone: string) => Promise<Order[]>;
+  fetchAccountOrders: (userId?: string, phone?: string) => Promise<Order[]>;
   completeOrder: (id: string) => Promise<void>;
   updateAnnouncement: (message: string) => Promise<void>;
   updateAnnouncementAr: (message: string) => Promise<void>;
@@ -755,51 +756,7 @@ export const useStore = create<StoreState>((set, get) => ({
     try {
       let rewardCouponCode = '';
       
-      // 1. Check if Cotton collection drops apply (via product.gives_cotton_reward check)
-      const hasCottonItem = 
-        order.product_name.toLowerCase().includes('cotton') || 
-        (order.notes && order.notes.toLowerCase().includes('cotton')) ||
-        (order.items && Array.isArray(order.items) && order.items.some((item: any) => {
-          const prod = get().products.find(p => p.id === item.product_id);
-          return prod?.gives_cotton_reward === true || 
-                 item.product_name.toLowerCase().includes('cotton') || 
-                 item.fabric.toLowerCase().includes('cotton');
-        }));
-
-      const isCottonEnabled = get().settings.cotton_reward_system_enabled !== false;
-      if (hasCottonItem && isCottonEnabled) {
-        const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const code = `COTTON-${randomString}`;
-        rewardCouponCode = code;
-        
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 30);
-
-        const newOffer = {
-          title_en: 'Cotton Collection Reward (25% OFF)',
-          title_ar: 'مكافأة مجموعة القطن (خصم ٢٥٪)',
-          description_en: 'Get 25% off one future order! (Bound to phone: ' + order.customer_phone + ')',
-          description_ar: 'احصل على خصم ٢٥٪ على طلبك القادم! (مرتبط برقم هاتف: ' + order.customer_phone + ')',
-          discount_text_en: '25% OFF',
-          discount_text_ar: 'خصم ٢٥٪',
-          code: code,
-          discount_percent: 25,
-          max_uses: 1,
-          max_uses_per_user: 1,
-          is_active: true, // Instantly Active!
-          show_on_homepage: false,
-          discount_type: 'percentage',
-          discount_value: 25,
-          coupon_type: 'cotton_reward',
-          is_one_time: true,
-          is_public: false,
-          bound_phone: order.customer_phone, // Bound to phone!
-          expires_at: expiryDate.toISOString(),
-        };
-
-        await supabase.from('offers').insert([newOffer]);
-      }
-      // 2. Check if there is an invited referrer phone/code (from URL ref= or manual referral coupon)
+      // 1. Check if there is an invited referrer phone/code (from URL ref= or manual referral coupon)
       let referrerPhone = typeof window !== 'undefined' ? localStorage.getItem('ff_referrer_phone') : null;
       
       if (referrerPhone && referrerPhone.trim().startsWith('REF-')) {
@@ -864,7 +821,7 @@ export const useStore = create<StoreState>((set, get) => ({
           expires_at: expiryDate.toISOString(),
         };
 
-        await supabase.from('offers').insert([newOffer]);
+        await safeInsertOffer(newOffer);
 
         // Increment referrer's orders count using already-resolved referrerPhone
         if (referrerPhone && referrerPhone.trim()) {
@@ -898,7 +855,8 @@ export const useStore = create<StoreState>((set, get) => ({
       // 3. Save order with pre-generated reward coupon code linked
       const finalOrder = {
         ...order,
-        reward_coupon_code: rewardCouponCode || undefined
+        reward_coupon_code: rewardCouponCode || undefined,
+        user_id: get().user?.id || undefined
       };
 
       // Try full insert first; if columns missing (DB not migrated), fallback to minimal safe insert
@@ -915,6 +873,7 @@ export const useStore = create<StoreState>((set, get) => ({
           price: order.price,
           customer_name: order.customer_name,
           customer_phone: order.customer_phone,
+          user_id: get().user?.id || undefined,
           location: order.location || `${order.governorate || ''} ${order.city || ''}`.trim() || 'N/A',
           notes: [
             order.notes,
@@ -1047,6 +1006,26 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
+  fetchAccountOrders: async (userId?: string, phone?: string) => {
+    try {
+      if (!userId && !phone) return [];
+      let query = supabase.from('orders').select('*');
+      if (userId && phone) {
+        query = query.or(`user_id.eq.${userId},customer_phone.eq.${phone}`);
+      } else if (userId) {
+        query = query.eq('user_id', userId);
+      } else if (phone) {
+        query = query.eq('customer_phone', phone);
+      }
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching account orders:', error);
+      return [];
+    }
+  },
+
   completeOrder: async (id) => {
     try {
       if (!isUsingMock) {
@@ -1083,6 +1062,24 @@ export const useStore = create<StoreState>((set, get) => ({
   trackReferralClick: async (refCode) => {
     if (!refCode) return;
     const cleanRef = refCode.trim().toUpperCase();
+
+    // 1. Prevent self-referral
+    const currentUser = get().user;
+    const currentProfile = get().profile;
+    if (currentUser && currentProfile && currentProfile.referral_code === cleanRef) {
+      console.warn('Self-referral detected. Clicks will not be counted.');
+      return;
+    }
+
+    // 2. Prevent duplicate claims on the same device/session
+    if (typeof window !== 'undefined') {
+      const alreadyClaimed = localStorage.getItem(`ff_ref_claimed_${cleanRef}`);
+      if (alreadyClaimed === 'true') {
+        console.warn('Referral link already claimed on this device.');
+        return;
+      }
+    }
+
     try {
       if (isUsingMock) {
         // Mock DB implementation
@@ -1169,6 +1166,11 @@ export const useStore = create<StoreState>((set, get) => ({
               .eq('id', targetProfile.id);
           }
         }
+      }
+
+      // Mark as claimed on this device to prevent duplicate entries
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`ff_ref_claimed_${cleanRef}`, 'true');
       }
 
       // Re-sync the current user's profile if they're logged in (to show updated counter)
@@ -2129,14 +2131,7 @@ export const getCartTotals = (
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
   let cottonDiscount = 0;
-  const hasCotton = cottonEnabled && cart.some(item => item.product.gives_cotton_reward === true);
   const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
-  
-  if (hasCotton && totalQty >= 2) {
-    const flatItems = cart.flatMap(item => Array(item.quantity).fill(item));
-    flatItems.sort((a, b) => b.price - a.price);
-    cottonDiscount = Math.round(flatItems[1].price * 0.25);
-  }
   
   // Calculate Auto-applied Offers
   let autoAppliedDiscount = 0;

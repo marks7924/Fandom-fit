@@ -61,7 +61,7 @@ export default function Home({
       if (ref) {
         const cleanRef = ref.trim();
         const cleanRefUpper = cleanRef.toUpperCase();
-        if (cleanRefUpper.startsWith('REF-') || /^01[0-25]\d{8}$/.test(cleanRef)) {
+        if (cleanRefUpper.startsWith('REF-')) {
           // Save the referrer for later (order attribution)
           localStorage.setItem('ff_referrer_phone', cleanRefUpper);
           // Show welcome banner — the banner's CTA button calls trackReferralClick

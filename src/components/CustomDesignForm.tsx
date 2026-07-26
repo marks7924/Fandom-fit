@@ -56,12 +56,7 @@ export default function CustomDesignForm() {
 
     setIsSubmitting(true);
 
-    // Attempt to automatically create the bucket to avoid "bucket not found" error
-    try {
-      await supabase.storage.createBucket('products', { public: true });
-    } catch (err) {
-      // Ignore
-    }
+
 
     const uploadedUrls: string[] = [];
     for (const file of files) {

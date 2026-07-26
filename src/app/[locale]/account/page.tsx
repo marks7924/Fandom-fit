@@ -6,6 +6,8 @@ import { useStore, getFabricPremium } from '@/lib/store';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import LoadingScreen from '@/components/LoadingScreen';
+import ProductQuickPreview from '@/components/ProductQuickPreview';
+import CartDrawer from '@/components/CartDrawer';
 import { 
   Trophy, Copy, Check, LogOut, Settings, Package, Lock, 
   Mail, Phone, User, MapPin, Eye, EyeOff, ShoppingBag, 
@@ -32,6 +34,7 @@ export default function AccountPage() {
     signOutUser, 
     updateProfile, 
     fetchOrdersByPhone,
+    fetchAccountOrders,
     toggleFavorite,
     setPreviewProduct,
     isLoading
@@ -107,23 +110,25 @@ export default function AccountPage() {
 
   // Fetch logged in orders
   useEffect(() => {
-    if (user && profile?.phone) {
+    if (user) {
       setIsLoadingOrders(true);
-      fetchOrdersByPhone(profile.phone).then(fetched => {
+      fetchAccountOrders(user.id, profile?.phone || undefined).then(fetched => {
         setUserOrders(fetched || []);
         setIsLoadingOrders(false);
       });
       // Populate fields
-      setEditName(profile.full_name || '');
-      setEditPhone(profile.phone || '');
-      const ad = profile.address_data || {};
-      setAddrGovernorate(ad.governorate || '');
-      setAddrCity(ad.city || '');
-      setAddrStreet(ad.street || '');
+      if (profile) {
+        setEditName(profile.full_name || '');
+        setEditPhone(profile.phone || '');
+        const ad = profile.address_data || {};
+        setAddrGovernorate(ad.governorate || '');
+        setAddrCity(ad.city || '');
+        setAddrStreet(ad.street || '');
+      }
     } else {
       setUserOrders([]);
     }
-  }, [user, profile, fetchOrdersByPhone]);
+  }, [user, profile, fetchAccountOrders]);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1007,6 +1012,10 @@ export default function AccountPage() {
       </main>
 
       <Footer />
+      {/* Quick Preview overlay */}
+      <ProductQuickPreview />
+      {/* Cart Drawer overlay */}
+      <CartDrawer />
     </div>
   );
 }

@@ -726,14 +726,7 @@ export default function AdminPage() {
     if (!e.target.files || e.target.files.length === 0) return;
     const selectedFiles = Array.from(e.target.files);
 
-    // Attempt to automatically create the bucket to avoid "bucket not found" error
-    if (!isUsingMock) {
-      try {
-        await supabase.storage.createBucket('products', { public: true });
-      } catch (err) {
-        // Ignore (bucket likely already exists)
-      }
-    }
+
 
     const uploadedUrls: string[] = [];
 
