@@ -409,14 +409,9 @@ export default function CheckoutModal() {
     // If step 1, generate code and transition to step 2 payment selector
     if (checkoutStep === 1) {
       const year = new Date().getFullYear();
-      const count = useStore.getState().orders.length;
-      const seq = 124 + count;
-      const pad = (num: number, size: number) => {
-        let s = num + "";
-        while (s.length < size) s = "0" + s;
-        return s;
-      };
-      const code = `FF-${year}-${pad(seq, 5)}`;
+      const rand = Math.floor(10000 + Math.random() * 90000);
+      const ts = Date.now().toString().slice(-4);
+      const code = `FF-${year}-${rand}${ts}`;
       setOrderCode(code);
       setCheckoutStep(2);
       return;

@@ -318,8 +318,10 @@ export default function AccountPage() {
       }
 
       // Generate order code
-      const uniqueSuffix = Math.floor(100 + Math.random() * 900);
-      const generatedOrderCode = `FF-${new Date().getFullYear()}-${uniqueSuffix}`;
+      const year = new Date().getFullYear();
+      const rand = Math.floor(10000 + Math.random() * 90000);
+      const ts = Date.now().toString().slice(-4);
+      const generatedOrderCode = `FF-${year}-${rand}${ts}`;
 
       // Upload receipt screenshot if using instapay
       let receiptUrl = '';
