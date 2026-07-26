@@ -24,7 +24,7 @@ export default function WhyChooseUs() {
   const locale = useLocale();
   const { settings } = useStore();
 
-  let reasons = [];
+  let reasons: { id: string | number; title: string; desc: string; icon: React.ReactNode; colorClass: string }[] = [];
   try {
     const customReasons = typeof settings.why_choose_us === 'string'
       ? JSON.parse(settings.why_choose_us)
@@ -133,9 +133,9 @@ export default function WhyChooseUs() {
               className="bg-white border-3 border-black p-5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[-2px] transition-transform duration-200 flex flex-col items-center text-center"
             >
               {/* Icon Sticker */}
-              <div className={`p-4 border-2 border-black rounded-full mb-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${reason.colorClass} ${reason.id % 4 === 0 ? 'text-white' : 'text-black'}`}>
+              <div className={`p-4 border-2 border-black rounded-full mb-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${reason.colorClass} ${reason.colorClass === 'bg-[#3D405B]' ? 'text-white' : 'text-black'}`}>
                 {/* Override svg colour if needed */}
-                <span className={reason.id % 4 === 0 ? 'text-white [&>svg]:text-white' : '[&>svg]:text-black'}>
+                <span className={reason.colorClass === 'bg-[#3D405B]' ? 'text-white [&>svg]:text-white' : '[&>svg]:text-black'}>
                   {reason.icon}
                 </span>
               </div>

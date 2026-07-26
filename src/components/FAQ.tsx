@@ -14,7 +14,7 @@ export default function FAQ() {
   const [openIdx, setOpenIdx] = useState<number | null>(0);
 
   // Load FAQs from settings.faqs if configured, otherwise fallback to defaults
-  let faqItems = [];
+  let faqItems: { q: string; a: string }[] = [];
   try {
     const customFaqs = typeof settings.faqs === 'string' 
       ? JSON.parse(settings.faqs) 
