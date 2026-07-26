@@ -45,10 +45,6 @@ export default function AccountPage() {
     setMounted(true);
   }, []);
 
-  if (!mounted || isLoading) {
-    return <LoadingScreen />;
-  }
-
   // Authentication mode states
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'guest'>('signin');
   const [email, setEmail] = useState('');
@@ -138,6 +134,10 @@ export default function AccountPage() {
       setUserOrders([]);
     }
   }, [user, profile, fetchAccountOrders]);
+
+  if (!mounted || isLoading) {
+    return <LoadingScreen />;
+  }
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
