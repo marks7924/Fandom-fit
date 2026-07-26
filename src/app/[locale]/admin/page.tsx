@@ -163,6 +163,7 @@ export default function AdminPage() {
   });
 
   const [autoOffers, setAutoOffers] = useState<any[]>([]);
+  const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
   const [isAutoOffersOpen, setIsAutoOffersOpen] = useState(false);
   const [thresholdOffers, setThresholdOffers] = useState<any[]>([]);
   const [isThresholdOffersOpen, setIsThresholdOffersOpen] = useState(false);
@@ -888,6 +889,30 @@ export default function AdminPage() {
         ...prev,
         images: [...prev.images, ...uploadedUrls]
       }));
+    }
+  };
+
+  const handleFaviconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingFavicon(true);
+    try {
+      if (isUsingMock) {
+        const base64 = await fileToBase64(file);
+        setSettingsForm(prev => ({ ...prev, favicon_url: base64 }));
+      } else {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `favicon-${Date.now()}.${fileExt}`;
+        const { data, error } = await supabase.storage.from('products').upload(fileName, file);
+        if (error) throw error;
+        const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(data.path);
+        setSettingsForm(prev => ({ ...prev, favicon_url: publicUrl }));
+      }
+      alert(locale === 'ar' ? '✅ تم رفع الأيقونة بنجاح! احفظ الإعدادات لتطبيقها.' : '✅ Favicon uploaded! Save settings to apply.');
+    } catch (err: any) {
+      alert(locale === 'ar' ? `فشل رفع الملف: ${err.message}` : `Upload failed: ${err.message}`);
+    } finally {
+      setIsUploadingFavicon(false);
     }
   };
 
@@ -3532,11 +3557,33 @@ export default function AdminPage() {
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent resize-none" />
                   </div>
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Website Tab Icon URL / رابط أيقونة التبويب (Favicon)</label>
-                    <input type="text" value={settingsForm.favicon_url}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, favicon_url: e.target.value })}
-                      placeholder="e.g. /icon.png or https://example.com/logo.ico"
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Website Tab Icon (Favicon) / أيقونة التبويب</label>
+                    <div className="flex gap-2 items-stretch">
+                      <input type="text" value={settingsForm.favicon_url}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, favicon_url: e.target.value })}
+                        placeholder="Paste URL or upload from device →"
+                        className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                      <label className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-black uppercase cursor-pointer transition-colors whitespace-nowrap ${
+                        isUploadingFavicon
+                          ? 'bg-zinc-700 border-zinc-600 text-zinc-400 pointer-events-none'
+                          : 'bg-brand-accent hover:bg-brand-accent/80 border-brand-accent text-white'
+                      }`}>
+                        {isUploadingFavicon ? '⏳ Uploading…' : '📁 Upload'}
+                        <input
+                          type="file"
+                          accept="image/*,.ico"
+                          className="hidden"
+                          disabled={isUploadingFavicon}
+                          onChange={handleFaviconUpload}
+                        />
+                      </label>
+                    </div>
+                    {settingsForm.favicon_url && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <img src={settingsForm.favicon_url} alt="Favicon preview" className="w-6 h-6 object-contain rounded border border-zinc-700 bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <span className="text-[9px] text-zinc-500 truncate max-w-[260px]">{settingsForm.favicon_url}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </details>

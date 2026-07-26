@@ -190,15 +190,11 @@ export default function Hero() {
                 <span className="font-handwriting text-xl text-black">New Season Drop</span>
                 <span className="text-xs font-black uppercase px-2 py-0.5 bg-black text-white rounded">Premium</span>
               </div>
-            </motion.div>
 
-            {/* Overlapping secondary sticker */}
-            <motion.div 
-              initial={{ rotate: 12 }}
-              whileHover={{ rotate: 5, scale: 1.05 }}
-              className="absolute bottom-2 left-2 sm:-bottom-4 sm:-left-6 bg-[#81B29A] text-black border-3 border-black px-3 py-1.5 sm:px-4 sm:py-2.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-sm sm:text-lg rotate-[12deg] cursor-pointer z-10"
-            >
-              🎮 100% Egyptian Cotton!
+              {/* Overlapping secondary sticker - nested inside the polaroid card so it is always relative and never cut off on phone screens */}
+              <div className="absolute -bottom-4 -left-6 bg-[#81B29A] text-black border-3 border-black px-3 py-1.5 sm:px-4 sm:py-2.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-sm sm:text-lg rotate-[15deg] cursor-pointer z-10 whitespace-nowrap">
+                🎮 100% Egyptian Cotton!
+              </div>
             </motion.div>
           </div>
 
