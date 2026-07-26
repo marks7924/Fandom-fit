@@ -175,7 +175,8 @@ export default function AdminPage() {
     instapay_name: '',
     instapay_qr_code: '',
     instapay_link: '',
-    instapay_enabled: true
+    instapay_enabled: true,
+    cod_enabled: true
   });
   const [revealApiKey, setRevealApiKey] = useState(false);
   const [revealSecretKey, setRevealSecretKey] = useState(false);
@@ -475,7 +476,8 @@ export default function AdminPage() {
             instapay_name: parsed.instapay_name || '',
             instapay_qr_code: parsed.instapay_qr_code || '',
             instapay_link: parsed.instapay_link || '',
-            instapay_enabled: parsed.instapay_enabled !== false
+            instapay_enabled: parsed.instapay_enabled !== false,
+            cod_enabled: parsed.cod_enabled !== false
           });
         }
       } catch (e) {
@@ -1138,22 +1140,12 @@ export default function AdminPage() {
 
   const handleSavePaymentSettings = async () => {
     try {
-      const paymentSettingsJson = JSON.stringify(paymentSettingsForm);
-      const { data: currentSettings, error: fetchErr } = await supabase
-        .from('settings')
-        .select('id')
-        .limit(1)
-        .maybeSingle();
-
-      if (fetchErr || !currentSettings) {
-        alert('Failed to locate current settings record to update');
-        return;
-      }
-
       const { error: updateErr } = await supabase
         .from('settings')
-        .update({ payment_settings: paymentSettingsJson })
-        .eq('id', currentSettings.id);
+        .upsert({
+          key: 'payment_settings',
+          value: paymentSettingsForm
+        });
 
       if (updateErr) {
         throw updateErr;
@@ -5294,6 +5286,25 @@ export default function AdminPage() {
                             />
                           </div>
                         </div>
+                      </div>
+
+                      {/* COD Settings Section */}
+                      <div className="space-y-4 pt-4 border-t border-zinc-800">
+                        <h4 className="text-xs font-black uppercase text-brand-accent border-b border-zinc-800 pb-1 flex justify-between items-center select-none">
+                          <span>Cash on Delivery (COD) Settings</span>
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-zinc-400">
+                            <input
+                              type="checkbox"
+                              checked={paymentSettingsForm.cod_enabled}
+                              onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, cod_enabled: e.target.checked })}
+                              className="accent-brand-accent"
+                            />
+                            Enable Cash on Delivery (COD)
+                          </label>
+                        </h4>
+                        <p className="text-[10px] text-zinc-500 leading-relaxed font-mono">
+                          Allow customers to select Cash on Delivery. Note that for Custom Design checkouts, COD automatically requires a 50% upfront payment via online card or InstaPay screenshot upload.
+                        </p>
                       </div>
 
                       {/* Manual Save Trigger for Payment Settings */}

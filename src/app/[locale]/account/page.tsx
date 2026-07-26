@@ -151,6 +151,40 @@ export default function AccountPage() {
     }
   }, [user, profile, fetchAccountOrders, fetchUserCustomRequests]);
 
+  // Set default payment methods for accepted custom requests when settings load
+  useEffect(() => {
+    try {
+      const ps = settings?.payment_settings;
+      if (ps && userCustomRequests) {
+        const parsed = typeof ps === 'string' ? JSON.parse(ps) : ps;
+        const defaultMethod = parsed.paymob_enabled !== false 
+          ? 'card' 
+          : (parsed.instapay_enabled !== false ? 'instapay' : (parsed.cod_enabled !== false ? 'cod' : 'card'));
+          
+        const initialMethods: Record<string, string> = {};
+        const initialUpfront: Record<string, string> = {};
+        
+        const defaultUpfront = parsed.paymob_enabled !== false 
+          ? 'upfront_card' 
+          : (parsed.instapay_enabled !== false ? 'upfront_instapay' : 'upfront_card');
+
+        userCustomRequests.forEach((req: any) => {
+          if (req.status === 'accepted' && !customPaymentMethod[req.id]) {
+            initialMethods[req.id] = defaultMethod;
+            initialUpfront[req.id] = defaultUpfront;
+          }
+        });
+
+        if (Object.keys(initialMethods).length > 0) {
+          setCustomPaymentMethod(prev => ({ ...prev, ...initialMethods }));
+          setCustomUpfrontMethod(prev => ({ ...prev, ...initialUpfront }));
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [settings, userCustomRequests]);
+
   if (!mounted || isLoading) {
     return <LoadingScreen />;
   }
@@ -1032,6 +1066,10 @@ ${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm ===
                           const fabrics = ['Standard Cotton', '100% Egyptian Cotton', 'Heavy Cotton Blends'];
                           const fits = ['regular', 'oversized'];
 
+                          const isPaymobEnabled = settings.payment_settings?.paymob_enabled !== false;
+                          const isInstapayEnabled = settings.payment_settings?.instapay_enabled !== false;
+                          const isCodEnabled = settings.payment_settings?.cod_enabled !== false;
+
                           return (
                             <div key={reqId} className="border-3 border-black bg-[#EDE0D0]/10 rounded-2xl p-4 space-y-4 relative">
                               <div className="absolute top-0 bottom-0 left-0 w-2.5 bg-[#81B29A]"></div>
@@ -1143,24 +1181,33 @@ ${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm ===
                                     <div className="grid grid-cols-3 gap-2">
                                       <button
                                         type="button"
+                                        disabled={!isPaymobEnabled}
                                         onClick={() => setCustomPaymentMethod(prev => ({ ...prev, [reqId]: 'card' }))}
-                                        className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border-2 border-black transition-all ${payMethod === 'card' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
+                                        className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border-2 border-black transition-all ${
+                                          !isPaymobEnabled ? 'opacity-40 pointer-events-none filter blur-[0.3px]' : ''
+                                        } ${payMethod === 'card' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
                                       >
-                                        Card Online
+                                        Card Online {!isPaymobEnabled && (locale === 'ar' ? ' (غير متوفر)' : ' (N/A)')}
                                       </button>
                                       <button
                                         type="button"
+                                        disabled={!isInstapayEnabled}
                                         onClick={() => setCustomPaymentMethod(prev => ({ ...prev, [reqId]: 'instapay' }))}
-                                        className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border-2 border-black transition-all ${payMethod === 'instapay' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
+                                        className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border-2 border-black transition-all ${
+                                          !isInstapayEnabled ? 'opacity-40 pointer-events-none filter blur-[0.3px]' : ''
+                                        } ${payMethod === 'instapay' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
                                       >
-                                        InstaPay
+                                        InstaPay {!isInstapayEnabled && (locale === 'ar' ? ' (غير متوفر)' : ' (N/A)')}
                                       </button>
                                       <button
                                         type="button"
+                                        disabled={!isCodEnabled}
                                         onClick={() => setCustomPaymentMethod(prev => ({ ...prev, [reqId]: 'cod' }))}
-                                        className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border-2 border-black transition-all ${payMethod === 'cod' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
+                                        className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border-2 border-black transition-all ${
+                                          !isCodEnabled ? 'opacity-40 pointer-events-none filter blur-[0.3px]' : ''
+                                        } ${payMethod === 'cod' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
                                       >
-                                        COD (50% Upfront)
+                                        COD (50% Upfront) {!isCodEnabled && (locale === 'ar' ? ' (غير متوفر)' : ' (N/A)')}
                                       </button>
                                     </div>
 
@@ -1188,17 +1235,23 @@ ${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm ===
                                             <div className="flex gap-2">
                                               <button
                                                 type="button"
+                                                disabled={!isPaymobEnabled}
                                                 onClick={() => setCustomUpfrontMethod(prev => ({ ...prev, [reqId]: 'upfront_card' }))}
-                                                className={`flex-1 py-1.5 text-[9px] font-bold uppercase rounded-md border-2 border-black ${upfrontMethod === 'upfront_card' ? 'bg-zinc-800 text-white' : 'bg-white'}`}
+                                                className={`flex-1 py-1.5 text-[9px] font-bold uppercase rounded-md border-2 border-black ${
+                                                  !isPaymobEnabled ? 'opacity-40 pointer-events-none filter blur-[0.3px]' : ''
+                                                } ${upfrontMethod === 'upfront_card' ? 'bg-zinc-800 text-white' : 'bg-white'}`}
                                               >
-                                                Card Upfront
+                                                Card Upfront {!isPaymobEnabled && ' (N/A)'}
                                               </button>
                                               <button
                                                 type="button"
+                                                disabled={!isInstapayEnabled}
                                                 onClick={() => setCustomUpfrontMethod(prev => ({ ...prev, [reqId]: 'upfront_instapay' }))}
-                                                className={`flex-1 py-1.5 text-[9px] font-bold uppercase rounded-md border-2 border-black ${upfrontMethod === 'upfront_instapay' ? 'bg-zinc-800 text-white' : 'bg-white'}`}
+                                                className={`flex-1 py-1.5 text-[9px] font-bold uppercase rounded-md border-2 border-black ${
+                                                  !isInstapayEnabled ? 'opacity-40 pointer-events-none filter blur-[0.3px]' : ''
+                                                } ${upfrontMethod === 'upfront_instapay' ? 'bg-zinc-800 text-white' : 'bg-white'}`}
                                               >
-                                                InstaPay Upfront
+                                                InstaPay Upfront {!isInstapayEnabled && ' (N/A)'}
                                               </button>
                                             </div>
                                           </div>

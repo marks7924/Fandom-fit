@@ -42,7 +42,7 @@ export default function CheckoutModal() {
   const [referralCode, setReferralCode] = useState('');
 
   const [checkoutStep, setCheckoutStep] = useState<number>(1);
-  const [paymentMethod, setPaymentMethod] = useState<'paymob_card' | 'paymob_fawry' | 'instapay'>('paymob_card');
+  const [paymentMethod, setPaymentMethod] = useState<'paymob_card' | 'paymob_fawry' | 'instapay' | 'cod'>('paymob_card');
   const [orderCode, setOrderCode] = useState('');
   const [receiptUrl, setReceiptUrl] = useState('');
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
@@ -75,6 +75,25 @@ export default function CheckoutModal() {
       }
     }
   }, [profile]);
+
+  // Set default payment method when settings load
+  useEffect(() => {
+    try {
+      const ps = settings?.payment_settings;
+      if (ps) {
+        const parsed = typeof ps === 'string' ? JSON.parse(ps) : ps;
+        if (parsed.paymob_enabled !== false) {
+          setPaymentMethod('paymob_card');
+        } else if (parsed.instapay_enabled !== false) {
+          setPaymentMethod('instapay');
+        } else if (parsed.cod_enabled !== false) {
+          setPaymentMethod('cod');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [settings]);
 
   // Sizing choices (only for single product checkout)
   const [selectedSize, setSelectedSize] = useState('M');
@@ -440,7 +459,7 @@ export default function CheckoutModal() {
 
     const fullNotes = `[Checkout Type: Web]${isSingle ? ` | Fabric: ${selectedFabric} | Fit: ${selectedFit}` : ` | Items Spec: ${cart.map(i => `${i.product.name_en}: ${i.fabric}/${i.fitType || 'oversized'}`).join(', ')}`}${notes ? ` | Customer Note: ${notes}` : ''}${appliedDiscount > 0 ? ` | Coupon Code: ${couponCode.trim()} (${appliedDiscount}% Off)` : ''}${referralCode.trim() ? ` | Referral: ${referralCode.trim()}` : ''}`;
 
-    const orderStatus = paymentMethod === 'instapay' ? 'pending_verification' : 'pending_payment';
+    const orderStatus = paymentMethod === 'instapay' ? 'pending_verification' : (paymentMethod === 'cod' ? 'pending' : 'pending_payment');
 
     const result = await addOrder({
       product_id: isSingle && checkoutProduct ? checkoutProduct.id : null,
@@ -1002,66 +1021,89 @@ export default function CheckoutModal() {
                     </button>
 
                     {/* Payment methods list */}
-                    <div className="space-y-4">
-                      <h4 className="text-sm font-black uppercase text-black">
-                        {locale === 'ar' ? 'اختر طريقة الدفع' : 'Select Payment Method'}
-                      </h4>
-                      <div className="grid grid-cols-1 gap-2.5">
-                        {/* Visa/Mastercard (Paymob) */}
-                        <label className={`p-4 border-3 border-black rounded-2xl cursor-pointer flex items-start gap-3 transition-all ${paymentMethod === 'paymob_card' ? 'bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'bg-white/50 opacity-70 hover:opacity-100'}`}>
-                          <input
-                            type="radio"
-                            name="payment_method"
-                            checked={paymentMethod === 'paymob_card'}
-                            onChange={() => setPaymentMethod('paymob_card')}
-                            className="mt-1 accent-black"
-                          />
-                          <div className="flex-1">
-                            <span className="font-black text-xs uppercase block text-black flex items-center gap-1.5">
-                              <CreditCard size={14} className="text-zinc-600" />
-                              {locale === 'ar' ? 'بطاقة ائتمان / ميزة' : 'Visa / Mastercard'}
-                            </span>
-                            <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
-                              {locale === 'ar' ? 'دفع تلقائي آمن عبر بوابة Paymob' : 'Secure automatic payment via Paymob gateway'}
-                            </span>
-                          </div>
-                        </label>
-
-                        {/* Fawry kiosk (Paymob) */}
-                        <label className={`p-4 border-3 border-black rounded-2xl cursor-pointer flex items-start gap-3 transition-all ${paymentMethod === 'paymob_fawry' ? 'bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'bg-white/50 opacity-70 hover:opacity-100'}`}>
-                          <input
-                            type="radio"
-                            name="payment_method"
-                            checked={paymentMethod === 'paymob_fawry'}
-                            onChange={() => setPaymentMethod('paymob_fawry')}
-                            className="mt-1 accent-black"
-                          />
-                          <div className="flex-1">
-                            <span className="font-black text-xs uppercase block text-black flex items-center gap-1.5">
-                              <Ticket size={14} className="text-zinc-600" />
-                              {locale === 'ar' ? 'فوري' : 'Fawry Pay'}
-                            </span>
-                            <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
-                              {locale === 'ar' ? 'ادفع في أي منفذ فوري خلال ساعة' : 'Pay at any Fawry kiosk within 1 hour'}
-                            </span>
-                          </div>
-                        </label>
-
-                        {/* InstaPay Manual Option */}
-                        {(() => {
-                          const paymentSettings = (() => {
-                            try {
-                              const ps = settings?.payment_settings;
-                              if (!ps) return null;
-                              return typeof ps === 'string' ? JSON.parse(ps) : ps;
-                            } catch { return null; }
-                          })();
-                          if (paymentSettings?.instapay_enabled === false) return null;
-                          return (
-                            <label className={`p-4 border-3 border-black rounded-2xl cursor-pointer flex items-start gap-3 transition-all ${paymentMethod === 'instapay' ? 'bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'bg-white/50 opacity-70 hover:opacity-100'}`}>
+                    {(() => {
+                      const paymentSettings = (() => {
+                        try {
+                          const ps = settings?.payment_settings;
+                          if (!ps) return null;
+                          return typeof ps === 'string' ? JSON.parse(ps) : ps;
+                        } catch { return null; }
+                      })();
+                      
+                      const isPaymobEnabled = paymentSettings?.paymob_enabled !== false;
+                      const isInstapayEnabled = paymentSettings?.instapay_enabled !== false;
+                      const isCodEnabled = paymentSettings?.cod_enabled !== false;
+                      
+                      return (
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-black uppercase text-black">
+                            {locale === 'ar' ? 'اختر طريقة الدفع' : 'Select Payment Method'}
+                          </h4>
+                          <div className="grid grid-cols-1 gap-2.5">
+                            {/* Visa/Mastercard (Paymob) */}
+                            <label className={`p-4 border-3 border-black rounded-2xl cursor-pointer flex items-start gap-3 transition-all ${
+                              !isPaymobEnabled ? 'opacity-45 pointer-events-none filter blur-[0.3px]' : ''
+                            } ${paymentMethod === 'paymob_card' ? 'bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'bg-white/50 opacity-70 hover:opacity-100'}`}>
                               <input
                                 type="radio"
                                 name="payment_method"
+                                disabled={!isPaymobEnabled}
+                                checked={paymentMethod === 'paymob_card'}
+                                onChange={() => setPaymentMethod('paymob_card')}
+                                className="mt-1 accent-black"
+                              />
+                              <div className="flex-1">
+                                <span className="font-black text-xs uppercase block text-black flex items-center gap-1.5">
+                                  <CreditCard size={14} className="text-zinc-600" />
+                                  {locale === 'ar' ? 'بطاقة ائتمان / ميزة' : 'Visa / Mastercard'}
+                                  {!isPaymobEnabled && (
+                                    <span className="text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 uppercase font-sans ml-2">
+                                      {locale === 'ar' ? 'غير متوفر حالياً' : 'Not available now'}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
+                                  {locale === 'ar' ? 'دفع تلقائي آمن عبر بوابة Paymob' : 'Secure automatic payment via Paymob gateway'}
+                                </span>
+                              </div>
+                            </label>
+
+                            {/* Fawry kiosk (Paymob) */}
+                            <label className={`p-4 border-3 border-black rounded-2xl cursor-pointer flex items-start gap-3 transition-all ${
+                              !isPaymobEnabled ? 'opacity-45 pointer-events-none filter blur-[0.3px]' : ''
+                            } ${paymentMethod === 'paymob_fawry' ? 'bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'bg-white/50 opacity-70 hover:opacity-100'}`}>
+                              <input
+                                type="radio"
+                                name="payment_method"
+                                disabled={!isPaymobEnabled}
+                                checked={paymentMethod === 'paymob_fawry'}
+                                onChange={() => setPaymentMethod('paymob_fawry')}
+                                className="mt-1 accent-black"
+                              />
+                              <div className="flex-1">
+                                <span className="font-black text-xs uppercase block text-black flex items-center gap-1.5">
+                                  <Ticket size={14} className="text-zinc-600" />
+                                  {locale === 'ar' ? 'فوري' : 'Fawry Pay'}
+                                  {!isPaymobEnabled && (
+                                    <span className="text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 uppercase font-sans ml-2">
+                                      {locale === 'ar' ? 'غير متوفر حالياً' : 'Not available now'}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
+                                  {locale === 'ar' ? 'ادفع في أي منفذ فوري خلال ساعة' : 'Pay at any Fawry kiosk within 1 hour'}
+                                </span>
+                              </div>
+                            </label>
+
+                            {/* InstaPay Manual Option */}
+                            <label className={`p-4 border-3 border-black rounded-2xl cursor-pointer flex items-start gap-3 transition-all ${
+                              !isInstapayEnabled ? 'opacity-45 pointer-events-none filter blur-[0.3px]' : ''
+                            } ${paymentMethod === 'instapay' ? 'bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'bg-white/50 opacity-70 hover:opacity-100'}`}>
+                              <input
+                                type="radio"
+                                name="payment_method"
+                                disabled={!isInstapayEnabled}
                                 checked={paymentMethod === 'instapay'}
                                 onChange={() => setPaymentMethod('instapay')}
                                 className="mt-1 accent-black"
@@ -1070,16 +1112,49 @@ export default function CheckoutModal() {
                                 <span className="font-black text-xs uppercase block text-black flex items-center gap-1.5">
                                   <Share2 size={14} className="text-zinc-600" />
                                   {locale === 'ar' ? 'انستاباي (تحويل وتأكيد يدوي)' : 'InstaPay (Manual Verification)'}
+                                  {!isInstapayEnabled && (
+                                    <span className="text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 uppercase font-sans ml-2">
+                                      {locale === 'ar' ? 'غير متوفر حالياً' : 'Not available now'}
+                                    </span>
+                                  )}
                                 </span>
                                 <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
                                   {locale === 'ar' ? 'تحويل مباشر وسريع ثم رفع لقطة شاشة للإيصال' : 'Transfer directly and upload payment receipt'}
                                 </span>
                               </div>
                             </label>
-                          );
-                        })()}
-                      </div>
-                    </div>
+
+                            {/* COD Option */}
+                            <label className={`p-4 border-3 border-black rounded-2xl cursor-pointer flex items-start gap-3 transition-all ${
+                              !isCodEnabled ? 'opacity-45 pointer-events-none filter blur-[0.3px]' : ''
+                            } ${paymentMethod === 'cod' ? 'bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'bg-white/50 opacity-70 hover:opacity-100'}`}>
+                              <input
+                                type="radio"
+                                name="payment_method"
+                                disabled={!isCodEnabled}
+                                checked={paymentMethod === 'cod'}
+                                onChange={() => setPaymentMethod('cod')}
+                                className="mt-1 accent-black"
+                              />
+                              <div className="flex-1">
+                                <span className="font-black text-xs uppercase block text-black flex items-center gap-1.5">
+                                  <span>📦</span>
+                                  {locale === 'ar' ? 'الدفع عند الاستلام' : 'Cash on Delivery (COD)'}
+                                  {!isCodEnabled && (
+                                    <span className="text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 uppercase font-sans ml-2">
+                                      {locale === 'ar' ? 'غير متوفر حالياً' : 'Not available now'}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-semibold block mt-0.5">
+                                  {locale === 'ar' ? 'ادفع كاش بالكامل عند استلام الطرد' : 'Pay fully in cash when your package is delivered'}
+                                </span>
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Paymob Info */}
                     {(paymentMethod === 'paymob_card' || paymentMethod === 'paymob_fawry') && (
@@ -1087,6 +1162,14 @@ export default function CheckoutModal() {
                         {locale === 'ar'
                           ? 'سيتم تحويلك إلى صفحة الدفع الآمنة الخاصة بـ Paymob لإتمام عمليتك. بمجرد الدفع، سيتم تأكيد طلبك تلقائياً.'
                           : 'You will be redirected to Paymob secure checkout to complete your transaction. Your order will be confirmed automatically once paid.'}
+                      </div>
+                    )}
+
+                    {paymentMethod === 'cod' && (
+                      <div className="p-4 bg-zinc-100 border-2 border-black rounded-xl text-xs font-semibold text-zinc-700 leading-relaxed">
+                        {locale === 'ar'
+                          ? 'لقد اخترت الدفع عند الاستلام. سيتم شحن طلبك والدفع كاش عند التوصيل.'
+                          : 'You selected Cash on Delivery. Pay cash to the courier agent when your shipment arrives.'}
                       </div>
                     )}
 
