@@ -192,6 +192,15 @@ export default function Hero() {
                 <span className="text-xs font-black uppercase px-2 py-0.5 bg-black text-white rounded">Premium</span>
               </div>
 
+              {/* Cotton sticker — absolute to the polaroid card (no overflow:hidden on card).
+                  Top-right position is near the section top, so clip-path at 91% height never clips it. */}
+              <div
+                className="absolute -top-5 -right-5 bg-[#81B29A] text-black border-3 border-black px-3 py-1.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-sm whitespace-nowrap"
+                style={{ transform: 'rotate(15deg)', zIndex: 20 }}
+              >
+                🎮 100% Egyptian Cotton!
+              </div>
+
             </motion.div>
 
           </div>
@@ -200,14 +209,5 @@ export default function Hero() {
       </div>
     </section>
 
-    {/* Egyptian Cotton sticker — rendered OUTSIDE the section so the section's
-        clip-path (ripped paper edge) cannot clip it. z-50 puts it above every layer. */}
-    <div
-      className="absolute top-[12%] right-[4%] sm:top-[15%] sm:right-[6%] bg-[#81B29A] text-black border-3 border-black px-3 py-1.5 sm:px-4 sm:py-2.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-sm sm:text-lg whitespace-nowrap pointer-events-none select-none"
-      style={{ transform: 'rotate(15deg)', zIndex: 50 }}
-    >
-      🎮 100% Egyptian Cotton!
-    </div>
-    </div>
   );
 }
