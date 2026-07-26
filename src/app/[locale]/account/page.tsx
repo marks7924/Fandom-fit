@@ -1108,6 +1108,20 @@ ${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm ===
                                 <span className="text-[#E07A5F] text-sm font-mono">{pricePerItem} EGP</span>
                               </div>
 
+                              {/* Price and Payment split notice banner */}
+                              <div className="bg-[#EDE0D0]/50 border-2 border-dashed border-black/35 rounded-xl p-3 text-xs leading-relaxed text-left rtl:text-right font-medium text-zinc-800">
+                                📢 {' '}
+                                {locale === 'ar' ? (
+                                  <>
+                                    <strong>تفاصيل الدفع:</strong> سعر القطعة هو <strong>{pricePerItem} جنيه</strong>. يمكنك اختيار الدفع بالكامل الآن (فيزا/انستاباي) <strong>أو</strong> اختيار الدفع عند الاستلام (COD) لتدفع <strong>٥٠٪ مقدماً فقط</strong> والـ ٥٠٪ المتبقية نقداً عند التسليم.
+                                  </>
+                                ) : (
+                                  <>
+                                    <strong>Payment Options:</strong> The base price is <strong>{pricePerItem} EGP</strong> per item. You can pay 100% online now (via Card/InstaPay) <strong>or</strong> choose Cash on Delivery (COD) to pay only <strong>50% upfront now</strong> and the remaining 50% cash balance upon delivery.
+                                  </>
+                                )}
+                              </div>
+
                               {success ? (
                                 <div className="p-4 bg-green-100 border-2 border-green-500 rounded-xl text-center text-green-800 text-xs font-bold space-y-1">
                                   <span>🎉</span>

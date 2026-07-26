@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useStore } from '@/lib/store';
 import supabase, { isUsingMock } from '@/lib/supabase';
@@ -37,6 +37,8 @@ export default function AdminPage() {
 
   // Tab State: 'dashboard' | 'products' | 'categories' | 'requests' | 'offers' | 'settings'
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [mainCategory, setMainCategory] = useState<'orders' | 'managemental'>('orders');
+  const [expandedRequestRowId, setExpandedRequestRowId] = useState<string | null>(null);
 
   // Modal / Editing states
   const [editingItem, setEditingItem] = useState<any | null>(null);
@@ -290,6 +292,7 @@ export default function AdminPage() {
     if (isAuthenticated) {
       fetchAdminRequests();
       fetchOrders();
+      useStore.getState().fetchUsersList();
 
       // Fetch all product designs for printing reference check
       supabase.from('product_designs').select('*').then(({ data }: any) => {
@@ -1240,28 +1243,63 @@ export default function AdminPage() {
             <span className="text-[9px] font-black bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded uppercase border border-zinc-700">CMS</span>
           </div>
 
+          {/* Main Categories Switch */}
+          <div className="grid grid-cols-2 gap-1 p-1 bg-zinc-950 border border-zinc-800 rounded-xl mb-6 select-none">
+            <button
+              type="button"
+              onClick={() => {
+                setMainCategory('orders');
+                setActiveTab('dashboard');
+              }}
+              className={`py-2 px-1 text-[9px] font-black uppercase rounded-lg transition-all cursor-pointer text-center ${
+                mainCategory === 'orders' 
+                  ? 'bg-zinc-800 text-brand-accent shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {locale === 'ar' ? 'عمليات الطلبات' : 'Orders Tab'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMainCategory('managemental');
+                setActiveTab('settings');
+              }}
+              className={`py-2 px-1 text-[9px] font-black uppercase rounded-lg transition-all cursor-pointer text-center ${
+                mainCategory === 'managemental' 
+                  ? 'bg-zinc-800 text-brand-accent shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {locale === 'ar' ? 'لوحة الإدارة' : 'Managemental'}
+            </button>
+          </div>
+
           <div className="flex flex-col gap-1.5">
             {/* Tabs */}
             {[
-              { id: 'dashboard', name: t('sidebar.dashboard'), icon: <LayoutDashboard size={16} /> },
-              { id: 'products', name: t('sidebar.products'), icon: <ShoppingBag size={16} /> },
-              { id: 'categories', name: t('sidebar.categories'), icon: <FolderOpen size={16} /> },
-              { id: 'offers', name: t('sidebar.offers'), icon: <Ticket size={16} /> },
-              { id: 'discounts', name: locale === 'ar' ? 'حملات الخصم' : 'Discounts', icon: <Tag size={16} /> },
-              { id: 'requests', name: t('sidebar.custom_requests'), icon: <Palette size={16} /> },
-              { id: 'orders', name: locale === 'ar' ? 'الطلبات' : 'Orders', icon: <ShoppingCart size={16} /> },
-              { id: 'designs-explorer', name: locale === 'ar' ? 'التصاميم والطباعة' : 'Designs Explorer', icon: <Palette size={16} /> },
-              { id: 'chats', name: locale === 'ar' ? 'المحادثات المباشرة' : 'Live Chat', icon: <MessageSquare size={16} /> },
-              { id: 'users', name: locale === 'ar' ? 'إدارة المستخدمين' : 'Users Management', icon: <Users size={16} /> },
-              { id: 'analytics', name: locale === 'ar' ? 'تحليلات الموقع' : 'Web Analytics', icon: <BarChart3 size={16} /> },
-              { id: 'settings', name: t('sidebar.settings'), icon: <Settings size={16} /> },
-            ].map((tab) => (
+              { id: 'dashboard', name: t('sidebar.dashboard'), icon: <LayoutDashboard size={16} />, cat: 'orders' },
+              { id: 'products', name: t('sidebar.products'), icon: <ShoppingBag size={16} />, cat: 'orders' },
+              { id: 'categories', name: t('sidebar.categories'), icon: <FolderOpen size={16} />, cat: 'orders' },
+              { id: 'offers', name: t('sidebar.offers'), icon: <Ticket size={16} />, cat: 'orders' },
+              { id: 'discounts', name: locale === 'ar' ? 'حملات الخصم' : 'Discounts', icon: <Tag size={16} />, cat: 'orders' },
+              { id: 'requests', name: t('sidebar.custom_requests'), icon: <Palette size={16} />, cat: 'orders' },
+              { id: 'orders', name: locale === 'ar' ? 'الطلبات' : 'Orders', icon: <ShoppingCart size={16} />, cat: 'orders' },
+              { id: 'designs-explorer', name: locale === 'ar' ? 'التصاميم والطباعة' : 'Designs Explorer', icon: <Palette size={16} />, cat: 'orders' },
+              { id: 'chats', name: locale === 'ar' ? 'المحادثات المباشرة' : 'Live Chat', icon: <MessageSquare size={16} />, cat: 'orders' },
+              { id: 'users', name: locale === 'ar' ? 'إدارة المستخدمين' : 'Users Management', icon: <Users size={16} />, cat: 'managemental' },
+              { id: 'analytics', name: locale === 'ar' ? 'تحليلات الموقع' : 'Web Analytics', icon: <BarChart3 size={16} />, cat: 'managemental' },
+              { id: 'settings', name: t('sidebar.settings'), icon: <Settings size={16} />, cat: 'managemental' },
+            ].filter(t => t.cat === mainCategory).map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => { 
                   setActiveTab(tab.id); 
                   setIsFormOpen(false); 
-                  if (tab.id === 'designs-explorer') {
+                  if (tab.id === 'requests') {
+                    useStore.getState().fetchAdminRequests();
+                    useStore.getState().fetchUsersList();
+                  } else if (tab.id === 'designs-explorer') {
                     supabase.from('product_designs').select('*').then(({ data }: any) => {
                       if (data) setAllDesigns(data);
                     });
@@ -3625,110 +3663,294 @@ export default function AdminPage() {
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[800px] text-left font-mono">
-                <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
-                  <tr>
-                    <th className="p-4">{t('custom_requests.client')}</th>
-                    <th className="p-4">{t('custom_requests.instagram')}</th>
-                    <th className="p-4">Description</th>
-                    <th className="p-4">{t('custom_requests.status')}</th>
-                    <th className="p-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800 text-xs">
-                  {customRequests.map((req) => (
-                    <tr key={req.id} className="hover:bg-zinc-800/20 text-zinc-300">
-                      <td className="p-4 font-bold text-white">
-                        <div>{req.customer_name}</div>
-                        {req.email && <div className="text-[10px] text-zinc-500 font-normal">{req.email}</div>}
-                      </td>
-                      <td className="p-4 text-brand-accent">
-                        <a 
-                          href={`https://instagram.com/${req.instagram_username.replace('@', '')}`}
-                          target="_blank" rel="noopener noreferrer"
-                          className="hover:underline"
-                        >
-                          {req.instagram_username}
-                        </a>
-                      </td>
-                      <td className="p-4 max-w-xs">
-                        <div className="truncate" title={req.description}>{req.description}</div>
-                        {req.price ? (
-                          <div className="text-[10px] text-brand-accent font-black mt-0.5">{req.price} EGP</div>
-                        ) : null}
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                          req.status === 'completed' ? 'bg-green-950/50 text-green-400 border border-green-900' :
-                          req.status === 'accepted' ? 'bg-blue-950/50 text-blue-400 border border-blue-900' :
-                          req.status === 'declined' ? 'bg-red-950/50 text-red-400 border border-red-900' :
-                          req.status === 'in_progress' ? 'bg-amber-950/50 text-amber-400 border border-amber-900' :
-                          'bg-zinc-800 text-zinc-400 border border-zinc-700'
-                        }`}>
-                          {t(`custom_requests.${req.status}`) || req.status}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="flex flex-col items-end gap-2">
-                          <select
-                            value={req.status}
-                            onChange={(e) => {
-                              const newStatus = e.target.value;
-                              if (newStatus === 'accepted') {
-                                setAcceptingReqId(req.id);
-                                setCustomRequestPrice(req.price ? req.price.toString() : '');
-                              } else {
-                                updateRequestStatus(req.id, newStatus, req.notes || '');
-                              }
-                            }}
-                            className="px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="accepted">Accepted</option>
-                            <option value="declined">Declined</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="completed">Completed</option>
-                          </select>
+                 <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
+                   <tr>
+                     <th className="p-4 w-[80px]">Details</th>
+                     <th className="p-4">{t('custom_requests.client')}</th>
+                     <th className="p-4">{t('custom_requests.instagram')}</th>
+                     <th className="p-4">Description</th>
+                     <th className="p-4">{t('custom_requests.status')}</th>
+                     <th className="p-4 text-right">Actions</th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y divide-zinc-800 text-xs">
+                   {customRequests.map((req) => (
+                     <Fragment key={req.id}>
+                       <tr className="hover:bg-zinc-800/20 text-zinc-300">
+                         <td className="p-4">
+                           <button
+                             type="button"
+                             onClick={() => setExpandedRequestRowId(expandedRequestRowId === req.id ? null : req.id)}
+                             className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-[9px] font-bold cursor-pointer transition-colors"
+                           >
+                             {expandedRequestRowId === req.id ? 'Hide' : 'Show'}
+                           </button>
+                         </td>
+                         <td className="p-4 font-bold text-white">
+                           <div>{req.customer_name}</div>
+                           {req.email && <div className="text-[10px] text-zinc-500 font-normal">{req.email}</div>}
+                         </td>
+                         <td className="p-4 text-brand-accent">
+                           <a 
+                             href={`https://instagram.com/${req.instagram_username.replace('@', '')}`}
+                             target="_blank" rel="noopener noreferrer"
+                             className="hover:underline"
+                           >
+                             {req.instagram_username}
+                           </a>
+                         </td>
+                         <td className="p-4 max-w-xs">
+                           <div className="truncate" title={req.description}>{req.description}</div>
+                           {req.price ? (
+                             <div className="text-[10px] text-brand-accent font-black mt-0.5">{req.price} EGP</div>
+                           ) : null}
+                         </td>
+                         <td className="p-4">
+                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                             req.status === 'completed' ? 'bg-green-950/50 text-green-400 border border-green-900' :
+                             req.status === 'accepted' ? 'bg-blue-950/50 text-blue-400 border border-blue-900' :
+                             req.status === 'declined' ? 'bg-red-950/50 text-red-400 border border-red-900' :
+                             req.status === 'in_progress' ? 'bg-amber-950/50 text-amber-400 border border-amber-900' :
+                             'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                           }`}>
+                             {t(`custom_requests.${req.status}`) || req.status}
+                           </span>
+                         </td>
+                         <td className="p-4 text-right">
+                           <div className="flex flex-col items-end gap-2">
+                             <select
+                               value={req.status}
+                               onChange={(e) => {
+                                 const newStatus = e.target.value;
+                                 if (newStatus === 'accepted') {
+                                   setAcceptingReqId(req.id);
+                                   setCustomRequestPrice(req.price ? req.price.toString() : '');
+                                 } else {
+                                   updateRequestStatus(req.id, newStatus, req.notes || '');
+                                 }
+                               }}
+                               className="px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
+                             >
+                               <option value="pending">Pending</option>
+                               <option value="accepted">Accepted</option>
+                               <option value="declined">Declined</option>
+                               <option value="in_progress">In Progress</option>
+                               <option value="completed">Completed</option>
+                             </select>
 
-                          {acceptingReqId === req.id && (
-                            <div className="flex items-center gap-1.5 mt-1 bg-zinc-950 p-1.5 border border-zinc-800 rounded shadow-md">
-                              <input
-                                type="number"
-                                placeholder="Price EGP"
-                                value={customRequestPrice}
-                                onChange={(e) => setCustomRequestPrice(e.target.value)}
-                                className="w-16 px-1.5 py-0.5 bg-zinc-900 border border-zinc-700 rounded text-[10px] text-white font-mono"
-                              />
-                              <button
-                                onClick={async () => {
-                                  const priceNum = parseFloat(customRequestPrice);
-                                  if (isNaN(priceNum) || priceNum <= 0) {
-                                    alert('Please enter a valid price');
-                                    return;
-                                  }
-                                  await updateRequestStatus(req.id, 'accepted', req.notes || '', priceNum);
-                                  setAcceptingReqId(null);
-                                  setCustomRequestPrice('');
-                                }}
-                                className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[9px] font-bold"
-                              >
-                                Accept
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setAcceptingReqId(null);
-                                  setCustomRequestPrice('');
-                                }}
-                                className="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-[9px] font-bold"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                             {acceptingReqId === req.id && (
+                               <div className="flex items-center gap-1.5 mt-1 bg-zinc-950 p-1.5 border border-zinc-800 rounded shadow-md">
+                                 <input
+                                   type="number"
+                                   placeholder="Price EGP"
+                                   value={customRequestPrice}
+                                   onChange={(e) => setCustomRequestPrice(e.target.value)}
+                                   className="w-16 px-1.5 py-0.5 bg-zinc-900 border border-zinc-700 rounded text-[10px] text-white font-mono"
+                                 />
+                                 <button
+                                   onClick={async () => {
+                                     const priceNum = parseFloat(customRequestPrice);
+                                     if (isNaN(priceNum) || priceNum <= 0) {
+                                       alert('Please enter a valid price');
+                                       return;
+                                     }
+                                     await updateRequestStatus(req.id, 'accepted', req.notes || '', priceNum);
+                                     setAcceptingReqId(null);
+                                     setCustomRequestPrice('');
+                                   }}
+                                   className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[9px] font-bold"
+                                 >
+                                   Accept
+                                 </button>
+                                 <button
+                                   onClick={() => {
+                                     setAcceptingReqId(null);
+                                     setCustomRequestPrice('');
+                                   }}
+                                   className="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-[9px] font-bold"
+                                 >
+                                   Cancel
+                                 </button>
+                               </div>
+                             )}
+                           </div>
+                         </td>
+                       </tr>
+
+                       {expandedRequestRowId === req.id && (() => {
+                         const userProfile = usersList.find((u: any) => u.id === req.user_id);
+                         const otherReqs = customRequests.filter((r: any) => 
+                           r.id !== req.id && 
+                           ((req.user_id && r.user_id === req.user_id) || (req.email && r.email === req.email))
+                         );
+
+                         return (
+                           <tr className="bg-zinc-950/70 border-b border-zinc-800">
+                             <td colSpan={6} className="p-5 text-zinc-300">
+                               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                 
+                                 {/* 1. Client Registered Account Info */}
+                                 <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 space-y-3 font-sans">
+                                   <h4 className="text-xs font-black uppercase text-brand-accent border-b border-zinc-800 pb-1.5 flex items-center gap-1.5 select-none">
+                                     <span>👤 Customer Profile info</span>
+                                   </h4>
+                                   {userProfile ? (
+                                     <div className="space-y-2 text-[11px] leading-relaxed">
+                                       <div>
+                                         <span className="text-zinc-500 font-bold block">Account Full Name:</span>
+                                         <span className="text-white font-mono">{userProfile.address_data?.customer_name || 'Not Set'}</span>
+                                       </div>
+                                       <div>
+                                         <span className="text-zinc-500 font-bold block">Registered Email:</span>
+                                         <span className="text-white font-mono select-all">{userProfile.email}</span>
+                                       </div>
+                                       <div>
+                                         <span className="text-zinc-500 font-bold block">Registered Phone:</span>
+                                         <span className="text-white font-mono select-all">{userProfile.phone || 'N/A'}</span>
+                                       </div>
+                                       <div>
+                                         <span className="text-zinc-500 font-bold block">Loyalty Points:</span>
+                                         <span className="text-brand-accent font-black">{userProfile.loyalty_points || 0} Points</span>
+                                       </div>
+                                       <div className="pt-1.5 border-t border-zinc-800">
+                                         <span className="text-zinc-500 font-bold block">Saved Shipping Address:</span>
+                                         <p className="text-white font-mono text-[10px] bg-zinc-950 p-2 rounded border border-zinc-800 mt-1">
+                                           {userProfile.address_data?.governorate ? (
+                                             <>
+                                               {userProfile.address_data.governorate} - {userProfile.address_data.city}<br />
+                                               {userProfile.address_data.address || userProfile.address_data.street}
+                                             </>
+                                           ) : (
+                                             'No shipping address saved'
+                                           )}
+                                         </p>
+                                       </div>
+                                     </div>
+                                   ) : (
+                                     <div className="text-[11px] text-zinc-500 bg-zinc-950 p-3 rounded border border-zinc-800 text-center font-mono">
+                                       No linked account. Custom request submitted using:
+                                       <div className="text-white mt-1 select-all">{req.email || 'No email provided'}</div>
+                                       <div className="text-white select-all">{req.customer_phone || 'No phone provided'}</div>
+                                     </div>
+                                   )}
+                                 </div>
+
+                                 {/* 2. Custom Idea Description & Uploaded Images */}
+                                 <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 space-y-3 font-sans">
+                                   <h4 className="text-xs font-black uppercase text-brand-accent border-b border-zinc-800 pb-1.5 select-none">
+                                     💡 Custom Request details
+                                   </h4>
+                                   <div className="space-y-2 text-[11px] leading-relaxed">
+                                     <div>
+                                       <span className="text-zinc-500 font-bold block">Submitter Name:</span>
+                                       <span className="text-white font-mono">{req.customer_name}</span>
+                                     </div>
+                                     <div>
+                                       <span className="text-zinc-500 font-bold block">Contact Email:</span>
+                                       <span className="text-white font-mono select-all">{req.email || 'N/A'}</span>
+                                     </div>
+                                     <div>
+                                       <span className="text-zinc-500 font-bold block">Contact Phone:</span>
+                                       <span className="text-white font-mono select-all">{req.customer_phone || 'N/A'}</span>
+                                     </div>
+                                     <div>
+                                       <span className="text-zinc-500 font-bold block">Instagram Username:</span>
+                                       <span className="text-brand-accent font-mono select-all">@{req.instagram_username}</span>
+                                     </div>
+                                     <div>
+                                       <span className="text-zinc-500 font-bold block">Garment Idea Description:</span>
+                                       <p className="text-white text-[10px] bg-zinc-950 p-2.5 rounded border border-zinc-800 mt-1 leading-normal whitespace-pre-wrap select-text font-mono">
+                                         {req.description}
+                                       </p>
+                                     </div>
+
+                                     {/* Reference Images */}
+                                     {req.reference_images && req.reference_images.length > 0 ? (
+                                       <div className="pt-2">
+                                         <span className="text-zinc-500 font-bold block mb-1.5">Uploaded Reference Pics:</span>
+                                         <div className="flex gap-2 flex-wrap">
+                                           {req.reference_images.map((img: string, idx: number) => (
+                                             <a
+                                               key={idx}
+                                               href={img}
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               className="relative w-14 h-14 border border-zinc-700 hover:border-brand-accent rounded overflow-hidden bg-zinc-950 flex items-center justify-center cursor-zoom-in transition-colors group"
+                                             >
+                                               <img src={img} alt="ref" className="w-full h-full object-cover" />
+                                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[8px] text-white font-mono font-bold transition-opacity">
+                                                 [VIEW]
+                                               </div>
+                                             </a>
+                                           ))}
+                                         </div>
+                                       </div>
+                                     ) : (
+                                       <div className="text-[10px] text-zinc-500 italic mt-2">No reference pictures uploaded.</div>
+                                     )}
+                                   </div>
+                                 </div>
+
+                                 {/* 3. User Custom Requests History */}
+                                 <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 space-y-3 font-sans">
+                                   <h4 className="text-xs font-black uppercase text-brand-accent border-b border-zinc-800 pb-1.5 select-none">
+                                     📂 Customer Request History ({otherReqs.length})
+                                   </h4>
+                                   {otherReqs.length > 0 ? (
+                                     <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                                       {otherReqs.map((other: any) => (
+                                         <div key={other.id} className="p-2.5 bg-zinc-950 border border-zinc-800 rounded-lg space-y-1.5">
+                                           <div className="flex justify-between items-center text-[9px]">
+                                             <span className="text-zinc-500 font-mono font-bold">
+                                               {new Date(other.created_at).toLocaleDateString()}
+                                             </span>
+                                             <span className={`px-1.5 py-0.2 rounded-full text-[8px] font-black uppercase ${
+                                               other.status === 'completed' ? 'bg-green-950/40 text-green-400 border border-green-900' :
+                                               other.status === 'accepted' ? 'bg-blue-950/40 text-blue-400 border border-blue-900' :
+                                               other.status === 'declined' ? 'bg-red-950/40 text-red-400 border border-red-900' :
+                                               'bg-zinc-850 text-zinc-400 border border-zinc-700'
+                                             }`}>
+                                               {other.status}
+                                             </span>
+                                           </div>
+                                           <p className="text-[10px] text-white font-mono line-clamp-2 select-text" title={other.description}>
+                                             {other.description}
+                                           </p>
+
+                                           {/* Mini thumbnails of images in history */}
+                                           {other.reference_images && other.reference_images.length > 0 && (
+                                             <div className="flex gap-1 pt-1">
+                                               {other.reference_images.map((oimg: string, oidx: number) => (
+                                                 <a
+                                                   key={oidx}
+                                                   href={oimg}
+                                                   target="_blank"
+                                                   rel="noopener noreferrer"
+                                                   className="w-8 h-8 rounded border border-zinc-800 bg-zinc-950 overflow-hidden block hover:border-brand-accent transition-colors"
+                                                 >
+                                                   <img src={oimg} alt="ref mini" className="w-full h-full object-cover" />
+                                                 </a>
+                                               ))}
+                                             </div>
+                                           )}
+                                         </div>
+                                       ))}
+                                     </div>
+                                   ) : (
+                                     <div className="text-[10px] text-zinc-500 italic text-center py-6 font-mono">
+                                       No other custom requests submitted by this customer.
+                                     </div>
+                                   )}
+                                 </div>
+
+                               </div>
+                             </td>
+                           </tr>
+                         );
+                       })()}
+                     </Fragment>
+                   ))}
+                 </tbody>
               </table>
             </div>
           </div>

@@ -14,6 +14,7 @@ export default function CustomDesignForm() {
   const { user, profile, addCustomRequest } = useStore();
 
   const [name, setName] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [instagram, setInstagram] = useState('');
   const [phone, setPhone] = useState('');
   const [description, setDescription] = useState('');
@@ -27,6 +28,12 @@ export default function CustomDesignForm() {
       setPhone(prev => prev || profile.phone || '');
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (user) {
+      setEmailInput(prev => prev || user.email || '');
+    }
+  }, [user]);
 
   const [files, setFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
@@ -50,7 +57,7 @@ export default function CustomDesignForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !instagram || !phone || !description) return;
+    if (!name || !emailInput || !instagram || !phone || !description) return;
 
     if (!/^01[0-25]\d{8}$/.test(phone.trim())) {
       alert(
@@ -62,8 +69,6 @@ export default function CustomDesignForm() {
     }
 
     setIsSubmitting(true);
-
-
 
     const uploadedUrls: string[] = [];
     for (const file of files) {
@@ -84,7 +89,7 @@ export default function CustomDesignForm() {
     const success = await addCustomRequest({
       user_id: user?.id,
       customer_name: name,
-      email: user?.email || '',
+      email: emailInput.trim(),
       instagram_username: instagram,
       customer_phone: phone,
       description: `[Topic: ${selectedTopic}] ${description}`,
@@ -111,6 +116,7 @@ export default function CustomDesignForm() {
   const handleCloseSuccess = () => {
     setShowSuccess(false);
     setName('');
+    setEmailInput(user?.email || '');
     setInstagram('');
     setPhone('');
     setDescription('');
@@ -218,6 +224,21 @@ export default function CustomDesignForm() {
                       placeholder={t('name_placeholder')}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
+                      className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
+                    />
+                  </div>
+
+                  {/* Email Address */}
+                  <div>
+                    <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
+                      {locale === 'ar' ? 'البريد الإلكتروني *' : 'Email Address *'}
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder={locale === 'ar' ? 'مثال: user@example.com' : 'e.g. user@example.com'}
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
                       className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
                     />
                   </div>
