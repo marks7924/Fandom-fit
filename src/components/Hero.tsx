@@ -196,7 +196,7 @@ export default function Hero() {
             <motion.div 
               initial={{ rotate: 12 }}
               whileHover={{ rotate: 5, scale: 1.05 }}
-              className="absolute -bottom-4 -left-6 bg-[#81B29A] text-black border-3 border-black px-4 py-2.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-lg rotate-[12deg] cursor-pointer"
+              className="absolute bottom-2 left-2 sm:-bottom-4 sm:-left-6 bg-[#81B29A] text-black border-3 border-black px-3 py-1.5 sm:px-4 sm:py-2.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-sm sm:text-lg rotate-[12deg] cursor-pointer z-10"
             >
               🎮 100% Egyptian Cotton!
             </motion.div>

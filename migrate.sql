@@ -157,6 +157,76 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- SECURE RPC FUNCTION: Increment referral orders securely from client requests
+-- Run this to bypass RLS policies when updating referral order counts and generating coupons
+CREATE OR REPLACE FUNCTION increment_referral_orders(referrer_code TEXT)
+RETURNS VOID AS $$
+DECLARE
+    target_profile RECORD;
+    random_code TEXT;
+    expiry_date TIMESTAMP WITH TIME ZONE;
+BEGIN
+    -- Find the profile matching code or phone
+    SELECT * INTO target_profile FROM profiles
+    WHERE UPPER(referral_code) = UPPER(referrer_code) OR phone = referrer_code
+    LIMIT 1;
+
+    IF target_profile.id IS NOT NULL THEN
+        -- Generate a random coupon code suffix
+        random_code := 'THANKS-' || UPPER(SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 6));
+        expiry_date := NOW() + INTERVAL '30 days';
+
+        -- Insert the thank you offer
+        INSERT INTO offers (
+            title_en,
+            title_ar,
+            description_en,
+            description_ar,
+            discount_text_en,
+            discount_text_ar,
+            code,
+            discount_percent,
+            max_uses,
+            max_uses_per_user,
+            is_active,
+            show_on_homepage,
+            discount_type,
+            discount_value,
+            coupon_type,
+            is_one_time,
+            is_public,
+            bound_phone,
+            expires_at
+        ) VALUES (
+            'Referral Reward (15% OFF)',
+            'مكافأة ترشيح (خصم ١٥٪)',
+            'Friend purchase reward! (Bound to account: ' || COALESCE(target_profile.phone, target_profile.email, target_profile.id) || ')',
+            'مكافأة شراء صديق! (مرتبطة بالحساب: ' || COALESCE(target_profile.phone, target_profile.email, target_profile.id) || ')',
+            '15% OFF',
+            'خصم ١٥٪',
+            random_code,
+            15,
+            1,
+            1,
+            TRUE,
+            FALSE,
+            'percentage',
+            15.00,
+            'referral_reward_thank_you',
+            TRUE,
+            FALSE,
+            NULLIF(target_profile.phone, ''),
+            expiry_date
+        );
+
+        -- Increment referral orders count
+        UPDATE profiles 
+        SET referral_orders = COALESCE(target_profile.referral_orders, 0) + 1 
+        WHERE id = target_profile.id;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- STORAGE BUCKETS MIGRATION (Must be run by Superuser/Admin in Supabase console)
 -- Create bucket structures if missing
 INSERT INTO storage.buckets (id, name, public)

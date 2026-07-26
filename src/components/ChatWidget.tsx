@@ -5,9 +5,11 @@ import { useStore } from '@/lib/store';
 import { useLocale } from 'next-intl';
 import { MessageSquare, X, Send, Phone, Lock, Circle, Trash2, ArrowRight, ShieldOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePathname } from 'next/navigation';
 
 export default function ChatWidget() {
   const locale = useLocale();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [isConnected, setIsConnected] = useState(false);
@@ -29,7 +31,8 @@ export default function ChatWidget() {
     sendChatMessage,
     endUserChat,
     settings,
-    fetchAutoResponses
+    fetchAutoResponses,
+    isCartOpen
   } = useStore();
 
   // Load auto responses on mount
@@ -190,6 +193,11 @@ export default function ChatWidget() {
 
   // If blocked, show blocked state in the toggle button
   const isUserBlocked = isConnected && activeChat?.is_blocked;
+
+  const isHomePage = pathname === '/' || pathname === '/en' || pathname === '/ar' || pathname === '/en/' || pathname === '/ar/';
+  if (!isHomePage || isCartOpen) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-6 right-6 z-[999] font-sans text-black">

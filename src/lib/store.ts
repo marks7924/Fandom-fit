@@ -801,50 +801,91 @@ export const useStore = create<StoreState>((set, get) => ({
       );
 
       if (referrerProfile && !isSelfReferral && isReferralEnabled) {
-        const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const thankYouCode = `THANKS-${randomString}`;
-
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 30);
-
-        const newOffer = {
-          title_en: 'Referral Reward (15% OFF)',
-          title_ar: 'مكافأة ترشيح (خصم ١٥٪)',
-          description_en: 'Friend purchase reward! (Bound to account: ' + (referrerProfile.phone || referrerProfile.email || referrerProfile.id) + ')',
-          description_ar: 'مكافأة شراء صديق! (مرتبطة بالحساب: ' + (referrerProfile.phone || referrerProfile.email || referrerProfile.id) + ')',
-          discount_text_en: '15% OFF',
-          discount_text_ar: 'خصم ١٥٪',
-          code: thankYouCode,
-          discount_percent: 15,
-          max_uses: 1,
-          max_uses_per_user: 1,
-          is_active: true, // Instantly Active!
-          show_on_homepage: false,
-          discount_type: 'percentage',
-          discount_value: 15,
-          coupon_type: 'referral_reward_thank_you',
-          is_one_time: true,
-          is_public: false,
-          bound_phone: referrerProfile.phone || undefined, // Set phone if they have it
-          expires_at: expiryDate.toISOString(),
-        };
-
-        await safeInsertOffer(newOffer);
-
-        // Increment referrer's orders count
-        try {
+        if (!isUsingMock) {
+          // Real Supabase backend: execute secure RPC function to bypass RLS policies
+          try {
+            const { error } = await supabase.rpc('increment_referral_orders', {
+              referrer_code: referrerProfile.referral_code
+            });
+            if (error) {
+              console.error('RPC increment_referral_orders failed, trying client-side fallback:', error);
+              throw error;
+            }
+          } catch (rpcErr) {
+            // Client-side fallback if RPC is not yet created in the DB
+            const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const thankYouCode = `THANKS-${randomString}`;
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + 30);
+            
+            const newOffer = {
+              title_en: 'Referral Reward (15% OFF)',
+              title_ar: 'مكافأة ترشيح (خصم ١٥٪)',
+              description_en: 'Friend purchase reward! (Bound to account: ' + (referrerProfile.phone || referrerProfile.email || referrerProfile.id) + ')',
+              description_ar: 'مكافأة شراء صديق! (مرتبطة بالحساب: ' + (referrerProfile.phone || referrerProfile.email || referrerProfile.id) + ')',
+              discount_text_en: '15% OFF',
+              discount_text_ar: 'خصم ١٥٪',
+              code: thankYouCode,
+              discount_percent: 15,
+              max_uses: 1,
+              max_uses_per_user: 1,
+              is_active: true,
+              show_on_homepage: false,
+              discount_type: 'percentage',
+              discount_value: 15,
+              coupon_type: 'referral_reward_thank_you',
+              is_one_time: true,
+              is_public: false,
+              bound_phone: referrerProfile.phone || undefined,
+              expires_at: expiryDate.toISOString(),
+            };
+            await safeInsertOffer(newOffer);
+            
+            await supabase
+              .from('profiles')
+              .update({ referral_orders: (referrerProfile.referral_orders || 0) + 1 })
+              .eq('id', referrerProfile.id);
+          }
+        } else {
+          // Mock mode: direct client side
+          const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const thankYouCode = `THANKS-${randomString}`;
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + 30);
+          
+          const newOffer = {
+            title_en: 'Referral Reward (15% OFF)',
+            title_ar: 'مكافأة ترشيح (خصم ١٥٪)',
+            description_en: 'Friend purchase reward! (Bound to account: ' + (referrerProfile.phone || referrerProfile.email || referrerProfile.id) + ')',
+            description_ar: 'مكافأة شراء صديق! (مرتبطة بالحساب: ' + (referrerProfile.phone || referrerProfile.email || referrerProfile.id) + ')',
+            discount_text_en: '15% OFF',
+            discount_text_ar: 'خصم ١٥٪',
+            code: thankYouCode,
+            discount_percent: 15,
+            max_uses: 1,
+            max_uses_per_user: 1,
+            is_active: true,
+            show_on_homepage: false,
+            discount_type: 'percentage',
+            discount_value: 15,
+            coupon_type: 'referral_reward_thank_you',
+            is_one_time: true,
+            is_public: false,
+            bound_phone: referrerProfile.phone || undefined,
+            expires_at: expiryDate.toISOString(),
+          };
+          await safeInsertOffer(newOffer);
+          
           await supabase
             .from('profiles')
             .update({ referral_orders: (referrerProfile.referral_orders || 0) + 1 })
             .eq('id', referrerProfile.id);
+        }
 
-          // Re-sync if current user is the referrer
-          const currentUser = get().user;
-          if (currentUser && currentUser.id === referrerProfile.id) {
-            await get().syncUserProfile();
-          }
-        } catch (e) {
-          console.warn('Could not increment referrer orders count:', e);
+        // Re-sync if current user is the referrer
+        const currentUser = get().user;
+        if (currentUser && currentUser.id === referrerProfile.id) {
+          await get().syncUserProfile();
         }
       }
 
