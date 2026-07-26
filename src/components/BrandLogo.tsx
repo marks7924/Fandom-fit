@@ -1,4 +1,7 @@
+'use client';
+
 import React from 'react';
+import { useStore } from '@/lib/store';
 
 interface BrandLogoProps {
   /** Stroke/text color. Defaults to currentColor. */
@@ -13,12 +16,29 @@ interface BrandLogoProps {
 
 /**
  * Fandom Fit brand mark — hand-drawn crown SVG + handwriting text.
- * Sizes are applied directly so the element takes real layout space.
+ * If settings.logo_url is set in the admin panel, renders that image instead.
  */
 export default function BrandLogo({ color = 'currentColor', textSize = 1.6, className = '' }: BrandLogoProps) {
+  const logoUrl = useStore((state) => state.settings?.logo_url);
+
   // Crown dimensions proportional to text size
   const crownW = textSize * 28;
   const crownH = textSize * 18;
+
+  // If admin has uploaded a custom logo image, use it
+  if (logoUrl) {
+    const imgH = textSize * 40;
+    return (
+      <div className={`flex items-center justify-center select-none ${className}`}>
+        <img
+          src={logoUrl}
+          alt="Brand Logo"
+          style={{ height: imgH, maxHeight: imgH, objectFit: 'contain' }}
+          className="block"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`flex flex-col items-center leading-none select-none ${className}`}>

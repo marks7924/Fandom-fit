@@ -1,22 +1,33 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useStore } from '@/lib/store';
 import BrandLogo from './BrandLogo';
 
 export default function LoadingScreen() {
+  const loadingLogoUrl = useStore((state) => state.settings?.loading_logo_url);
+
   return (
     <div className="fixed inset-0 z-[9999] bg-[#EDE0D0] flex flex-col items-center justify-center select-none pointer-events-none">
       {/* Dot grid background */}
       <div className="absolute inset-0 notebook-grid opacity-40" />
 
       <div className="relative flex flex-col items-center gap-6">
-        {/* Brand mark — animated crown + handwriting text */}
+        {/* Brand mark — custom image if set, else animated crown + handwriting text */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: 'easeOut' }}
         >
-          <BrandLogo color="black" textSize={2.8} />
+          {loadingLogoUrl ? (
+            <img
+              src={loadingLogoUrl}
+              alt="Loading"
+              className="h-24 object-contain"
+            />
+          ) : (
+            <BrandLogo color="black" textSize={2.8} />
+          )}
         </motion.div>
 
         {/* Bouncing dots */}

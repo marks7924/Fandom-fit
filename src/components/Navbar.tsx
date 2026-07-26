@@ -8,6 +8,7 @@ import { Menu, X, Globe, ShoppingBag, User } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import TrackOrderModal from './TrackOrderModal';
 import BrandLogo from './BrandLogo';
+import EditableText from './EditableText';
 
 export default function Navbar() {
   const t = useTranslations('nav');
@@ -44,12 +45,12 @@ export default function Navbar() {
   };
 
   const navItems = [
-    { name: t('home'), href: getNavLink('#home') },
-    { name: t('collections'), href: getNavLink('#collections') },
-    { name: t('custom_design'), href: getNavLink('#custom-design') },
-    { name: t('about'), href: getNavLink('#about') },
-    { name: t('faq'), href: getNavLink('#faq') },
-    { name: t('contact'), href: getNavLink('#contact') },
+    { key: 'home', defaultEn: 'Home', defaultAr: 'الرئيسية', href: getNavLink('#home') },
+    { key: 'collections', defaultEn: 'Collections', defaultAr: 'التشكيلات', href: getNavLink('#collections') },
+    { key: 'custom_design', defaultEn: 'Custom Design', defaultAr: 'تصميم خاص', href: getNavLink('#custom-design') },
+    { key: 'about', defaultEn: 'About', defaultAr: 'من نحن', href: getNavLink('#about') },
+    { key: 'faq', defaultEn: 'FAQ', defaultAr: 'الأسئلة الشائعة', href: getNavLink('#faq') },
+    { key: 'contact', defaultEn: 'Contact', defaultAr: 'اتصل بنا', href: getNavLink('#contact') },
   ];
 
   const { 
@@ -86,11 +87,15 @@ export default function Navbar() {
           <div className="hidden md:flex items-center space-x-6 lg:space-x-8 rtl:space-x-reverse">
             {navItems.map((item) => (
               <a
-                key={item.name}
+                key={item.key}
                 href={item.href}
                 className="text-sm font-semibold tracking-wide uppercase border-b-2 border-transparent hover:border-black py-1 transition-all duration-200"
               >
-                {item.name}
+                <EditableText
+                  textKey={`nav_${item.key}`}
+                  defaultEn={item.defaultEn}
+                  defaultAr={item.defaultAr}
+                />
               </a>
             ))}
           </div>
@@ -198,12 +203,16 @@ export default function Navbar() {
           <div className="flex flex-col space-y-2">
             {navItems.map((item) => (
               <a
-                key={item.name}
+                key={item.key}
                 href={item.href}
                 onClick={() => setIsOpen(false)}
                 className="text-base font-bold uppercase tracking-wider py-2 border-b border-black/10 text-center"
               >
-                {item.name}
+                <EditableText
+                  textKey={`nav_${item.key}`}
+                  defaultEn={item.defaultEn}
+                  defaultAr={item.defaultAr}
+                />
               </a>
             ))}
           </div>

@@ -150,8 +150,17 @@ export default function AdminPage() {
     referral_clicks_threshold: 5,
     good_stock_threshold: 10,
     low_stock_threshold: 3,
-    favicon_url: ''
+    favicon_url: '',
+    logo_url: '',
+    loading_logo_url: '',
+    account_fields: {} as Record<string, string>,
+    text_overrides: {} as Record<string, string>,
+    why_choose_us: [] as any[],
+    faqs: [] as any[]
   });
+
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingLoadingLogo, setIsUploadingLoadingLogo] = useState(false);
 
   const [sizeTable, setSizeTable] = useState<{ headers: string[]; rows: string[][] }>({
     headers: ['Size', 'Width (Chest - cm)', 'Length (cm)', 'Sleeve (cm)'],
@@ -322,6 +331,58 @@ export default function AdminPage() {
         ]);
       }
 
+      let customAccFields = {
+        name: 'required',
+        email: 'optional',
+        phone: 'required',
+        governorate: 'required',
+        city: 'required',
+        address: 'required',
+        notes: 'optional'
+      };
+      try {
+        if (settings.account_fields) {
+          customAccFields = typeof settings.account_fields === 'string'
+            ? JSON.parse(settings.account_fields)
+            : settings.account_fields;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
+      let customOverrides = {};
+      try {
+        if (settings.text_overrides) {
+          customOverrides = typeof settings.text_overrides === 'string'
+            ? JSON.parse(settings.text_overrides)
+            : settings.text_overrides;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
+      let customWhy = [];
+      try {
+        if (settings.why_choose_us) {
+          customWhy = typeof settings.why_choose_us === 'string'
+            ? JSON.parse(settings.why_choose_us)
+            : settings.why_choose_us;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
+      let customFaqs = [];
+      try {
+        if (settings.faqs) {
+          customFaqs = typeof settings.faqs === 'string'
+            ? JSON.parse(settings.faqs)
+            : settings.faqs;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
       setSettingsForm({
         brand_name: settings.brand_name || 'Fandom Fit',
         tagline: settings.tagline || 'Wear What You Love.',
@@ -352,7 +413,13 @@ export default function AdminPage() {
         referral_clicks_threshold: settings.referral_clicks_threshold ?? 5,
         good_stock_threshold: Number(settings.good_stock_threshold ?? 10),
         low_stock_threshold: Number(settings.low_stock_threshold ?? 3),
-        favicon_url: settings.favicon_url || ''
+        favicon_url: settings.favicon_url || '',
+        logo_url: settings.logo_url || '',
+        loading_logo_url: settings.loading_logo_url || '',
+        account_fields: customAccFields,
+        text_overrides: customOverrides,
+        why_choose_us: Array.isArray(customWhy) ? customWhy : [],
+        faqs: Array.isArray(customFaqs) ? customFaqs : []
       });
     }
   }, [isAuthenticated, settings]);
@@ -913,6 +980,54 @@ export default function AdminPage() {
       alert(locale === 'ar' ? `فشل رفع الملف: ${err.message}` : `Upload failed: ${err.message}`);
     } finally {
       setIsUploadingFavicon(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingLogo(true);
+    try {
+      if (isUsingMock) {
+        const base64 = await fileToBase64(file);
+        setSettingsForm(prev => ({ ...prev, logo_url: base64 }));
+      } else {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `logo-${Date.now()}.${fileExt}`;
+        const { data, error } = await supabase.storage.from('products').upload(fileName, file);
+        if (error) throw error;
+        const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(data.path);
+        setSettingsForm(prev => ({ ...prev, logo_url: publicUrl }));
+      }
+      alert(locale === 'ar' ? '✅ تم رفع اللوجو بنجاح! احفظ الإعدادات لتطبيقها.' : '✅ Website logo uploaded! Save settings to apply.');
+    } catch (err: any) {
+      alert(locale === 'ar' ? `فشل رفع الملف: ${err.message}` : `Upload failed: ${err.message}`);
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const handleLoadingLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingLoadingLogo(true);
+    try {
+      if (isUsingMock) {
+        const base64 = await fileToBase64(file);
+        setSettingsForm(prev => ({ ...prev, loading_logo_url: base64 }));
+      } else {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `loading-logo-${Date.now()}.${fileExt}`;
+        const { data, error } = await supabase.storage.from('products').upload(fileName, file);
+        if (error) throw error;
+        const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(data.path);
+        setSettingsForm(prev => ({ ...prev, loading_logo_url: publicUrl }));
+      }
+      alert(locale === 'ar' ? '✅ تم رفع لوجو شاشة التحميل بنجاح! احفظ الإعدادات لتطبيقها.' : '✅ Loading screen logo uploaded! Save settings to apply.');
+    } catch (err: any) {
+      alert(locale === 'ar' ? `فشل رفع الملف: ${err.message}` : `Upload failed: ${err.message}`);
+    } finally {
+      setIsUploadingLoadingLogo(false);
     }
   };
 
@@ -3491,6 +3606,46 @@ export default function AdminPage() {
                         className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-zinc-800/50">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Web Logo</label>
+                      <div className="flex gap-2">
+                        <input type="text" value={settingsForm.logo_url}
+                          onChange={(e) => setSettingsForm({ ...settingsForm, logo_url: e.target.value })}
+                          placeholder="Image URL or upload"
+                          className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                        <label className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors flex items-center shrink-0">
+                          {isUploadingLogo ? '⏳ ...' : '📁 Upload'}
+                          <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                        </label>
+                      </div>
+                      {settingsForm.logo_url && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <img src={settingsForm.logo_url} alt="Logo preview" className="h-8 object-contain rounded border border-zinc-800 bg-zinc-950" />
+                          <span className="text-[8px] text-zinc-500 truncate max-w-[150px]">{settingsForm.logo_url}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Loading Screen Logo</label>
+                      <div className="flex gap-2">
+                        <input type="text" value={settingsForm.loading_logo_url}
+                          onChange={(e) => setSettingsForm({ ...settingsForm, loading_logo_url: e.target.value })}
+                          placeholder="Image URL or upload"
+                          className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" />
+                        <label className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors flex items-center shrink-0">
+                          {isUploadingLoadingLogo ? '⏳ ...' : '📁 Upload'}
+                          <input type="file" accept="image/*" onChange={handleLoadingLogoUpload} className="hidden" />
+                        </label>
+                      </div>
+                      {settingsForm.loading_logo_url && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <img src={settingsForm.loading_logo_url} alt="Loading logo preview" className="h-8 object-contain rounded border border-zinc-800 bg-zinc-950" />
+                          <span className="text-[8px] text-zinc-500 truncate max-w-[150px]">{settingsForm.loading_logo_url}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </details>
 
@@ -4159,6 +4314,543 @@ export default function AdminPage() {
                     ))}
                   </div>
 
+                </div>
+              </details>
+
+              {/* ── CARD: Navbar Labels ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🗺️</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Navbar Labels</p>
+                      <p className="text-[10px] text-zinc-500">Customize navigation bar titles (EN & AR)</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800 space-y-4">
+                  {[
+                    { key: 'home', label: 'Home / الرئيسية', defaultEn: 'Home', defaultAr: 'الرئيسية' },
+                    { key: 'collections', label: 'Collections / التشكيلات', defaultEn: 'Collections', defaultAr: 'التشكيلات' },
+                    { key: 'custom_design', label: 'Custom Design / تصميم خاص', defaultEn: 'Custom Design', defaultAr: 'تصميم خاص' },
+                    { key: 'about', label: 'About / من نحن', defaultEn: 'About', defaultAr: 'من نحن' },
+                    { key: 'faq', label: 'FAQ / الأسئلة الشائعة', defaultEn: 'FAQ', defaultAr: 'الأسئلة الشائعة' },
+                    { key: 'contact', label: 'Contact / اتصل بنا', defaultEn: 'Contact', defaultAr: 'اتصل بنا' },
+                  ].map((navItem) => (
+                    <div key={navItem.key} className="grid grid-cols-2 gap-4 pb-2 border-b border-zinc-850/30 last:border-0">
+                      <div>
+                        <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">{navItem.label} (EN)</label>
+                        <input
+                          type="text"
+                          value={settingsForm.text_overrides?.[`nav_${navItem.key}_en`] ?? navItem.defaultEn}
+                          onChange={(e) => setSettingsForm({
+                            ...settingsForm,
+                            text_overrides: {
+                              ...settingsForm.text_overrides,
+                              [`nav_${navItem.key}_en`]: e.target.value
+                            }
+                          })}
+                          className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs focus:outline-none focus:border-brand-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">{navItem.label} (AR)</label>
+                        <input
+                          type="text"
+                          dir="rtl"
+                          value={settingsForm.text_overrides?.[`nav_${navItem.key}_ar`] ?? navItem.defaultAr}
+                          onChange={(e) => setSettingsForm({
+                            ...settingsForm,
+                            text_overrides: {
+                              ...settingsForm.text_overrides,
+                              [`nav_${navItem.key}_ar`]: e.target.value
+                            }
+                          })}
+                          className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs text-right focus:outline-none focus:border-brand-accent font-arabic"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              {/* ── CARD: Checkout & Account Fields ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📋</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Checkout & Account Fields</p>
+                      <p className="text-[10px] text-zinc-500">Configure which information is required, optional, or hidden</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800 space-y-4">
+                  {[
+                    { key: 'name', label: 'Full Name / الاسم بالكامل' },
+                    { key: 'phone', label: 'Phone Number / رقم الهاتف' },
+                    { key: 'email', label: 'Email Address / البريد الإلكتروني' },
+                    { key: 'governorate', label: 'Governorate Selector / المحافظة' },
+                    { key: 'city', label: 'City or District / المدينة أو المنطقة' },
+                    { key: 'address', label: 'Detailed Address / العنوان بالتفصيل' },
+                    { key: 'notes', label: 'Order Notes / ملاحظات الطلب' },
+                  ].map((field) => {
+                    const currentVal = settingsForm.account_fields?.[field.key] || (field.key === 'email' || field.key === 'notes' ? 'optional' : 'required');
+                    return (
+                      <div key={field.key} className="flex justify-between items-center pb-2 border-b border-zinc-850/30 last:border-0">
+                        <span className="text-xs font-bold text-zinc-300">{field.label}</span>
+                        <div className="flex gap-2">
+                          {['required', 'optional', 'hidden'].map((status) => (
+                            <button
+                              key={status}
+                              type="button"
+                              onClick={() => setSettingsForm({
+                                ...settingsForm,
+                                account_fields: {
+                                  ...settingsForm.account_fields,
+                                  [field.key]: status
+                                }
+                              })}
+                              className={`px-2.5 py-1 text-[9px] font-black uppercase rounded border transition-colors cursor-pointer ${
+                                currentVal === status
+                                  ? 'bg-brand-accent border-brand-accent text-white'
+                                  : 'bg-zinc-950 border-zinc-850 text-zinc-500 hover:text-zinc-300'
+                              }`}
+                            >
+                              {status}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+
+              {/* ── CARD: Why Choose Us Section ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">⭐</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Why Choose Us Section</p>
+                      <p className="text-[10px] text-zinc-500">Edit titles and customize the 8 feature cards</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-4 border-t border-zinc-800 space-y-4">
+                  <div className="grid grid-cols-2 gap-4 pb-4 border-b border-zinc-850">
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Section Title (EN)</label>
+                      <input
+                        type="text"
+                        value={settingsForm.text_overrides?.why_choose_us_title_en ?? 'Why Fandom Fit?'}
+                        onChange={(e) => setSettingsForm({
+                          ...settingsForm,
+                          text_overrides: {
+                            ...settingsForm.text_overrides,
+                            why_choose_us_title_en: e.target.value
+                          }
+                        })}
+                        className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs focus:outline-none focus:border-brand-accent"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Section Title (AR)</label>
+                      <input
+                        type="text"
+                        dir="rtl"
+                        value={settingsForm.text_overrides?.why_choose_us_title_ar ?? 'لماذا تختارنا؟'}
+                        onChange={(e) => setSettingsForm({
+                          ...settingsForm,
+                          text_overrides: {
+                            ...settingsForm.text_overrides,
+                            why_choose_us_title_ar: e.target.value
+                          }
+                        })}
+                        className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs text-right focus:outline-none focus:border-brand-accent font-arabic"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h5 className="text-[10px] uppercase font-bold text-zinc-400">Feature Cards List ({settingsForm.why_choose_us?.length || 0} cards)</h5>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newCard = {
+                            id: `card-${Date.now()}`,
+                            icon: '🌟',
+                            colorClass: 'bg-[#F2CC8F]',
+                            title_en: 'New Feature',
+                            title_ar: 'ميزة جديدة',
+                            desc_en: 'Feature details here.',
+                            desc_ar: 'تفاصيل الميزة هنا.'
+                          };
+                          setSettingsForm({
+                            ...settingsForm,
+                            why_choose_us: [...(settingsForm.why_choose_us || []), newCard]
+                          });
+                        }}
+                        className="px-2 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white rounded text-[9px] font-bold uppercase cursor-pointer"
+                      >
+                        + Add Card
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {(settingsForm.why_choose_us || []).map((card, idx) => (
+                        <div key={card.id || idx} className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl space-y-3 relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const list = [...settingsForm.why_choose_us];
+                              list.splice(idx, 1);
+                              setSettingsForm({ ...settingsForm, why_choose_us: list });
+                            }}
+                            className="absolute top-2 right-2 text-zinc-600 hover:text-red-400 cursor-pointer font-black"
+                          >
+                            ×
+                          </button>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Icon / Emoji</label>
+                              <input
+                                type="text"
+                                value={card.icon}
+                                onChange={(e) => {
+                                  const list = [...settingsForm.why_choose_us];
+                                  list[idx] = { ...list[idx], icon: e.target.value };
+                                  setSettingsForm({ ...settingsForm, why_choose_us: list });
+                                }}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Bg Color Class</label>
+                              <select
+                                value={card.colorClass}
+                                onChange={(e) => {
+                                  const list = [...settingsForm.why_choose_us];
+                                  list[idx] = { ...list[idx], colorClass: e.target.value };
+                                  setSettingsForm({ ...settingsForm, why_choose_us: list });
+                                }}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] focus:outline-none"
+                              >
+                                <option value="bg-[#F2CC8F]">Yellow (#F2CC8F)</option>
+                                <option value="bg-[#81B29A]">Green (#81B29A)</option>
+                                <option value="bg-[#E07A5F]">Coral (#E07A5F)</option>
+                                <option value="bg-[#3D405B]">Navy (#3D405B)</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Title (EN)</label>
+                              <input
+                                type="text"
+                                value={card.title_en}
+                                onChange={(e) => {
+                                  const list = [...settingsForm.why_choose_us];
+                                  list[idx] = { ...list[idx], title_en: e.target.value };
+                                  setSettingsForm({ ...settingsForm, why_choose_us: list });
+                                }}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Title (AR)</label>
+                              <input
+                                type="text"
+                                dir="rtl"
+                                value={card.title_ar}
+                                onChange={(e) => {
+                                  const list = [...settingsForm.why_choose_us];
+                                  list[idx] = { ...list[idx], title_ar: e.target.value };
+                                  setSettingsForm({ ...settingsForm, why_choose_us: list });
+                                }}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] text-right font-arabic"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Desc (EN)</label>
+                              <textarea
+                                rows={2}
+                                value={card.desc_en}
+                                onChange={(e) => {
+                                  const list = [...settingsForm.why_choose_us];
+                                  list[idx] = { ...list[idx], desc_en: e.target.value };
+                                  setSettingsForm({ ...settingsForm, why_choose_us: list });
+                                }}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] resize-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Desc (AR)</label>
+                              <textarea
+                                rows={2}
+                                dir="rtl"
+                                value={card.desc_ar}
+                                onChange={(e) => {
+                                  const list = [...settingsForm.why_choose_us];
+                                  list[idx] = { ...list[idx], desc_ar: e.target.value };
+                                  setSettingsForm({ ...settingsForm, why_choose_us: list });
+                                }}
+                                className="w-full px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] text-right resize-none font-arabic"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              {/* ── CARD: FAQ CRUD Manager ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">❓</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">FAQ Manager</p>
+                      <p className="text-[10px] text-zinc-500">Add, edit, or delete items in the FAQ accordion</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-4 border-t border-zinc-800 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h5 className="text-[10px] uppercase font-bold text-zinc-400">FAQ List ({settingsForm.faqs?.length || 0} items)</h5>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newFaq = {
+                          id: `faq-${Date.now()}`,
+                          q_en: 'New Question',
+                          q_ar: 'سؤال جديد',
+                          a_en: 'Answer details here.',
+                          a_ar: 'تفاصيل الإجابة هنا.'
+                        };
+                        setSettingsForm({
+                          ...settingsForm,
+                          faqs: [...(settingsForm.faqs || []), newFaq]
+                        });
+                      }}
+                      className="px-2 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white rounded text-[9px] font-bold uppercase cursor-pointer"
+                    >
+                      + Add FAQ Item
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {(settingsForm.faqs || []).map((faq, idx) => (
+                      <div key={faq.id || idx} className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl space-y-3 relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const list = [...settingsForm.faqs];
+                            list.splice(idx, 1);
+                            setSettingsForm({ ...settingsForm, faqs: list });
+                          }}
+                          className="absolute top-2 right-2 text-zinc-600 hover:text-red-400 cursor-pointer font-black"
+                        >
+                          ×
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Question (EN)</label>
+                            <input
+                              type="text"
+                              value={faq.q_en}
+                              onChange={(e) => {
+                                const list = [...settingsForm.faqs];
+                                list[idx] = { ...list[idx], q_en: e.target.value };
+                                setSettingsForm({ ...settingsForm, faqs: list });
+                              }}
+                              className="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Question (AR)</label>
+                            <input
+                              type="text"
+                              dir="rtl"
+                              value={faq.q_ar}
+                              onChange={(e) => {
+                                const list = [...settingsForm.faqs];
+                                list[idx] = { ...list[idx], q_ar: e.target.value };
+                                setSettingsForm({ ...settingsForm, faqs: list });
+                              }}
+                              className="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] text-right font-arabic"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Answer (EN)</label>
+                            <textarea
+                              rows={2}
+                              value={faq.a_en}
+                              onChange={(e) => {
+                                const list = [...settingsForm.faqs];
+                                list[idx] = { ...list[idx], a_en: e.target.value };
+                                setSettingsForm({ ...settingsForm, faqs: list });
+                              }}
+                              className="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] resize-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Answer (AR)</label>
+                            <textarea
+                              rows={2}
+                              dir="rtl"
+                              value={faq.a_ar}
+                              onChange={(e) => {
+                                const list = [...settingsForm.faqs];
+                                list[idx] = { ...list[idx], a_ar: e.target.value };
+                                setSettingsForm({ ...settingsForm, faqs: list });
+                              }}
+                              className="w-full px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-white text-[10px] text-right resize-none font-arabic"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </details>
+
+              {/* ── CARD: Footer Editor ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🦶</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Footer Editor</p>
+                      <p className="text-[10px] text-zinc-500">Edit footer copyright, tagline, and Made in Egypt stamp</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Footer Tagline (EN)</label>
+                      <textarea rows={2}
+                        value={settingsForm.text_overrides?.footer_tagline ?? ''}
+                        onChange={(e) => setSettingsForm({
+                          ...settingsForm,
+                          text_overrides: {
+                            ...settingsForm.text_overrides,
+                            footer_tagline: e.target.value
+                          }
+                        })}
+                        placeholder="Tagline under brand logo in English"
+                        className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs focus:outline-none focus:border-brand-accent resize-none" />
+                    </div>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Footer Tagline (AR)</label>
+                      <textarea rows={2} dir="rtl"
+                        value={settingsForm.text_overrides?.footer_tagline_ar ?? ''}
+                        onChange={(e) => setSettingsForm({
+                          ...settingsForm,
+                          text_overrides: {
+                            ...settingsForm.text_overrides,
+                            footer_tagline_ar: e.target.value
+                          }
+                        })}
+                        placeholder="شعار الفوتر باللغة العربية"
+                        className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs text-right focus:outline-none focus:border-brand-accent resize-none font-arabic" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-zinc-800/50">
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Footer Copyright Text (EN)</label>
+                      <input type="text"
+                        value={settingsForm.text_overrides?.footer_copyright ?? ''}
+                        onChange={(e) => setSettingsForm({
+                          ...settingsForm,
+                          text_overrides: {
+                            ...settingsForm.text_overrides,
+                            footer_copyright: e.target.value
+                          }
+                        })}
+                        placeholder="e.g. © 2026 Fandom Fit. All rights reserved."
+                        className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs focus:outline-none focus:border-brand-accent" />
+                    </div>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Footer Copyright Text (AR)</label>
+                      <input type="text" dir="rtl"
+                        value={settingsForm.text_overrides?.footer_copyright_ar ?? ''}
+                        onChange={(e) => setSettingsForm({
+                          ...settingsForm,
+                          text_overrides: {
+                            ...settingsForm.text_overrides,
+                            footer_copyright_ar: e.target.value
+                          }
+                        })}
+                        placeholder="نص حقوق النشر باللغة العربية"
+                        className="w-full px-2.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded text-white text-xs text-right focus:outline-none focus:border-brand-accent font-arabic" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800/50">
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Stamp Header</label>
+                      <input type="text"
+                        value={settingsForm.text_overrides?.footer_stamp_badge ?? ''}
+                        onChange={(e) => setSettingsForm({
+                          ...settingsForm,
+                          text_overrides: {
+                            ...settingsForm.text_overrides,
+                            footer_stamp_badge: e.target.value
+                          }
+                        })}
+                        placeholder="AUTHENTIC"
+                        className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px] focus:outline-none focus:border-brand-accent" />
+                    </div>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Stamp Title</label>
+                      <input type="text"
+                        value={settingsForm.text_overrides?.footer_stamp_title ?? ''}
+                        onChange={(e) => setSettingsForm({
+                          ...settingsForm,
+                          text_overrides: {
+                            ...settingsForm.text_overrides,
+                            footer_stamp_title: e.target.value
+                          }
+                        })}
+                        placeholder="MADE IN EGYPT"
+                        className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px] focus:outline-none focus:border-brand-accent" />
+                    </div>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-0.5">Stamp Desc</label>
+                      <input type="text"
+                        value={settingsForm.text_overrides?.footer_stamp_desc ?? ''}
+                        onChange={(e) => setSettingsForm({
+                          ...settingsForm,
+                          text_overrides: {
+                            ...settingsForm.text_overrides,
+                            footer_stamp_desc: e.target.value
+                          }
+                        })}
+                        placeholder="100% Fine Cotton"
+                        className="w-full px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px] focus:outline-none focus:border-brand-accent" />
+                    </div>
+                  </div>
                 </div>
               </details>
 

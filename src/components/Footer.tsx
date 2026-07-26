@@ -4,6 +4,8 @@ import { useTranslations, useLocale } from 'next-intl';
 import { Globe } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import BrandLogo from './BrandLogo';
+import EditableText from './EditableText';
+import { useStore } from '@/lib/store';
 
 function FacebookIcon({ size = 20, className = '' }: { size?: number; className?: string }) {
   return (
@@ -27,15 +29,23 @@ export default function Footer() {
   const t = useTranslations('footer');
   const tn = useTranslations('nav');
   const locale = useLocale();
-
+  const { settings } = useStore();
 
   const currentYear = new Date().getFullYear();
 
   const socialLinks = {
-    instagram: "https://www.instagram.com/fandom.__.fit?igsh=cG9udzFxcjg5MGZv",
-    tiktok: "https://www.tiktok.com/@fandom._.fit?_r=1&_t=ZS-97n8CR3c4or",
-    facebook: "https://www.facebook.com/share/1GmUSwSQRE/"
+    instagram: settings.instagram_url || "https://www.instagram.com/fandom.__.fit?igsh=cG9udzFxcjg5MGZv",
+    tiktok: settings.tiktok_url || "https://www.tiktok.com/@fandom._.fit?_r=1&_t=ZS-97n8CR3c4or",
+    facebook: settings.facebook_url || "https://www.facebook.com/share/1GmUSwSQRE/"
   };
+
+  const navItems = [
+    { key: 'home', defaultEn: 'Home', defaultAr: 'الرئيسية', href: '#home' },
+    { key: 'collections', defaultEn: 'Collections', defaultAr: 'التشكيلات', href: '#collections' },
+    { key: 'custom_design', defaultEn: 'Custom Design', defaultAr: 'تصميم خاص', href: '#custom-design' },
+    { key: 'about', defaultEn: 'About', defaultAr: 'من نحن', href: '#about' },
+    { key: 'faq', defaultEn: 'FAQ', defaultAr: 'الأسئلة الشائعة', href: '#faq' },
+  ];
 
   return (
     <footer id="contact" className="bg-black text-[#EDE0D0] border-t-4 border-black py-16 relative">
@@ -48,9 +58,11 @@ export default function Footer() {
               <BrandLogo color="#EDE0D0" textSize={1.6} />
             </a>
             <p className="text-xs font-semibold uppercase tracking-wider text-[#EDE0D0]/60 font-handwriting leading-relaxed max-w-xs">
-              {locale === 'ar' 
-                ? 'علامة تجارية مصرية تجمع بين حب الفاندوم وثقافة ملابس الشارع الكاجوال.' 
-                : 'Combining streetwear elements with the fandoms you cherish. Premium Egyptian apparel.'}
+              <EditableText
+                textKey="footer_tagline"
+                defaultEn="Combining streetwear elements with the fandoms you cherish. Premium Egyptian apparel."
+                defaultAr="علامة تجارية مصرية تجمع بين حب الفاندوم وثقافة ملابس الشارع الكاجوال."
+              />
             </p>
           </div>
 
@@ -60,21 +72,19 @@ export default function Footer() {
               {locale === 'ar' ? 'الروابط السريعة' : 'QUICK LINKS'}
             </h4>
             <div className="flex flex-col gap-2.5">
-              <a href="#home" className="text-xs font-bold uppercase tracking-wider hover:text-brand-accent transition-colors">
-                {tn('home')}
-              </a>
-              <a href="#collections" className="text-xs font-bold uppercase tracking-wider hover:text-brand-accent transition-colors">
-                {tn('collections')}
-              </a>
-              <a href="#custom-design" className="text-xs font-bold uppercase tracking-wider hover:text-brand-accent transition-colors">
-                {tn('custom_design')}
-              </a>
-              <a href="#about" className="text-xs font-bold uppercase tracking-wider hover:text-brand-accent transition-colors">
-                {tn('about')}
-              </a>
-              <a href="#faq" className="text-xs font-bold uppercase tracking-wider hover:text-brand-accent transition-colors">
-                {tn('faq')}
-              </a>
+              {navItems.map((item) => (
+                <a
+                  key={item.key}
+                  href={item.href}
+                  className="text-xs font-bold uppercase tracking-wider hover:text-brand-accent transition-colors"
+                >
+                  <EditableText
+                    textKey={`nav_${item.key}`}
+                    defaultEn={item.defaultEn}
+                    defaultAr={item.defaultAr}
+                  />
+                </a>
+              ))}
             </div>
           </div>
 
@@ -119,9 +129,15 @@ export default function Footer() {
           {/* Stamp / Made in Egypt column */}
           <div className="flex flex-col items-start md:items-end">
             <div className="px-5 py-3 border-2 border-dashed border-[#EDE0D0]/30 rounded-xl flex flex-col items-center rotate-[3deg] text-center w-full max-w-[180px]">
-              <span className="text-[9px] font-black tracking-widest text-[#EDE0D0]/40 uppercase">AUTHENTIC</span>
-              <span className="text-sm font-black text-brand-accent mt-1 uppercase">MADE IN EGYPT</span>
-              <span className="text-[10px] font-bold text-[#EDE0D0]/60 font-handwriting mt-0.5">100% Fine Cotton</span>
+              <span className="text-[9px] font-black tracking-widest text-[#EDE0D0]/40 uppercase">
+                <EditableText textKey="footer_stamp_badge" defaultEn="AUTHENTIC" defaultAr="أصلي" />
+              </span>
+              <span className="text-sm font-black text-brand-accent mt-1 uppercase">
+                <EditableText textKey="footer_stamp_title" defaultEn="MADE IN EGYPT" defaultAr="صنع في مصر" />
+              </span>
+              <span className="text-[10px] font-bold text-[#EDE0D0]/60 font-handwriting mt-0.5">
+                <EditableText textKey="footer_stamp_desc" defaultEn="100% Fine Cotton" defaultAr="قطن مصري ممتاز ١٠٠٪" />
+              </span>
             </div>
           </div>
 
@@ -130,10 +146,18 @@ export default function Footer() {
         {/* Bottom Bar */}
         <div className="mt-12 pt-8 border-t border-[#EDE0D0]/10 flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#EDE0D0]/40">
-            {t('copyright', { year: currentYear })}
+            <EditableText 
+              textKey="footer_copyright" 
+              defaultEn={`© ${currentYear} Fandom Fit. All rights reserved.`} 
+              defaultAr={`© ${currentYear} فاندوم فيت. جميع الحقوق محفوظة.`} 
+            />
           </span>
           <span className="text-[9px] font-black uppercase tracking-wider text-brand-accent">
-            {t('rights')}
+            <EditableText
+              textKey="footer_rights"
+              defaultEn="Wear What You Love"
+              defaultAr="ارتدِ ما تحب"
+            />
           </span>
         </div>
 

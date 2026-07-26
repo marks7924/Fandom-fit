@@ -1,73 +1,111 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { motion } from 'framer-motion';
 import { 
   Heart, Truck, Shirt, Compass, Sparkles, Scissors, Layers, CheckSquare 
 } from 'lucide-react';
+import { useStore } from '@/lib/store';
 import EditableText from './EditableText';
+
+const iconMap: Record<string, React.ReactNode> = {
+  Compass: <Compass className="text-black" size={24} />,
+  Truck: <Truck className="text-black" size={24} />,
+  Sparkles: <Sparkles className="text-black" size={24} />,
+  Heart: <Heart className="text-black" size={24} />,
+  Scissors: <Scissors className="text-black" size={24} />,
+  Shirt: <Shirt className="text-black" size={24} />,
+  Layers: <Layers className="text-black" size={24} />,
+  CheckSquare: <CheckSquare className="text-black" size={24} />,
+};
 
 export default function WhyChooseUs() {
   const t = useTranslations('why_choose_us');
+  const locale = useLocale();
+  const { settings } = useStore();
 
-  const reasons = [
-    {
-      id: 1,
-      title: t('egypt_made'),
-      desc: t('egypt_made_desc'),
-      icon: <Compass className="text-black" size={24} />,
-      colorClass: 'bg-[#F2CC8F]'
-    },
-    {
-      id: 2,
-      title: t('ships_egypt'),
-      desc: t('ships_egypt_desc'),
-      icon: <Truck className="text-black" size={24} />,
-      colorClass: 'bg-[#81B29A]'
-    },
-    {
-      id: 3,
-      title: t('premium_quality'),
-      desc: t('premium_quality_desc'),
-      icon: <Sparkles className="text-black" size={24} />,
-      colorClass: 'bg-[#E07A5F]'
-    },
-    {
-      id: 4,
-      title: t('inspired_fandoms'),
-      desc: t('inspired_fandoms_desc'),
-      icon: <Heart className="text-black" size={24} />,
-      colorClass: 'bg-[#3D405B]'
-    },
-    {
-      id: 5,
-      title: t('custom_available'),
-      desc: t('custom_available_desc'),
-      icon: <Scissors className="text-black" size={24} />,
-      colorClass: 'bg-[#F2CC8F]'
-    },
-    {
-      id: 6,
-      title: t('unisex_clothing'),
-      desc: t('unisex_clothing_desc'),
-      icon: <Shirt className="text-black" size={24} />,
-      colorClass: 'bg-[#81B29A]'
-    },
-    {
-      id: 7,
-      title: t('two_fabrics'),
-      desc: t('two_fabrics_desc'),
-      icon: <Layers className="text-black" size={24} />,
-      colorClass: 'bg-[#E07A5F]'
-    },
-    {
-      id: 8,
-      title: t('multiple_sizes'),
-      desc: t('multiple_sizes_desc'),
-      icon: <CheckSquare className="text-black" size={24} />,
-      colorClass: 'bg-[#3D405B]'
+  let reasons = [];
+  try {
+    const customReasons = typeof settings.why_choose_us === 'string'
+      ? JSON.parse(settings.why_choose_us)
+      : (settings.why_choose_us || null);
+
+    if (Array.isArray(customReasons) && customReasons.length > 0) {
+      reasons = customReasons.map((r: any, idx: number) => {
+        const iconNode = iconMap[r.icon] || <span className="text-xl font-normal">{r.icon || '✨'}</span>;
+        return {
+          id: r.id || idx,
+          title: locale === 'ar' ? (r.title_ar || r.title_en) : (r.title_en || r.title_ar),
+          desc: locale === 'ar' ? (r.desc_ar || r.desc_en) : (r.desc_en || r.desc_ar),
+          icon: iconNode,
+          colorClass: r.colorClass || 'bg-[#F2CC8F]'
+        };
+      });
     }
-  ];
+  } catch (e) {
+    console.error("Error parsing why_choose_us", e);
+  }
+
+  if (reasons.length === 0) {
+    reasons = [
+      {
+        id: 1,
+        title: t('egypt_made'),
+        desc: t('egypt_made_desc'),
+        icon: <Compass className="text-black" size={24} />,
+        colorClass: 'bg-[#F2CC8F]'
+      },
+      {
+        id: 2,
+        title: t('ships_egypt'),
+        desc: t('ships_egypt_desc'),
+        icon: <Truck className="text-black" size={24} />,
+        colorClass: 'bg-[#81B29A]'
+      },
+      {
+        id: 3,
+        title: t('premium_quality'),
+        desc: t('premium_quality_desc'),
+        icon: <Sparkles className="text-black" size={24} />,
+        colorClass: 'bg-[#E07A5F]'
+      },
+      {
+        id: 4,
+        title: t('inspired_fandoms'),
+        desc: t('inspired_fandoms_desc'),
+        icon: <Heart className="text-black" size={24} />,
+        colorClass: 'bg-[#3D405B]'
+      },
+      {
+        id: 5,
+        title: t('custom_available'),
+        desc: t('custom_available_desc'),
+        icon: <Scissors className="text-black" size={24} />,
+        colorClass: 'bg-[#F2CC8F]'
+      },
+      {
+        id: 6,
+        title: t('unisex_clothing'),
+        desc: t('unisex_clothing_desc'),
+        icon: <Shirt className="text-black" size={24} />,
+        colorClass: 'bg-[#81B29A]'
+      },
+      {
+        id: 7,
+        title: t('two_fabrics'),
+        desc: t('two_fabrics_desc'),
+        icon: <Layers className="text-black" size={24} />,
+        colorClass: 'bg-[#E07A5F]'
+      },
+      {
+        id: 8,
+        title: t('multiple_sizes'),
+        desc: t('multiple_sizes_desc'),
+        icon: <CheckSquare className="text-black" size={24} />,
+        colorClass: 'bg-[#3D405B]'
+      }
+    ];
+  }
 
   return (
     <section className="py-24 bg-[#EDE0D0] border-b-4 border-black relative select-none">

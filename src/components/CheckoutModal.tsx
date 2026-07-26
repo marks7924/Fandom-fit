@@ -240,13 +240,57 @@ export default function CheckoutModal() {
     setDiscountMsg(t('coupon_success', { discount: `${pct}%` }));
   };
 
+  const getFieldStatus = (fieldName: string) => {
+    const defaults: Record<string, string> = {
+      name: 'required',
+      email: 'optional',
+      phone: 'required',
+      governorate: 'required',
+      city: 'required',
+      address: 'required',
+      notes: 'optional'
+    };
+    
+    let config = defaults;
+    try {
+      if (settings?.account_fields) {
+        config = typeof settings.account_fields === 'string' 
+          ? JSON.parse(settings.account_fields) 
+          : settings.account_fields;
+      }
+    } catch (e) {
+      console.error("Error parsing account_fields", e);
+    }
+    
+    return config[fieldName] || defaults[fieldName] || 'optional';
+  };
+
+  const renderLabel = (fieldName: string, defaultEn: string, defaultAr: string) => {
+    const status = getFieldStatus(fieldName);
+    const baseText = locale === 'ar' ? defaultAr : defaultEn;
+    if (status === 'required') {
+      return baseText + " *";
+    }
+    if (status === 'optional') {
+      return baseText + (locale === 'ar' ? ' (اختياري)' : ' (Optional)');
+    }
+    return baseText;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !governorate || !city || !address) return;
 
-    // Phone format Egyptian check
+    if (getFieldStatus('name') === 'required' && !name) return;
+    if (getFieldStatus('phone') === 'required' && !phone) return;
+    if (getFieldStatus('email') === 'required' && !email) return;
+    if (getFieldStatus('governorate') === 'required' && !governorate) return;
+    if (getFieldStatus('city') === 'required' && !city) return;
+    if (getFieldStatus('address') === 'required' && !address) return;
+    if (getFieldStatus('notes') === 'required' && !notes) return;
+
+    // Phone format Egyptian check if phone is visible/provided
     const cleanPhone = phone.trim();
-    if (!/^01[0-25]\d{8}$/.test(cleanPhone)) {
+    if (getFieldStatus('phone') !== 'hidden' && cleanPhone && !/^01[0-25]\d{8}$/.test(cleanPhone)) {
       alert(locale === 'ar' ? 'الرجاء إدخال رقم موبايل مصري صحيح (مثال: 01012345678)' : 'Please enter a valid Egyptian mobile number (e.g. 01012345678)');
       return;
     }
@@ -575,135 +619,149 @@ export default function CheckoutModal() {
 
                 {/* Delivery Fields Group */}
                 <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-black uppercase text-black/60 block mb-1">
-                      {t('name_label')}
-                    </label>
-                    <div className="relative flex items-center">
-                      <User className="absolute left-3 text-black/40" size={14} />
-                      <input
-                        type="text"
-                        required
-                        placeholder={t('name_placeholder')}
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
+                  {getFieldStatus('name') !== 'hidden' && (
                     <div>
                       <label className="text-xs font-black uppercase text-black/60 block mb-1">
-                        {t('phone_label')}
+                        {renderLabel('name', 'Full Name', 'الاسم بالكامل')}
                       </label>
                       <div className="relative flex items-center">
-                        <Phone className="absolute left-3 text-black/40" size={14} />
+                        <User className="absolute left-3 text-black/40" size={14} />
                         <input
-                          type="tel"
-                          required
-                          placeholder={t('phone_placeholder')}
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
+                          type="text"
+                          required={getFieldStatus('name') === 'required'}
+                          placeholder={t('name_placeholder')}
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
                           className="w-full pl-9 pr-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
                         />
                       </div>
-                      <p className="text-[9px] text-[#D84A2A] font-bold mt-1">
-                        {locale === 'ar' ? '⚠️ هام: كوبونات المكافآت ترتبط برقم الهاتف هذا. لا تغير رقمك لاحقاً للاستفادة منها.' : '⚠️ Note: Reward coupons are bound to this phone number. Do not change it later.'}
-                      </p>
-                      {phone.trim().length >= 10 && (() => {
-                        const userCoupons = useStore.getState().offers.filter(o => o.bound_phone && o.bound_phone.trim() === phone.trim() && o.is_active);
-                        if (userCoupons.length === 0) return null;
-                        return (
-                          <div className="mt-2 p-2 bg-green-50 border border-green-500 rounded-lg text-[10px] flex justify-between items-center animate-pulse">
-                            <div className="font-bold text-green-800">
-                              {locale === 'ar' 
-                                ? `لديك كوبون مكافأة غير مستخدم: ${userCoupons[0].code} (${userCoupons[0].discount_percent}%)` 
-                                : `Unused reward coupon found: ${userCoupons[0].code} (${userCoupons[0].discount_percent}%)`}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {getFieldStatus('phone') !== 'hidden' && (
+                      <div>
+                        <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                          {renderLabel('phone', 'Phone Number', 'رقم الهاتف')}
+                        </label>
+                        <div className="relative flex items-center">
+                          <Phone className="absolute left-3 text-black/40" size={14} />
+                          <input
+                            type="tel"
+                            required={getFieldStatus('phone') === 'required'}
+                            placeholder={t('phone_placeholder')}
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
+                          />
+                        </div>
+                        <p className="text-[9px] text-[#D84A2A] font-bold mt-1">
+                          {locale === 'ar' ? '⚠️ هام: كوبونات المكافآت ترتبط برقم الهاتف هذا. لا تغير رقمك لاحقاً للاستفادة منها.' : '⚠️ Note: Reward coupons are bound to this phone number. Do not change it later.'}
+                        </p>
+                        {phone.trim().length >= 10 && (() => {
+                          const userCoupons = useStore.getState().offers.filter(o => o.bound_phone && o.bound_phone.trim() === phone.trim() && o.is_active);
+                          if (userCoupons.length === 0) return null;
+                          return (
+                            <div className="mt-2 p-2 bg-green-50 border border-green-500 rounded-lg text-[10px] flex justify-between items-center animate-pulse">
+                              <div className="font-bold text-green-800">
+                                {locale === 'ar' 
+                                  ? `لديك كوبون مكافأة غير مستخدم: ${userCoupons[0].code} (${userCoupons[0].discount_percent}%)` 
+                                  : `Unused reward coupon found: ${userCoupons[0].code} (${userCoupons[0].discount_percent}%)`}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCouponCode(userCoupons[0].code);
+                                  setAppliedDiscount(userCoupons[0].discount_percent);
+                                  setDiscountMsg(locale === 'ar' ? 'تم تطبيق كوبون المكافأة!' : 'Reward coupon applied!');
+                                  setDiscountErr('');
+                                }}
+                                className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded font-black text-[9px] cursor-pointer"
+                              >
+                                {locale === 'ar' ? 'تطبيق' : 'Apply'}
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCouponCode(userCoupons[0].code);
-                                setAppliedDiscount(userCoupons[0].discount_percent);
-                                setDiscountMsg(locale === 'ar' ? 'تم تطبيق كوبون المكافأة!' : 'Reward coupon applied!');
-                                setDiscountErr('');
-                              }}
-                              className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded font-black text-[9px] cursor-pointer"
-                            >
-                              {locale === 'ar' ? 'تطبيق' : 'Apply'}
-                            </button>
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-black uppercase text-black/60 block mb-1">
-                        {locale === 'ar' ? 'البريد الإلكتروني (اختياري)' : 'Email (Optional)'}
-                      </label>
-                      <div className="relative flex items-center">
-                        <Mail className="absolute left-3 text-black/40" size={14} />
-                        <input
-                          type="email"
-                          placeholder="e.g. mail@domain.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-9 pr-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
-                        />
+                          );
+                        })()}
                       </div>
-                    </div>
+                    )}
+
+                    {getFieldStatus('email') !== 'hidden' && (
+                      <div>
+                        <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                          {renderLabel('email', 'Email Address', 'البريد الإلكتروني')}
+                        </label>
+                        <div className="relative flex items-center">
+                          <Mail className="absolute left-3 text-black/40" size={14} />
+                          <input
+                            type="email"
+                            required={getFieldStatus('email') === 'required'}
+                            placeholder="e.g. mail@domain.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-black uppercase text-black/60 block mb-1">
-                        {t('governorate_label')}
-                      </label>
-                      <div className="relative">
-                        <select
-                          value={governorate}
-                          onChange={(e) => setGovernorate(e.target.value)}
-                          className="w-full px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none appearance-none"
-                        >
-                          {governorates.map((gov) => (
-                            <option key={gov} value={gov}>
-                              {gov}
-                            </option>
-                          ))}
-                        </select>
-                        <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none" size={14} />
+                    {getFieldStatus('governorate') !== 'hidden' && (
+                      <div>
+                        <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                          {renderLabel('governorate', 'Governorate', 'المحافظة')}
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={governorate}
+                            onChange={(e) => setGovernorate(e.target.value)}
+                            className="w-full px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none appearance-none"
+                          >
+                            {governorates.map((gov) => (
+                              <option key={gov} value={gov}>
+                                {gov}
+                              </option>
+                            ))}
+                          </select>
+                          <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none" size={14} />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
+                    {getFieldStatus('city') !== 'hidden' && (
+                      <div>
+                        <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                          {renderLabel('city', 'City / District', 'المدينة / المنطقة')}
+                        </label>
+                        <input
+                          type="text"
+                          required={getFieldStatus('city') === 'required'}
+                          placeholder="e.g. Heliopolis"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          className="w-full px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {getFieldStatus('address') !== 'hidden' && (
                     <div>
                       <label className="text-xs font-black uppercase text-black/60 block mb-1">
-                        {locale === 'ar' ? 'المدينة / المنطقة' : 'City / District'}
+                        {renderLabel('address', 'Detailed Address', 'العنوان بالتفصيل')}
                       </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Heliopolis"
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        className="w-full px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none"
+                      <textarea
+                        required={getFieldStatus('address') === 'required'}
+                        rows={2}
+                        placeholder={t('address_placeholder')}
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="w-full px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none resize-none"
                       />
                     </div>
-                  </div>
+                  )}
 
-                  <div>
-                    <label className="text-xs font-black uppercase text-black/60 block mb-1">
-                      {t('address_label')}
-                    </label>
-                    <textarea
-                      required
-                      rows={2}
-                      placeholder={t('address_placeholder')}
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      className="w-full px-4 py-2 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none resize-none"
-                    />
-                  </div>
                 </div>
 
                 {/* Promo Code & Referral Group */}
@@ -755,18 +813,21 @@ export default function CheckoutModal() {
                 </div>
 
                 {/* Additional notes */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1">
-                    {t('notes_label')}
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder={t('notes_placeholder')}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none resize-none"
-                  />
-                </div>
+                {getFieldStatus('notes') !== 'hidden' && (
+                  <div>
+                    <label className="text-xs font-black uppercase text-black/60 block mb-1">
+                      {renderLabel('notes', 'Order Notes', 'ملاحظات الطلب')}
+                    </label>
+                    <textarea
+                      required={getFieldStatus('notes') === 'required'}
+                      rows={2}
+                      placeholder={t('notes_placeholder')}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white text-black font-semibold border-2 border-black rounded-xl focus:outline-none resize-none"
+                    />
+                  </div>
+                )}
 
                 {/* Price Breakdown */}
                 <div className="p-4 border-2 border-dashed border-black/45 bg-white/40 rounded-xl space-y-2 text-xs">

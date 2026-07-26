@@ -4,20 +4,42 @@ import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { useStore } from '@/lib/store';
+import EditableText from './EditableText';
 
 export default function FAQ() {
   const t = useTranslations('faq_section');
   const locale = useLocale();
+  const { settings } = useStore();
   const [openIdx, setOpenIdx] = useState<number | null>(0);
 
-  const faqItems = [
-    { q: t('q1'), a: t('a1') },
-    { q: t('q2'), a: t('a2') },
-    { q: t('q3'), a: t('q3_ans') },
-    { q: t('q4'), a: t('a4') },
-    { q: t('q5'), a: t('a5') },
-    { q: t('q6'), a: t('a6') }
-  ];
+  // Load FAQs from settings.faqs if configured, otherwise fallback to defaults
+  let faqItems = [];
+  try {
+    const customFaqs = typeof settings.faqs === 'string' 
+      ? JSON.parse(settings.faqs) 
+      : (settings.faqs || null);
+    
+    if (Array.isArray(customFaqs) && customFaqs.length > 0) {
+      faqItems = customFaqs.map((f: any) => ({
+        q: locale === 'ar' ? (f.q_ar || f.q_en) : (f.q_en || f.q_ar),
+        a: locale === 'ar' ? (f.a_ar || f.a_en) : (f.a_en || f.a_ar)
+      }));
+    }
+  } catch (e) {
+    console.error("Error parsing settings.faqs", e);
+  }
+
+  if (faqItems.length === 0) {
+    faqItems = [
+      { q: t('q1'), a: t('a1') },
+      { q: t('q2'), a: t('a2') },
+      { q: t('q3'), a: t('q3_ans') },
+      { q: t('q4'), a: t('a4') },
+      { q: t('q5'), a: t('a5') },
+      { q: t('q6'), a: t('a6') }
+    ];
+  }
 
   return (
     <section id="faq" className="py-24 bg-[#EDE0D0] border-b-4 border-black relative select-none">
@@ -27,10 +49,10 @@ export default function FAQ() {
         <div className="text-center mb-16">
           <h2 className="text-4xl sm:text-5xl font-black uppercase tracking-tight text-black flex items-center justify-center gap-3">
             <HelpCircle className="text-brand-accent" size={32} />
-            {t('title')}
+            <EditableText textKey="faq_title" defaultEn="FAQs" defaultAr="الأسئلة الشائعة" />
           </h2>
           <p className="mt-4 text-lg font-semibold text-black/70 font-handwriting">
-            {t('subtitle')}
+            <EditableText textKey="faq_subtitle" defaultEn="Frequently asked questions about ordering, sizing, and shipping." defaultAr="الإجابات على استفساراتكم الشائعة بخصوص الطلب والمقاسات والشحن." />
           </p>
         </div>
 
