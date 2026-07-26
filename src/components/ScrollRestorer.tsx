@@ -14,15 +14,20 @@ export default function ScrollRestorer() {
   // Manage Favicon dynamically
   useEffect(() => {
     if (faviconUrl && typeof window !== 'undefined') {
+      // Add cache-buster so browsers always reload the latest icon after an admin update
+      const bustUrl = faviconUrl.includes('?')
+        ? `${faviconUrl}&_t=${Date.now()}`
+        : `${faviconUrl}?_t=${Date.now()}`;
+
       const linkTags = document.querySelectorAll("link[rel*='icon']");
       if (linkTags.length > 0) {
         linkTags.forEach((link: any) => {
-          link.href = faviconUrl;
+          link.href = bustUrl;
         });
       } else {
         const link = document.createElement('link');
         link.rel = 'icon';
-        link.href = faviconUrl;
+        link.href = bustUrl;
         document.getElementsByTagName('head')[0].appendChild(link);
       }
     }

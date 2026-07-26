@@ -194,9 +194,10 @@ export default function Hero() {
             </motion.div>
 
             {/* Cotton sticker — lives OUTSIDE the card so section overflow:hidden cannot clip it.
-                Negative margin-top pulls it up to visually overlap the bottom of the card. */}
+                Negative margin-top pulls it up slightly to visually overlap the bottom-left of the card.
+                Using small negative margin so ~89% of the badge is visible below the card. */}
             <div
-              className="self-start ml-0 sm:-ml-4 -mt-3 sm:-mt-6 bg-[#81B29A] text-black border-3 border-black px-3 py-1.5 sm:px-4 sm:py-2.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-sm sm:text-lg whitespace-nowrap z-10 relative"
+              className="self-start ml-4 sm:ml-0 -mt-1 sm:-mt-4 bg-[#81B29A] text-black border-3 border-black px-3 py-1.5 sm:px-4 sm:py-2.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-sm sm:text-lg whitespace-nowrap z-10 relative"
               style={{ transform: 'rotate(15deg)' }}
             >
               🎮 100% Egyptian Cotton!
