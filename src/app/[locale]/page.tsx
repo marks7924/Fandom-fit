@@ -60,14 +60,15 @@ export default function Home({
       const ref = urlParams.get('ref');
       if (ref) {
         const cleanRef = ref.trim();
-        if (cleanRef.startsWith('REF-') || /^01[0-25]\d{8}$/.test(cleanRef)) {
+        const cleanRefUpper = cleanRef.toUpperCase();
+        if (cleanRefUpper.startsWith('REF-') || /^01[0-25]\d{8}$/.test(cleanRef)) {
           // Save the referrer for later (order attribution)
-          localStorage.setItem('ff_referrer_phone', cleanRef);
+          localStorage.setItem('ff_referrer_phone', cleanRefUpper);
           // Show welcome banner — the banner's CTA button calls trackReferralClick
           const sessionTracked = sessionStorage.getItem('ff_referral_tracked');
-          if (sessionTracked !== cleanRef) {
-            setActiveRefCode(cleanRef);
-            sessionStorage.setItem('ff_referral_tracked', cleanRef);
+          if (sessionTracked !== cleanRefUpper) {
+            setActiveRefCode(cleanRefUpper);
+            sessionStorage.setItem('ff_referral_tracked', cleanRefUpper);
           }
         }
       }

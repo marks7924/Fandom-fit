@@ -738,6 +738,20 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   addOrder: async (order) => {
+    // Helper: insert offer with full schema, fall back to minimal if columns missing
+    const safeInsertOffer = async (offerData: any) => {
+      try {
+        const result = await supabase.from('offers').insert([offerData]);
+        if (result.error && result.error.code === 'PGRST204') {
+          // Column missing — strip extended fields and retry
+          const { bound_phone, referred_phone, ...minimalOffer } = offerData;
+          await supabase.from('offers').insert([minimalOffer]);
+        }
+      } catch (e) {
+        console.warn('Could not insert offer (non-critical):', e);
+      }
+    };
+    
     try {
       let rewardCouponCode = '';
       
@@ -887,7 +901,39 @@ export const useStore = create<StoreState>((set, get) => ({
         reward_coupon_code: rewardCouponCode || undefined
       };
 
-      const { data, error } = await supabase.from('orders').insert([finalOrder]).select();
+      // Try full insert first; if columns missing (DB not migrated), fallback to minimal safe insert
+      let data: any[] | null = null;
+      let error: any = null;
+      
+      const fullResult = await supabase.from('orders').insert([finalOrder]).select();
+      if (fullResult.error) {
+        console.warn('Full order insert failed (likely schema mismatch), trying minimal fallback:', fullResult.error.message);
+        // Minimal fallback — only columns that exist in the base schema
+        const minimalOrder = {
+          product_id: order.product_id || undefined,
+          product_name: order.product_name,
+          price: order.price,
+          customer_name: order.customer_name,
+          customer_phone: order.customer_phone,
+          location: order.location || `${order.governorate || ''} ${order.city || ''}`.trim() || 'N/A',
+          notes: [
+            order.notes,
+            order.items ? `Items: ${JSON.stringify(order.items)}` : null,
+            order.coupon_code ? `Coupon: ${order.coupon_code}` : null,
+            order.referral_code ? `Ref: ${order.referral_code}` : null,
+            rewardCouponCode ? `Reward: ${rewardCouponCode}` : null,
+            order.customer_email ? `Email: ${order.customer_email}` : null,
+            order.address ? `Address: ${order.governorate}, ${order.city}, ${order.address}` : null,
+          ].filter(Boolean).join(' | '),
+        };
+        const fallbackResult = await supabase.from('orders').insert([minimalOrder]).select();
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      } else {
+        data = fullResult.data;
+        error = fullResult.error;
+      }
+
       if (error) throw error;
       
       const newOrder = data?.[0] || null;
@@ -1036,63 +1082,100 @@ export const useStore = create<StoreState>((set, get) => ({
 
   trackReferralClick: async (refCode) => {
     if (!refCode) return;
+    const cleanRef = refCode.trim().toUpperCase();
     try {
-      const { data: matchedProfiles } = await supabase
-        .from('profiles')
-        .select('*')
-        .or(`referral_code.eq.${refCode},phone.eq.${refCode}`);
-        
-      if (matchedProfiles && matchedProfiles.length > 0) {
-        const targetProfile = matchedProfiles[0];
-        const nextClicks = (targetProfile.referral_clicks || 0) + 1;
+      if (isUsingMock) {
+        // Mock DB implementation
+        const { data: matchedProfiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .or(`referral_code.eq.${cleanRef},phone.eq.${cleanRef}`);
+          
+        if (matchedProfiles && matchedProfiles.length > 0) {
+          const targetProfile = matchedProfiles[0];
+          const nextClicks = (targetProfile.referral_clicks || 0) + 1;
+          const threshold = get().settings.referral_clicks_threshold ?? 5;
+          
+          if (nextClicks >= threshold) {
+            const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const code = `REFERRAL-${randomString}`;
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + 30);
+
+            const newOffer = {
+              title_en: 'Referral Clicks Goal Reward (15% OFF)',
+              title_ar: 'مكافأة هدف زيارات الرابط (خصم ١٥٪)',
+              description_en: 'Goal reached! (' + threshold + ' clicks on your link). Bound to phone: ' + targetProfile.phone,
+              description_ar: 'تم الوصول للهدف! (' + threshold + ' زيارة لرابطك). مرتبطة برقم هاتف: ' + targetProfile.phone,
+              discount_text_en: '15% OFF',
+              discount_text_ar: 'خصم ١٥٪',
+              code: code,
+              discount_percent: 15,
+              max_uses: 1,
+              max_uses_per_user: 1,
+              is_active: true,
+              show_on_homepage: false,
+              discount_type: 'percentage',
+              discount_value: 15,
+              coupon_type: 'referral_reward',
+              is_one_time: true,
+              is_public: false,
+              bound_phone: targetProfile.phone || undefined,
+              expires_at: expiryDate.toISOString()
+            };
+
+            // Resilient insert in case columns are missing
+            try {
+              const res = await supabase.from('offers').insert([newOffer]);
+              if (res.error && res.error.code === 'PGRST204') {
+                const { bound_phone, ...minimalOffer } = newOffer;
+                await supabase.from('offers').insert([minimalOffer]);
+              }
+            } catch (err) {
+              console.warn('Could not insert click reward offer:', err);
+            }
+
+            await supabase
+              .from('profiles')
+              .update({ referral_clicks: 0 })
+              .eq('id', targetProfile.id);
+          } else {
+            await supabase
+              .from('profiles')
+              .update({ referral_clicks: nextClicks })
+              .eq('id', targetProfile.id);
+          }
+        }
+      } else {
+        // Real Supabase backend: execute the secure RPC function to bypass RLS policies
         const threshold = get().settings.referral_clicks_threshold ?? 5;
-        
-        if (nextClicks >= threshold) {
-          const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
-          const code = `REFERRAL-${randomString}`;
-          const expiryDate = new Date();
-          expiryDate.setDate(expiryDate.getDate() + 30);
-
-          const newOffer = {
-            title_en: 'Referral Clicks Goal Reward (15% OFF)',
-            title_ar: 'مكافأة هدف زيارات الرابط (خصم ١٥٪)',
-            description_en: 'Goal reached! (' + threshold + ' clicks on your link). Bound to phone: ' + targetProfile.phone,
-            description_ar: 'تم الوصول للهدف! (' + threshold + ' زيارة لرابطك). مرتبطة برقم هاتف: ' + targetProfile.phone,
-            discount_text_en: '15% OFF',
-            discount_text_ar: 'خصم ١٥٪',
-            code: code,
-            discount_percent: 15,
-            max_uses: 1,
-            max_uses_per_user: 1,
-            is_active: true,
-            show_on_homepage: false,
-            discount_type: 'percentage',
-            discount_value: 15,
-            coupon_type: 'referral_reward',
-            is_one_time: true,
-            is_public: false,
-            bound_phone: targetProfile.phone || undefined,
-            expires_at: expiryDate.toISOString()
-          };
-
-          await supabase.from('offers').insert([newOffer]);
-
-          await supabase
+        const { error } = await supabase.rpc('increment_referral_clicks', { 
+          referrer_code: cleanRef,
+          click_threshold: threshold
+        });
+        if (error) {
+          console.error('RPC increment_referral_clicks failed:', error);
+          // Fallback to direct client-side update in case RPC is not yet created in the DB
+          const { data: matchedProfiles } = await supabase
             .from('profiles')
-            .update({ referral_clicks: 0 })
-            .eq('id', targetProfile.id);
-        } else {
-          await supabase
-            .from('profiles')
-            .update({ referral_clicks: nextClicks })
-            .eq('id', targetProfile.id);
+            .select('*')
+            .or(`referral_code.eq.${cleanRef},phone.eq.${cleanRef}`);
+          if (matchedProfiles && matchedProfiles.length > 0) {
+            const targetProfile = matchedProfiles[0];
+            const nextClicks = (targetProfile.referral_clicks || 0) + 1;
+            await supabase
+              .from('profiles')
+              .update({ referral_clicks: nextClicks })
+              .eq('id', targetProfile.id);
+          }
         }
       }
-        // Re-sync the current user's profile if they're logged in (to show updated counter)
-        const currentUser = get().user;
-        if (currentUser) {
-          await get().syncUserProfile();
-        }
+
+      // Re-sync the current user's profile if they're logged in (to show updated counter)
+      const currentUser = get().user;
+      if (currentUser) {
+        await get().syncUserProfile();
+      }
     } catch (e) {
       console.error('Error tracking referral click:', e);
     }

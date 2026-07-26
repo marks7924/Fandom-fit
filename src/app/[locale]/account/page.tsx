@@ -21,6 +21,7 @@ export default function AccountPage() {
   const { 
     user, 
     profile, 
+    products,
     orders,
     settings,
     fetchInitialData,
@@ -31,6 +32,8 @@ export default function AccountPage() {
     signOutUser, 
     updateProfile, 
     fetchOrdersByPhone,
+    toggleFavorite,
+    setPreviewProduct,
     isLoading
   } = useStore();
 
@@ -238,6 +241,9 @@ export default function AccountPage() {
   // Referral Calculations
   const host = typeof window !== 'undefined' ? window.location.origin : 'https://fandom-fit.vercel.app';
   const referralLink = `${host}/?ref=${activeProfile.referral_code}`;
+
+  // Resolve favorite items from user profile
+  const favoriteProducts = products.filter(p => profile?.favorites?.includes(p.id));
 
   const handleCopyReferral = () => {
     navigator.clipboard.writeText(referralLink);
@@ -767,6 +773,60 @@ export default function AccountPage() {
                         )}
                       </div>
                     </div>
+                  </div>
+
+                  {/* My Favorites Section */}
+                  <div className="bg-white border-4 border-black p-5 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]">
+                    <h3 className="text-base font-black uppercase tracking-tight text-black border-b-2 border-black/10 pb-2 mb-4 flex items-center gap-2">
+                      <span className="text-red-500 text-lg">❤️</span>
+                      {locale === 'ar' ? 'منتجاتي المفضلة' : 'My Favorites'}
+                    </h3>
+
+                    {favoriteProducts.length === 0 ? (
+                      <div className="text-center py-6">
+                        <span className="text-2xl opacity-60">💔</span>
+                        <p className="text-[10px] font-black text-black/55 mt-2 leading-relaxed">
+                          {locale === 'ar' 
+                            ? 'لم تقم بإضافة أي منتجات للمفضلة بعد! ابدأ بالتصفح وإضافتها.' 
+                            : 'No favorite items yet! Start exploring the shop to fill this space.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-1">
+                        {favoriteProducts.map((p) => {
+                          const name = locale === 'ar' ? p.name_ar : p.name_en;
+                          const defaultPlaceholder = p.category_id === '4' ? '/placeholders/manga_front.jpg' : '/placeholders/arcade_front.jpg';
+                          const image = (p.images && p.images.length > 0) ? p.images[0] : defaultPlaceholder;
+                          
+                          return (
+                            <div key={p.id} className="flex items-center gap-3 p-2 bg-[#EDE0D0]/20 border-2 border-black rounded-2xl">
+                              <div className="relative w-12 h-12 bg-white border border-black rounded-lg overflow-hidden shrink-0 flex items-center justify-center">
+                                <img src={image} alt={name} className="w-full h-full object-contain p-0.5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-black text-black truncate uppercase">{name}</h4>
+                                <span className="text-[10px] font-mono font-black text-brand-accent mt-0.5 block">{p.price} EGP</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  onClick={() => setPreviewProduct(p)}
+                                  className="px-2.5 py-1 bg-black hover:bg-brand-accent text-white text-[9px] font-black uppercase rounded-lg border border-black transition-colors cursor-pointer"
+                                >
+                                  {locale === 'ar' ? 'عرض' : 'View'}
+                                </button>
+                                <button
+                                  onClick={() => toggleFavorite(p.id)}
+                                  className="p-1 hover:bg-black/5 rounded-lg border border-black/10 transition-colors text-red-500 cursor-pointer"
+                                  title={locale === 'ar' ? 'حذف من المفضلة' : 'Remove'}
+                                >
+                                  ❌
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                 </div>
