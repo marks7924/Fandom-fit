@@ -78,12 +78,15 @@ export interface Offer {
 
 export interface CustomRequest {
   id: string;
+  user_id?: string;
   customer_name: string;
+  email?: string;
   instagram_username: string;
   customer_phone?: string;
   description: string;
   reference_images: string[];
   status: string;
+  price?: number;
   notes: string;
   created_at: string;
 }
@@ -139,6 +142,7 @@ interface StoreState {
   offers: Offer[];
   settings: Record<string, any>;
   customRequests: CustomRequest[];
+  userCustomRequests: CustomRequest[];
   orders: Order[];
   announcement: string;
   announcement_ar: string;
@@ -170,6 +174,7 @@ interface StoreState {
   setPreviewProduct: (product: Product | null) => void;
   setCheckoutProduct: (product: Product | null, options?: { size?: string, fabric?: string, fitType?: 'regular' | 'oversized' }) => void;
   addCustomRequest: (req: Omit<CustomRequest, 'id' | 'created_at' | 'status' | 'notes'>) => Promise<boolean>;
+  fetchUserCustomRequests: (userId: string) => Promise<void>;
   
   // Order Operations
   fetchOrders: () => Promise<void>;
@@ -184,7 +189,7 @@ interface StoreState {
 
   // Admin Operations
   fetchAdminRequests: () => Promise<void>;
-  updateRequestStatus: (id: string, status: string, notes: string) => Promise<void>;
+  updateRequestStatus: (id: string, status: string, notes: string, price?: number) => Promise<void>;
   saveSettings: (settings: Record<string, any>) => Promise<void>;
   
   // Product CRUD
@@ -296,6 +301,7 @@ export const useStore = create<StoreState>((set, get) => ({
   discountCampaigns: [],
   settings: {},
   customRequests: [],
+  userCustomRequests: [],
   orders: [],
   announcement: '',
   announcement_ar: '',
@@ -730,6 +736,20 @@ export const useStore = create<StoreState>((set, get) => ({
     } catch (error) {
       console.error('Error submitting custom request:', error);
       return false;
+    }
+  },
+
+  fetchUserCustomRequests: async (userId) => {
+    try {
+      const { data: userCustomRequests } = await supabase
+        .from('custom_requests')
+        .select('*')
+        .eq('user_id', userId);
+      if (userCustomRequests) {
+        set({ userCustomRequests });
+      }
+    } catch (error) {
+      console.error('Error fetching user custom requests:', error);
     }
   },
 
@@ -1291,10 +1311,28 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  updateRequestStatus: async (id, status, notes) => {
+  updateRequestStatus: async (id, status, notes, price) => {
     try {
-      await supabase.from('custom_requests').update({ status, notes }).eq('id', id);
-      const updated = get().customRequests.map(r => r.id === id ? { ...r, status, notes } : r);
+      const res = await fetch('/api/admin/requests/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status, notes, price })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to update custom request');
+      }
+
+      const updated = get().customRequests.map(r => 
+        r.id === id 
+          ? { 
+              ...r, 
+              status, 
+              notes, 
+              price: price !== undefined ? price : r.price 
+            } 
+          : r
+      );
       set({ customRequests: updated });
     } catch (error) {
       console.error('Error updating custom request status:', error);

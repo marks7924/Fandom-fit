@@ -303,3 +303,8 @@ INSERT INTO settings (key, value) VALUES
   "instapay_enabled": true
 }')
 ON CONFLICT (key) DO NOTHING;
+
+-- CUSTOM DESIGN REQUEST UPDATES: Alter custom_requests table
+ALTER TABLE custom_requests ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE custom_requests ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE custom_requests ADD COLUMN IF NOT EXISTS price NUMERIC DEFAULT 0;

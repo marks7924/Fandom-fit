@@ -8,6 +8,7 @@ import Footer from '@/components/Footer';
 import LoadingScreen from '@/components/LoadingScreen';
 import ProductQuickPreview from '@/components/ProductQuickPreview';
 import CartDrawer from '@/components/CartDrawer';
+import supabase from '@/lib/supabase';
 import { 
   Trophy, Copy, Check, LogOut, Settings, Package, Lock, 
   Mail, Phone, User, MapPin, Eye, EyeOff, ShoppingBag, 
@@ -26,6 +27,8 @@ export default function AccountPage() {
     products,
     orders,
     settings,
+    userCustomRequests,
+    fetchUserCustomRequests,
     fetchInitialData,
     syncUserProfile,
     signUpUser, 
@@ -70,6 +73,18 @@ export default function AccountPage() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Custom checkout configurations states (keyed by request ID)
+  const [customSelectedSize, setCustomSelectedSize] = useState<Record<string, string>>({});
+  const [customSelectedFabric, setCustomSelectedFabric] = useState<Record<string, string>>({});
+  const [customSelectedFit, setCustomSelectedFit] = useState<Record<string, string>>({});
+  const [customSelectedQuantity, setCustomSelectedQuantity] = useState<Record<string, number>>({});
+  const [customPaymentMethod, setCustomPaymentMethod] = useState<Record<string, string>>({});
+  const [customUpfrontMethod, setCustomUpfrontMethod] = useState<Record<string, string>>({});
+  const [customInstapayReceipt, setCustomInstapayReceipt] = useState<Record<string, File | null>>({});
+  const [customCheckoutSubmitting, setCustomCheckoutSubmitting] = useState<Record<string, boolean>>({});
+  const [customCheckoutSuccess, setCustomCheckoutSuccess] = useState<Record<string, boolean>>({});
+  const [customCheckoutError, setCustomCheckoutError] = useState<Record<string, string>>({});
+
   // Orders list state
   const [userOrders, setUserOrders] = useState<any[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
@@ -113,7 +128,7 @@ export default function AccountPage() {
     });
   }, [fetchInitialData, syncUserProfile]);
 
-  // Fetch logged in orders
+  // Fetch logged in orders & custom requests
   useEffect(() => {
     if (user) {
       setIsLoadingOrders(true);
@@ -121,6 +136,7 @@ export default function AccountPage() {
         setUserOrders(fetched || []);
         setIsLoadingOrders(false);
       });
+      fetchUserCustomRequests(user.id);
       // Populate fields
       if (profile) {
         setEditName(profile.full_name || '');
@@ -133,7 +149,7 @@ export default function AccountPage() {
     } else {
       setUserOrders([]);
     }
-  }, [user, profile, fetchAccountOrders]);
+  }, [user, profile, fetchAccountOrders, fetchUserCustomRequests]);
 
   if (!mounted || isLoading) {
     return <LoadingScreen />;
@@ -238,6 +254,143 @@ export default function AccountPage() {
       console.error(err);
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const handleCustomRequestCheckout = async (req: any) => {
+    const reqId = req.id;
+    const size = customSelectedSize[reqId] || 'M';
+    const fabric = customSelectedFabric[reqId] || 'Standard Cotton';
+    const fit = customSelectedFit[reqId] || 'regular';
+    const qty = customSelectedQuantity[reqId] || 1;
+    const pm = customPaymentMethod[reqId] || 'card';
+    const upfrontPm = customUpfrontMethod[reqId] || 'upfront_card';
+
+    setCustomCheckoutSubmitting(prev => ({ ...prev, [reqId]: true }));
+    setCustomCheckoutError(prev => ({ ...prev, [reqId]: '' }));
+
+    try {
+      const pricePerItem = req.price || 0;
+      const totalAmount = pricePerItem * qty;
+      const isCod = pm === 'cod';
+      const actualPaymentMethod = isCod 
+        ? (upfrontPm === 'upfront_instapay' ? 'cod_instapay_upfront' : 'cod_card_upfront')
+        : pm;
+      const chargeAmount = isCod ? totalAmount * 0.5 : totalAmount;
+
+      // Ensure address is filled
+      if (!addrGovernorate || !addrCity || !addrStreet) {
+        throw new Error(locale === 'ar' ? 'الرجاء إدخال بيانات العنوان بالكامل في نموذج التعديل أدناه أولاً' : 'Please fill in your default delivery address details below first.');
+      }
+
+      // Generate order code
+      const uniqueSuffix = Math.floor(100 + Math.random() * 900);
+      const generatedOrderCode = `FF-${new Date().getFullYear()}-${uniqueSuffix}`;
+
+      // Upload receipt screenshot if using instapay
+      let receiptUrl = '';
+      if (actualPaymentMethod === 'instapay' || actualPaymentMethod === 'cod_instapay_upfront') {
+        const screenshotFile = customInstapayReceipt[reqId];
+        if (!screenshotFile) {
+          throw new Error(locale === 'ar' ? 'الرجاء إرفاق لقطة شاشة إيصال تحويل InstaPay' : 'Please select and attach your InstaPay transfer screenshot receipt.');
+        }
+
+        const fileExt = screenshotFile.name.split('.').pop();
+        const fileName = `receipts/${generatedOrderCode}-${Date.now()}.${fileExt}`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('products')
+          .upload(fileName, screenshotFile);
+
+        if (uploadErr) throw uploadErr;
+        if (uploadData) {
+          const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(uploadData.path);
+          receiptUrl = publicUrl;
+        }
+      }
+
+      // Create Order payload
+      const orderPayload = {
+        user_id: user.id,
+        customer_name: editName || profile?.full_name || 'Guest User',
+        customer_phone: editPhone || profile?.phone || '',
+        customer_email: user.email,
+        price: totalAmount,
+        location: `${addrStreet}, ${addrCity}, ${addrGovernorate}`,
+        notes: `[Custom Design Request #${reqId.substring(0, 8).toUpperCase()}]
+Description: ${req.description}
+Size: ${size}
+Fabric: ${fabric}
+Fit Type: ${fit}
+Quantity: ${qty}
+${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm === 'upfront_instapay' ? 'InstaPay' : 'Card'}. Balance due on delivery: ${totalAmount * 0.5} EGP.` : 'Paid in full.'}`,
+        status: (actualPaymentMethod === 'instapay' || actualPaymentMethod === 'cod_instapay_upfront') ? 'pending_verification' : 'pending_payment',
+        payment_method: actualPaymentMethod,
+        payment_receipt_url: receiptUrl,
+        order_code: generatedOrderCode,
+        items: [
+          {
+            id: `custom-${reqId}`,
+            product_id: null,
+            product_name: `Custom Design: ${req.description.substring(0, 30)}...`,
+            size,
+            fabric,
+            quantity: qty,
+            price: pricePerItem
+          }
+        ]
+      };
+
+      // 1. Save order to DB
+      const { data: newOrder, error: orderErr } = await supabase
+        .from('orders')
+        .insert([orderPayload])
+        .select()
+        .single();
+
+      if (orderErr) throw orderErr;
+
+      // 2. Mark Custom Request as completed
+      const { error: reqErr } = await supabase
+        .from('custom_requests')
+        .update({ status: 'completed' })
+        .eq('id', reqId);
+
+      if (reqErr) throw reqErr;
+
+      // 3. Trigger Paymob initiation if Card chosen
+      if (actualPaymentMethod === 'card' || actualPaymentMethod === 'cod_card_upfront') {
+        const initRes = await fetch('/api/payment/paymob/initiate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderCode: generatedOrderCode,
+            amount: chargeAmount,
+            customerName: orderPayload.customer_name,
+            customerPhone: orderPayload.customer_phone,
+            customerEmail: orderPayload.customer_email
+          })
+        });
+
+        const initData = await initRes.json();
+        if (!initData.success || !initData.paymentUrl) {
+          throw new Error(initData.error || 'Failed to initiate Paymob card session.');
+        }
+
+        // Redirect to Paymob Checkout
+        window.location.href = initData.paymentUrl;
+        return;
+      }
+
+      // Success for manual payment
+      setCustomCheckoutSuccess(prev => ({ ...prev, [reqId]: true }));
+      // Reload orders and custom requests
+      fetchAccountOrders(user.id);
+      fetchUserCustomRequests(user.id);
+    } catch (e: any) {
+      console.error(e);
+      setCustomCheckoutError(prev => ({ ...prev, [reqId]: e.message || 'An error occurred during checkout' }));
+    } finally {
+      setCustomCheckoutSubmitting(prev => ({ ...prev, [reqId]: false }));
     }
   };
 
@@ -847,6 +1000,308 @@ export default function AccountPage() {
 
                 {/* RIGHT COLUMN: Profile Settings & Order History (7 cols) */}
                 <div className="lg:col-span-7 space-y-6">
+
+                  {/* Accepted Custom Designs */}
+                  {userCustomRequests && userCustomRequests.some((r: any) => r.status === 'accepted') && (
+                    <div className="bg-white border-4 border-black p-5 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] space-y-4">
+                      <h3 className="text-base font-black uppercase tracking-tight text-black border-b-2 border-black/10 pb-2 mb-2 flex items-center gap-2">
+                        <span className="text-lg">🎨</span>
+                        {locale === 'ar' ? 'طلبات التصاميم المقبولة' : 'Accepted Custom Designs'}
+                      </h3>
+                      
+                      <div className="space-y-6">
+                        {userCustomRequests.filter((r: any) => r.status === 'accepted').map((req: any) => {
+                          const reqId = req.id;
+                          const selectedSize = customSelectedSize[reqId] || 'M';
+                          const selectedFabric = customSelectedFabric[reqId] || 'Standard Cotton';
+                          const selectedFit = customSelectedFit[reqId] || 'regular';
+                          const selectedQty = customSelectedQuantity[reqId] || 1;
+                          const payMethod = customPaymentMethod[reqId] || 'card';
+                          const upfrontMethod = customUpfrontMethod[reqId] || 'upfront_card';
+                          const screenshot = customInstapayReceipt[reqId] || null;
+                          const submitting = customCheckoutSubmitting[reqId] || false;
+                          const success = customCheckoutSuccess[reqId] || false;
+                          const err = customCheckoutError[reqId] || '';
+
+                          const pricePerItem = req.price || 0;
+                          const totalAmount = pricePerItem * selectedQty;
+                          const isCod = payMethod === 'cod';
+                          const chargeAmount = isCod ? totalAmount * 0.5 : totalAmount;
+
+                          const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
+                          const fabrics = ['Standard Cotton', '100% Egyptian Cotton', 'Heavy Cotton Blends'];
+                          const fits = ['regular', 'oversized'];
+
+                          return (
+                            <div key={reqId} className="border-3 border-black bg-[#EDE0D0]/10 rounded-2xl p-4 space-y-4 relative">
+                              <div className="absolute top-0 bottom-0 left-0 w-2.5 bg-[#81B29A]"></div>
+                              
+                              <div className="flex justify-between items-start gap-4">
+                                <div>
+                                  <span className="text-[9px] font-black text-black/40 block uppercase font-mono">
+                                    REQUEST ID: {reqId.substring(0, 8).toUpperCase()}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-black/60">
+                                    {new Date(req.created_at).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <span className="text-[9px] font-black px-2.5 py-0.5 border-2 border-black/15 bg-blue-100 text-blue-700 rounded-full uppercase">
+                                  {locale === 'ar' ? 'مقبول - بانتظار الدفع' : 'Accepted - Payment Pending'}
+                                </span>
+                              </div>
+
+                              <div className="bg-white/40 border border-black/10 rounded-xl p-3 text-xs font-semibold leading-relaxed text-left rtl:text-right">
+                                <p className="font-mono text-[9px] text-zinc-500 uppercase">{locale === 'ar' ? 'وصف الفكرة:' : 'Design Description:'}</p>
+                                <p className="text-black whitespace-pre-wrap">{req.description}</p>
+                                
+                                {req.reference_images && req.reference_images.length > 0 && (
+                                  <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+                                    {req.reference_images.map((img: string, idx: number) => (
+                                      <a key={idx} href={img} target="_blank" rel="noopener noreferrer" className="relative w-12 h-12 border border-black/20 rounded-md overflow-hidden shrink-0 block bg-white">
+                                        <img src={img} alt="ref" className="w-full h-full object-cover" />
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="bg-[#E07A5F]/15 border border-black/10 rounded-xl p-3 flex justify-between items-center text-xs font-black">
+                                <span className="text-black/60">{locale === 'ar' ? 'السعر المقدر للقطعة:' : ' Garment Base Price:'}</span>
+                                <span className="text-[#E07A5F] text-sm font-mono">{pricePerItem} EGP</span>
+                              </div>
+
+                              {success ? (
+                                <div className="p-4 bg-green-100 border-2 border-green-500 rounded-xl text-center text-green-800 text-xs font-bold space-y-1">
+                                  <span>🎉</span>
+                                  <p>{locale === 'ar' ? 'تم تقديم الطلب بنجاح!' : 'Your custom design order was placed successfully!'}</p>
+                                  <p className="text-[10px] font-semibold opacity-85">
+                                    {locale === 'ar' 
+                                      ? 'يرجى مراجعة سجل الطلبات أدناه لمتابعة حالة الشحن والموافقة.' 
+                                      : 'Please check your order history below to follow confirmation status.'}
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-4 pt-2 border-t border-black/10">
+                                  {err && (
+                                    <div className="p-3 bg-red-100 border border-red-500 rounded-xl text-red-700 text-xs font-bold text-left rtl:text-right">
+                                      ⚠️ {err}
+                                    </div>
+                                  )}
+
+                                  {/* Selectors Grid */}
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-left rtl:text-right">
+                                    <div>
+                                      <label className="text-[9px] font-black uppercase text-black/55 block mb-1">Size</label>
+                                      <select
+                                        value={selectedSize}
+                                        onChange={(e) => setCustomSelectedSize(prev => ({ ...prev, [reqId]: e.target.value }))}
+                                        className="w-full px-2 py-1.5 bg-white border-2 border-black rounded-lg text-xs font-bold"
+                                      >
+                                        {sizes.map(s => <option key={s} value={s}>{s}</option>)}
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <label className="text-[9px] font-black uppercase text-black/55 block mb-1">Fabric</label>
+                                      <select
+                                        value={selectedFabric}
+                                        onChange={(e) => setCustomSelectedFabric(prev => ({ ...prev, [reqId]: e.target.value }))}
+                                        className="w-full px-2 py-1.5 bg-white border-2 border-black rounded-lg text-xs font-bold"
+                                      >
+                                        {fabrics.map(f => <option key={f} value={f}>{f}</option>)}
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <label className="text-[9px] font-black uppercase text-black/55 block mb-1">Fit Type</label>
+                                      <select
+                                        value={selectedFit}
+                                        onChange={(e) => setCustomSelectedFit(prev => ({ ...prev, [reqId]: e.target.value }))}
+                                        className="w-full px-2 py-1.5 bg-white border-2 border-black rounded-lg text-xs font-bold"
+                                      >
+                                        {fits.map(f => <option key={f} value={f}>{f}</option>)}
+                                      </select>
+                                    </div>
+
+                                    <div>
+                                      <label className="text-[9px] font-black uppercase text-black/55 block mb-1">Quantity</label>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={selectedQty}
+                                        onChange={(e) => setCustomSelectedQuantity(prev => ({ ...prev, [reqId]: Math.max(1, parseInt(e.target.value) || 1) }))}
+                                        className="w-full px-2 py-1 bg-white border-2 border-black rounded-lg text-xs font-bold text-center"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Payment Selection */}
+                                  <div className="space-y-3 pt-2 text-left rtl:text-right">
+                                    <label className="text-[10px] font-black uppercase text-black/60 block">Payment Method</label>
+                                    
+                                    <div className="grid grid-cols-3 gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setCustomPaymentMethod(prev => ({ ...prev, [reqId]: 'card' }))}
+                                        className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border-2 border-black transition-all ${payMethod === 'card' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
+                                      >
+                                        Card Online
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setCustomPaymentMethod(prev => ({ ...prev, [reqId]: 'instapay' }))}
+                                        className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border-2 border-black transition-all ${payMethod === 'instapay' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
+                                      >
+                                        InstaPay
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setCustomPaymentMethod(prev => ({ ...prev, [reqId]: 'cod' }))}
+                                        className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border-2 border-black transition-all ${payMethod === 'cod' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
+                                      >
+                                        COD (50% Upfront)
+                                      </button>
+                                    </div>
+
+                                    {/* Calculated Due Summary */}
+                                    <div className="p-3 bg-[#EDE0D0]/40 border-2 border-black rounded-xl space-y-1">
+                                      <div className="flex justify-between text-xs font-black">
+                                        <span>{locale === 'ar' ? 'إجمالي قيمة المنتجات:' : 'Subtotal:'}</span>
+                                        <span>{totalAmount} EGP</span>
+                                      </div>
+                                      
+                                      {isCod ? (
+                                        <>
+                                          <div className="flex justify-between text-xs font-black text-brand-accent border-b border-black/10 pb-1">
+                                            <span>{locale === 'ar' ? 'المستحق الآن (٥٠٪ مقدماً):' : 'Due Now (50% Upfront):'}</span>
+                                            <span>{chargeAmount} EGP</span>
+                                          </div>
+                                          <div className="flex justify-between text-[10px] font-bold text-black/50">
+                                            <span>{locale === 'ar' ? 'المستحق عند الاستلام:' : 'Remaining on Delivery:'}</span>
+                                            <span>{totalAmount * 0.5} EGP</span>
+                                          </div>
+                                          
+                                          {/* COD Upfront Payment Method */}
+                                          <div className="pt-2.5 space-y-2 border-t border-black/5">
+                                            <span className="text-[9px] font-black uppercase text-black/50 block">Choose Upfront Payment Method</span>
+                                            <div className="flex gap-2">
+                                              <button
+                                                type="button"
+                                                onClick={() => setCustomUpfrontMethod(prev => ({ ...prev, [reqId]: 'upfront_card' }))}
+                                                className={`flex-1 py-1.5 text-[9px] font-bold uppercase rounded-md border-2 border-black ${upfrontMethod === 'upfront_card' ? 'bg-zinc-800 text-white' : 'bg-white'}`}
+                                              >
+                                                Card Upfront
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => setCustomUpfrontMethod(prev => ({ ...prev, [reqId]: 'upfront_instapay' }))}
+                                                className={`flex-1 py-1.5 text-[9px] font-bold uppercase rounded-md border-2 border-black ${upfrontMethod === 'upfront_instapay' ? 'bg-zinc-800 text-white' : 'bg-white'}`}
+                                              >
+                                                InstaPay Upfront
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <div className="flex justify-between text-xs font-black text-brand-accent">
+                                          <span>{locale === 'ar' ? 'المستحق الآن (١٠٠٪ مقدماً):' : 'Due Now (100%):'}</span>
+                                          <span>{chargeAmount} EGP</span>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Render InstaPay Scan Widget if chosen (either for full payment or upfront) */}
+                                    {((payMethod === 'instapay') || (payMethod === 'cod' && upfrontMethod === 'upfront_instapay')) && (
+                                      <div className="p-3 bg-white border-2 border-black rounded-xl space-y-3">
+                                        <div className="flex flex-col sm:flex-row items-center gap-4 border-b border-black/10 pb-3">
+                                          <div className="w-24 h-24 shrink-0 border border-black/10 rounded overflow-hidden flex items-center justify-center bg-zinc-50">
+                                            <img src={settings.payment_settings?.instapay_qr_code || '/placeholders/qr_mock.png'} alt="QR" className="w-full h-full object-contain p-1" />
+                                          </div>
+                                          <div className="flex-1 space-y-1 text-center sm:text-left rtl:sm:text-right">
+                                            <span className="text-[8px] font-black uppercase text-zinc-400 block">Send exact upfront amount to:</span>
+                                            <p className="text-[10px] font-black text-black">Name: {settings.payment_settings?.instapay_name || 'Fandom Fit'}</p>
+                                            
+                                            {/* Clipboard Trigger */}
+                                            <div className="flex items-center gap-1.5 justify-center sm:justify-start">
+                                              <span className="text-xs font-mono font-black text-brand-accent bg-[#EDE0D0]/30 px-2 py-0.5 rounded border border-black/10">
+                                                {settings.payment_settings?.instapay_phone || '01012345678'}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  navigator.clipboard.writeText(settings.payment_settings?.instapay_phone || '01012345678');
+                                                  alert('Phone number copied!');
+                                                }}
+                                                className="text-[9px] font-black uppercase text-black hover:underline cursor-pointer"
+                                              >
+                                                [Copy]
+                                              </button>
+                                            </div>
+
+                                            {settings.payment_settings?.instapay_link && (
+                                              <a
+                                                href={settings.payment_settings.instapay_link}
+                                                target="_blank" rel="noopener noreferrer"
+                                                className="text-[9px] font-black text-[#E07A5F] hover:underline block mt-1"
+                                              >
+                                                Direct InstaPay Link ➔
+                                              </a>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {/* Drop screenshot */}
+                                        <div className="space-y-1.5 text-left rtl:text-right">
+                                          <label className="text-[9px] font-black uppercase text-black/55 block">Attach Payment Screenshot Receipt</label>
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                              const fileList = e.target.files;
+                                              if (fileList && fileList.length > 0) {
+                                                setCustomInstapayReceipt(prev => ({ ...prev, [reqId]: fileList[0] }));
+                                              }
+                                            }}
+                                            className="w-full text-[10px] font-semibold font-sans"
+                                          />
+                                          {screenshot && (
+                                            <span className="text-[8px] font-bold text-green-600 block">✓ Selected: {screenshot.name}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Action submit button */}
+                                    <button
+                                      type="button"
+                                      disabled={submitting}
+                                      onClick={() => handleCustomRequestCheckout(req)}
+                                      className="w-full py-3 bg-black hover:bg-brand-accent text-white border-2 border-black rounded-xl font-black uppercase text-xs tracking-wider transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none active:translate-y-0.5 cursor-pointer flex justify-center items-center gap-2"
+                                    >
+                                      {submitting ? (
+                                        <>
+                                          <span className="animate-spin text-sm">⚙️</span>
+                                          {locale === 'ar' ? 'جاري إتمام الطلب...' : 'Processing checkout...'}
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span>🛒</span>
+                                          {((payMethod === 'card') || (payMethod === 'cod' && upfrontMethod === 'upfront_card')) 
+                                            ? (locale === 'ar' ? `دفع ${chargeAmount} EGP بالفيزا` : `Pay ${chargeAmount} EGP Online`)
+                                            : (locale === 'ar' ? 'إرسال طلب التحويل والإيصال' : 'Submit Transfer & Receipt')}
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Order History */}
                   <div className="bg-white border-4 border-black p-5 rounded-3xl shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]">

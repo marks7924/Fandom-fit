@@ -183,6 +183,10 @@ export default function AdminPage() {
   const [revealPublicKey, setRevealPublicKey] = useState(false);
   const [isUploadingQrCode, setIsUploadingQrCode] = useState(false);
 
+  // Custom Requests accepting price state
+  const [acceptingReqId, setAcceptingReqId] = useState<string | null>(null);
+  const [customRequestPrice, setCustomRequestPrice] = useState<string>('');
+
   // Orders rejection details state
   const [rejectionReasonInput, setRejectionReasonInput] = useState<Record<string, string>>({});
   const [showRejectBox, setShowRejectBox] = useState<Record<string, boolean>>({});
@@ -3641,7 +3645,10 @@ export default function AdminPage() {
                 <tbody className="divide-y divide-zinc-800 text-xs">
                   {customRequests.map((req) => (
                     <tr key={req.id} className="hover:bg-zinc-800/20 text-zinc-300">
-                      <td className="p-4 font-bold text-white">{req.customer_name}</td>
+                      <td className="p-4 font-bold text-white">
+                        <div>{req.customer_name}</div>
+                        {req.email && <div className="text-[10px] text-zinc-500 font-normal">{req.email}</div>}
+                      </td>
                       <td className="p-4 text-brand-accent">
                         <a 
                           href={`https://instagram.com/${req.instagram_username.replace('@', '')}`}
@@ -3651,27 +3658,81 @@ export default function AdminPage() {
                           {req.instagram_username}
                         </a>
                       </td>
-                      <td className="p-4 max-w-xs truncate">{req.description}</td>
+                      <td className="p-4 max-w-xs">
+                        <div className="truncate" title={req.description}>{req.description}</div>
+                        {req.price ? (
+                          <div className="text-[10px] text-brand-accent font-black mt-0.5">{req.price} EGP</div>
+                        ) : null}
+                      </td>
                       <td className="p-4">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                           req.status === 'completed' ? 'bg-green-950/50 text-green-400 border border-green-900' :
+                          req.status === 'accepted' ? 'bg-blue-950/50 text-blue-400 border border-blue-900' :
+                          req.status === 'declined' ? 'bg-red-950/50 text-red-400 border border-red-900' :
                           req.status === 'in_progress' ? 'bg-amber-950/50 text-amber-400 border border-amber-900' :
                           'bg-zinc-800 text-zinc-400 border border-zinc-700'
                         }`}>
-                          {t(`custom_requests.${req.status}`)}
+                          {t(`custom_requests.${req.status}`) || req.status}
                         </span>
                       </td>
-                      <td className="p-4 text-right flex justify-end gap-2">
-                        <select
-                          value={req.status}
-                          onChange={(e) => updateRequestStatus(req.id, e.target.value, req.notes || '')}
-                          className="px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="reviewed">Reviewed</option>
-                          <option value="in_progress">In Progress</option>
-                          <option value="completed">Completed</option>
-                        </select>
+                      <td className="p-4 text-right">
+                        <div className="flex flex-col items-end gap-2">
+                          <select
+                            value={req.status}
+                            onChange={(e) => {
+                              const newStatus = e.target.value;
+                              if (newStatus === 'accepted') {
+                                setAcceptingReqId(req.id);
+                                setCustomRequestPrice(req.price ? req.price.toString() : '');
+                              } else {
+                                updateRequestStatus(req.id, newStatus, req.notes || '');
+                              }
+                            }}
+                            className="px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px]"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="accepted">Accepted</option>
+                            <option value="declined">Declined</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                          </select>
+
+                          {acceptingReqId === req.id && (
+                            <div className="flex items-center gap-1.5 mt-1 bg-zinc-950 p-1.5 border border-zinc-800 rounded shadow-md">
+                              <input
+                                type="number"
+                                placeholder="Price EGP"
+                                value={customRequestPrice}
+                                onChange={(e) => setCustomRequestPrice(e.target.value)}
+                                className="w-16 px-1.5 py-0.5 bg-zinc-900 border border-zinc-700 rounded text-[10px] text-white font-mono"
+                              />
+                              <button
+                                onClick={async () => {
+                                  const priceNum = parseFloat(customRequestPrice);
+                                  if (isNaN(priceNum) || priceNum <= 0) {
+                                    alert('Please enter a valid price');
+                                    return;
+                                  }
+                                  await updateRequestStatus(req.id, 'accepted', req.notes || '', priceNum);
+                                  setAcceptingReqId(null);
+                                  setCustomRequestPrice('');
+                                }}
+                                className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[9px] font-bold"
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setAcceptingReqId(null);
+                                  setCustomRequestPrice('');
+                                }}
+                                className="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-[9px] font-bold"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,7 +11,7 @@ import supabase from '@/lib/supabase';
 export default function CustomDesignForm() {
   const t = useTranslations('custom_design');
   const locale = useLocale();
-  const addCustomRequest = useStore((state) => state.addCustomRequest);
+  const { user, profile, addCustomRequest } = useStore();
 
   const [name, setName] = useState('');
   const [instagram, setInstagram] = useState('');
@@ -20,6 +20,13 @@ export default function CustomDesignForm() {
   const [selectedTopic, setSelectedTopic] = useState('Anime');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    if (profile) {
+      setName(prev => prev || profile.full_name || '');
+      setPhone(prev => prev || profile.phone || '');
+    }
+  }, [profile]);
 
   const [files, setFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
@@ -75,7 +82,9 @@ export default function CustomDesignForm() {
     }
 
     const success = await addCustomRequest({
+      user_id: user?.id,
       customer_name: name,
+      email: user?.email || '',
       instagram_username: instagram,
       customer_phone: phone,
       description: `[Topic: ${selectedTopic}] ${description}`,
@@ -145,147 +154,169 @@ export default function CustomDesignForm() {
 
           {/* Form Side */}
           <div className="lg:col-span-7 select-none">
-            <div className="bg-white border-3 border-black p-6 sm:p-8 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] rotate-[1deg] relative">
-              <div className="absolute -top-3 left-[20%] w-24 h-6 bg-[#81B29A]/85 border-2 border-black/35 rotate-[-5deg]"></div>
-              
-              <h3 className="text-2xl font-black uppercase text-black mb-6">
-                {t('form_title')}
-              </h3>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
+            {!user ? (
+              <div className="bg-white border-3 border-black p-8 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] rotate-[1deg] relative text-center space-y-6">
+                <div className="absolute -top-3 left-[20%] w-24 h-6 bg-[#E07A5F]/85 border-2 border-black/35 rotate-[-5deg]"></div>
                 
-                {/* Topic selector */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-2">
-                    Fandom Topic
-                  </label>
-                  <div className="flex gap-2 flex-wrap">
-                    {topics.map((topic) => (
-                      <button
-                        key={topic}
-                        type="button"
-                        onClick={() => setSelectedTopic(topic)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 border-black transition-all ${
-                          selectedTopic === topic
-                            ? 'bg-black text-[#EDE0D0] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]'
-                            : 'bg-[#EDE0D0]/20 text-black hover:bg-black/5'
-                        }`}
-                      >
-                        {topic}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <span className="text-4xl block animate-bounce">🔒</span>
+                <h3 className="text-xl font-black uppercase text-black">
+                  {locale === 'ar' ? 'مطلوب تسجيل الدخول أولاً' : 'Sign In Required'}
+                </h3>
+                <p className="text-xs font-semibold text-black/60 leading-relaxed max-w-sm mx-auto">
+                  {locale === 'ar'
+                    ? 'يجب تسجيل الدخول كعضو لتتمكن من إرسال طلبات التصاميم الخاصة. هذا يتيح لنا إرسال إشعارات الدفع والقبول لك، بالإضافة إلى تتبع طلباتك وإتمامها من صفحة حسابك.'
+                    : 'You must be logged in to submit a custom request. This links the design to your account, sends email notifications, and allows you to complete the order checkout from your profile.'}
+                </p>
+                <a
+                  href={`/${locale}/account`}
+                  className="w-full flex items-center justify-center py-4 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white border-3 border-black rounded-xl transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] cursor-pointer"
+                >
+                  {locale === 'ar' ? 'الذهاب لتسجيل الدخول / إنشاء حساب ➔' : 'Go to Sign In / Sign Up ➔'}
+                </a>
+              </div>
+            ) : (
+              <div className="bg-white border-3 border-black p-6 sm:p-8 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] rotate-[1deg] relative">
+                <div className="absolute -top-3 left-[20%] w-24 h-6 bg-[#81B29A]/85 border-2 border-black/35 rotate-[-5deg]"></div>
+                
+                <h3 className="text-2xl font-black uppercase text-black mb-6">
+                  {t('form_title')}
+                </h3>
 
-                {/* Name */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
-                    {t('name_label')}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder={t('name_placeholder')}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
-                  />
-                </div>
-
-                {/* Instagram Handle */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
-                    {t('insta_label')}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder={t('insta_placeholder')}
-                    value={instagram}
-                    onChange={(e) => setInstagram(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
-                  />
-                </div>
-
-                {/* Phone Number */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
-                    {locale === 'ar' ? 'رقم الهاتف *' : 'Phone Number *'}
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder={locale === 'ar' ? 'مثال: 01012345678' : 'e.g. 01012345678'}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
-                  />
-                </div>
-
-                {/* Idea description */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
-                    {t('desc_label')}
-                  </label>
-                  <textarea
-                    required
-                    rows={3}
-                    placeholder={t('desc_placeholder')}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white resize-none"
-                  />
-                </div>
-
-                {/* Reference images upload */}
-                <div>
-                  <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
-                    {t('images_label')}
-                  </label>
-                  <label htmlFor="design-files" className="border-2 border-dashed border-black/35 rounded-xl p-4 bg-[#EDE0D0]/10 text-center hover:bg-black/5 cursor-pointer flex flex-col items-center block">
-                    <FileImage className="text-black/55 mb-2" size={24} />
-                    <span className="text-xs font-bold block">{t('choose_images')}</span>
-                    <span className="text-[10px] font-bold text-black/40 block mt-1">{t('images_hint')}</span>
-                    <input 
-                      type="file" 
-                      id="design-files"
-                      multiple 
-                      accept="image/*" 
-                      onChange={handleFileChange}
-                      className="hidden" 
-                    />
-                  </label>
-
-                  {filePreviews.length > 0 && (
-                    <div className="flex flex-wrap gap-2.5 mt-3">
-                      {filePreviews.map((preview, idx) => (
-                        <div key={idx} className="relative w-16 h-16 border-2 border-black rounded-lg overflow-hidden bg-white/50">
-                          <img src={preview} alt="preview" className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveFile(idx)}
-                            className="absolute top-0.5 right-0.5 bg-red-600 border border-black text-white rounded-full p-0.5 cursor-pointer hover:bg-red-700 transition-colors"
-                          >
-                            <X size={10} />
-                          </button>
-                        </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  
+                  {/* Topic selector */}
+                  <div>
+                    <label className="text-xs font-black uppercase text-black/60 block mb-2">
+                      Fandom Topic
+                    </label>
+                    <div className="flex gap-2 flex-wrap">
+                      {topics.map((topic) => (
+                        <button
+                          key={topic}
+                          type="button"
+                          onClick={() => setSelectedTopic(topic)}
+                          className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 border-black transition-all ${
+                            selectedTopic === topic
+                              ? 'bg-black text-[#EDE0D0] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-y-[-1px]'
+                              : 'bg-[#EDE0D0]/20 text-black hover:bg-black/5'
+                          }`}
+                        >
+                          {topic}
+                        </button>
                       ))}
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                {/* Submit button */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full flex items-center justify-center gap-2 py-4 mt-6 text-sm font-black uppercase bg-black text-white hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
-                >
-                  <Send size={16} />
-                  {t('submit_btn')}
-                </button>
+                  {/* Name */}
+                  <div>
+                    <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
+                      {t('name_label')}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder={t('name_placeholder')}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
+                    />
+                  </div>
 
-              </form>
-            </div>
+                  {/* Instagram Handle */}
+                  <div>
+                    <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
+                      {t('insta_label')}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder={t('insta_placeholder')}
+                      value={instagram}
+                      onChange={(e) => setInstagram(e.target.value)}
+                      className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
+                    />
+                  </div>
+
+                  {/* Phone Number */}
+                  <div>
+                    <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
+                      {locale === 'ar' ? 'رقم الهاتف *' : 'Phone Number *'}
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder={locale === 'ar' ? 'مثال: 01012345678' : 'e.g. 01012345678'}
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white"
+                    />
+                  </div>
+
+                  {/* Idea description */}
+                  <div>
+                    <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
+                      {t('desc_label')}
+                    </label>
+                    <textarea
+                      required
+                      rows={3}
+                      placeholder={t('desc_placeholder')}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="w-full px-4 py-3 bg-[#EDE0D0]/10 text-black font-semibold border-2 border-black rounded-xl focus:outline-none focus:bg-white resize-none"
+                    />
+                  </div>
+
+                  {/* Reference images upload */}
+                  <div>
+                    <label className="text-xs font-black uppercase text-black/60 block mb-1.5">
+                      {t('images_label')}
+                    </label>
+                    <label htmlFor="design-files" className="border-2 border-dashed border-black/35 rounded-xl p-4 bg-[#EDE0D0]/10 text-center hover:bg-black/5 cursor-pointer flex flex-col items-center block">
+                      <FileImage className="text-black/55 mb-2" size={24} />
+                      <span className="text-xs font-bold block">{t('choose_images')}</span>
+                      <span className="text-[10px] font-bold text-black/40 block mt-1">{t('images_hint')}</span>
+                      <input 
+                        type="file" 
+                        id="design-files"
+                        multiple 
+                        accept="image/*" 
+                        onChange={handleFileChange}
+                        className="hidden" 
+                      />
+                    </label>
+
+                    {filePreviews.length > 0 && (
+                      <div className="flex flex-wrap gap-2.5 mt-3">
+                        {filePreviews.map((preview, idx) => (
+                          <div key={idx} className="relative w-16 h-16 border-2 border-black rounded-lg overflow-hidden bg-white/50">
+                            <img src={preview} alt="preview" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFile(idx)}
+                              className="absolute top-0.5 right-0.5 bg-red-600 border border-black text-white rounded-full p-0.5 cursor-pointer hover:bg-red-700 transition-colors"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Submit button */}
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full flex items-center justify-center gap-2 py-4 mt-6 text-sm font-black uppercase bg-black text-white hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
+                  >
+                    <Send size={16} />
+                    {t('submit_btn')}
+                  </button>
+
+                </form>
+              </div>
+            )}
           </div>
 
         </div>

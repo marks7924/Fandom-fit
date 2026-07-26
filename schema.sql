@@ -86,11 +86,14 @@ CREATE TABLE IF NOT EXISTS offers (
 -- 6. Create Custom Requests table
 CREATE TABLE IF NOT EXISTS custom_requests (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID,
     customer_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
     instagram_username VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
     reference_images TEXT[] DEFAULT ARRAY[]::TEXT[],
-    status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'reviewed', 'in_progress', 'completed'
+    status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'accepted', 'declined', 'completed'
+    price NUMERIC DEFAULT 0,
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
