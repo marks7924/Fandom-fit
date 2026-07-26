@@ -348,6 +348,7 @@ export default function AccountPage() {
         customer_name: editName || profile?.full_name || 'Guest User',
         customer_phone: editPhone || profile?.phone || '',
         customer_email: user.email,
+        product_name: `Custom Design Request #${reqId.substring(0, 8).toUpperCase()}`,
         price: totalAmount,
         location: `${addrStreet}, ${addrCity}, ${addrGovernorate}`,
         notes: `[Custom Design Request #${reqId.substring(0, 8).toUpperCase()}]
@@ -382,6 +383,15 @@ ${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm ===
         .single();
 
       if (orderErr) throw orderErr;
+
+      // Trigger order receipt email in background
+      if (user.email && newOrder?.id) {
+        fetch('/api/orders/send-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: newOrder.id })
+        }).catch(err => console.error('Error triggering custom order receipt email:', err));
+      }
 
       // 2. Mark Custom Request as completed
       const { error: reqErr } = await supabase

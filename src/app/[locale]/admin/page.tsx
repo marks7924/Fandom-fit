@@ -117,6 +117,13 @@ export default function AdminPage() {
   const [autoResponseText, setAutoResponseText] = useState('');
   const [chatGreetingInput, setChatGreetingInput] = useState('');
 
+  // Email Dispatcher states
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailModalRecipient, setEmailModalRecipient] = useState('');
+  const [emailModalSubject, setEmailModalSubject] = useState('');
+  const [emailModalBody, setEmailModalBody] = useState('');
+  const [isEmailSending, setIsEmailSending] = useState(false);
+
   // Users Management states
   const [searchUserQuery, setSearchUserQuery] = useState('');
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<any | null>(null);
@@ -1159,6 +1166,41 @@ export default function AdminPage() {
     } catch (e: any) {
       console.error("Error saving payment settings:", e);
       alert('Failed to save payment settings: ' + e.message);
+    }
+  };
+
+  const handleSendCustomEmail = async () => {
+    if (!emailModalRecipient.trim() || !emailModalSubject.trim() || !emailModalBody.trim()) {
+      alert('Please fill in all email fields (recipient, subject, and message).');
+      return;
+    }
+
+    setIsEmailSending(true);
+    try {
+      const res = await fetch('/api/admin/send-custom-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailModalRecipient.trim(),
+          subject: emailModalSubject.trim(),
+          message: emailModalBody.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to dispatch email');
+      }
+
+      alert('Email sent successfully to ' + emailModalRecipient);
+      setIsEmailModalOpen(false);
+      setEmailModalSubject('');
+      setEmailModalBody('');
+    } catch (e: any) {
+      console.error(e);
+      alert('Error sending email: ' + e.message);
+    } finally {
+      setIsEmailSending(false);
     }
   };
 
@@ -3802,7 +3844,20 @@ export default function AdminPage() {
                                        </div>
                                        <div>
                                          <span className="text-zinc-500 font-bold block">Registered Email:</span>
-                                         <span className="text-white font-mono select-all">{userProfile.email}</span>
+                                         <div className="flex items-center gap-1.5 mt-0.5">
+                                           <span className="text-white font-mono select-all">{userProfile.email}</span>
+                                           <button
+                                             onClick={() => {
+                                               setEmailModalRecipient(userProfile.email);
+                                               setEmailModalSubject('');
+                                               setEmailModalBody('');
+                                               setIsEmailModalOpen(true);
+                                             }}
+                                             className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-brand-accent rounded text-[8px] uppercase font-bold border border-zinc-750 cursor-pointer"
+                                           >
+                                             Email
+                                           </button>
+                                         </div>
                                        </div>
                                        <div>
                                          <span className="text-zinc-500 font-bold block">Registered Phone:</span>
@@ -3848,6 +3903,20 @@ export default function AdminPage() {
                                      <div>
                                        <span className="text-zinc-500 font-bold block">Contact Email:</span>
                                        <span className="text-white font-mono select-all">{req.email || 'N/A'}</span>
+                                          {req.email && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEmailModalRecipient(req.email || '');
+                                                setEmailModalSubject('');
+                                                setEmailModalBody('');
+                                                setIsEmailModalOpen(true);
+                                              }}
+                                              className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-brand-accent rounded text-[8px] uppercase font-bold border border-zinc-750 cursor-pointer inline-block ml-1.5 align-middle"
+                                            >
+                                              Email
+                                            </button>
+                                          )}
                                      </div>
                                      <div>
                                        <span className="text-zinc-500 font-bold block">Contact Phone:</span>
@@ -6655,10 +6724,23 @@ export default function AdminPage() {
                                   address_street: ad.street || ''
                                 });
                               }}
-                              className="px-2.5 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded text-[10px] uppercase border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] cursor-pointer"
+                              className="px-2.5 py-1 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded text-[10px] uppercase border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] cursor-pointer mr-2"
                             >
                               Edit Profile
                             </button>
+                            {u.email && (
+                              <button
+                                onClick={() => {
+                                  setEmailModalRecipient(u.email);
+                                  setEmailModalSubject('');
+                                  setEmailModalBody('');
+                                  setIsEmailModalOpen(true);
+                                }}
+                                className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded text-[10px] uppercase border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] cursor-pointer"
+                              >
+                                Email
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ));
@@ -6808,6 +6890,75 @@ export default function AdminPage() {
                       </button>
                     </div>
                   </form>
+                </div>
+              </div>
+            )}
+
+            {/* Custom Email Dispatcher Modal */}
+            {isEmailModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 font-mono select-none">
+                <div className="bg-zinc-900 border-4 border-black p-6 rounded-3xl max-w-lg w-full text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                  <div className="flex justify-between items-center border-b border-zinc-850 pb-3 mb-4">
+                    <h3 className="text-sm font-black uppercase text-brand-accent flex items-center gap-1.5">
+                      ✉️ Email Customer via SendGrid
+                    </h3>
+                    <button onClick={() => setIsEmailModalOpen(false)} className="text-zinc-400 hover:text-white"><X size={16} /></button>
+                  </div>
+
+                  <div className="space-y-4 text-left font-mono">
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">To (Recipient)</label>
+                      <input
+                        type="email"
+                        disabled
+                        value={emailModalRecipient}
+                        className="w-full px-3 py-2 bg-zinc-950/60 border border-zinc-850 rounded-lg text-zinc-400 text-xs font-mono select-text cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Subject</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Update regarding your custom Fandom Fit request"
+                        value={emailModalSubject}
+                        onChange={(e) => setEmailModalSubject(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-sans select-text"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Message Body</label>
+                      <textarea
+                        rows={6}
+                        placeholder="Type your email message details here..."
+                        value={emailModalBody}
+                        onChange={(e) => setEmailModalBody(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-sans whitespace-pre-wrap select-text"
+                      />
+                      <span className="text-[8px] text-zinc-500 block mt-1.5 leading-normal">
+                        * Note: This email will be delivered securely via SendGrid. A default notice will be appended to advise the user to check their Spam/Junk folder.
+                      </span>
+                    </div>
+
+                    <div className="flex gap-3 pt-3 border-t border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => setIsEmailModalOpen(false)}
+                        className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-lg uppercase cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isEmailSending}
+                        onClick={handleSendCustomEmail}
+                        className="flex-1 py-2 bg-brand-accent hover:bg-brand-accent/95 text-white text-xs font-black rounded-lg uppercase border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {isEmailSending ? 'Sending...' : 'Send Email ➔'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

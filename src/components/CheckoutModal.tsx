@@ -508,6 +508,15 @@ export default function CheckoutModal() {
         }));
       }
 
+      // Dispatch order receipt email in background if email is provided
+      if (email.trim() && result.id) {
+        fetch('/api/orders/send-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: result.id })
+        }).catch(err => console.error('Error triggering receipt email:', err));
+      }
+
       setOrderRef(orderCode);
       setRewardCouponCode(result.reward_coupon_code || '');
 
