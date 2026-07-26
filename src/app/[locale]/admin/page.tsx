@@ -66,7 +66,10 @@ export default function AdminPage() {
   const [designUrlInput, setDesignUrlInput] = useState('');
   const [designNotesInput, setDesignNotesInput] = useState('');
   const [isUploadingDesign, setIsUploadingDesign] = useState(false);
-  const { fetchProductDesigns, addProductDesign, deleteProductDesign } = useStore();
+  const [editingDesignId, setEditingDesignId] = useState<string | null>(null);
+  const [editingDesignIdx, setEditingDesignIdx] = useState<number | null>(null);
+  const [editingDesignNotes, setEditingDesignNotes] = useState('');
+  const { fetchProductDesigns, addProductDesign, updateProductDesign, deleteProductDesign } = useStore();
 
 
   const [catForm, setCatForm] = useState({
@@ -434,6 +437,38 @@ export default function AdminPage() {
       setDesignUrlInput('');
       setDesignNotesInput('');
     }
+  };
+
+  const handleStartEditDesign = (design: any, idx: number) => {
+    if (design.id) {
+      setEditingDesignId(design.id);
+      setEditingDesignIdx(null);
+    } else {
+      setEditingDesignId(null);
+      setEditingDesignIdx(idx);
+    }
+    setEditingDesignNotes(design.notes || '');
+  };
+
+  const handleSaveDesignNotes = async (design: any, idx: number) => {
+    const trimmed = editingDesignNotes.trim();
+    if (!trimmed) return;
+
+    if (design.id) {
+      // Saved design in Supabase
+      const updated = await updateProductDesign(design.id, { notes: trimmed });
+      if (updated) {
+        setProductDesigns(prev => prev.map(d => d.id === design.id ? { ...d, notes: trimmed } : d));
+        setAllDesigns(prev => prev.map(d => d.id === design.id ? { ...d, notes: trimmed } : d));
+      }
+    } else {
+      // Queued design locally
+      setQueuedDesigns(prev => prev.map((d, i) => i === idx ? { ...d, notes: trimmed } : d));
+    }
+
+    setEditingDesignId(null);
+    setEditingDesignIdx(null);
+    setEditingDesignNotes('');
   };
 
   const handleDeleteDesign = async (designId: string | undefined, idx: number) => {
@@ -1646,38 +1681,89 @@ export default function AdminPage() {
                   {/* Current designs list */}
                   {((editingItem ? productDesigns : queuedDesigns) || []).length > 0 ? (
                     <div className="space-y-2">
-                      {((editingItem ? productDesigns : queuedDesigns) || []).map((design, idx) => (
-                        <div key={design.id || idx} className="flex items-center justify-between p-2.5 bg-zinc-900 rounded border border-zinc-850 gap-4">
-                          <div className="flex items-center gap-3 min-w-0">
-                            {/* Visual Thumbnail if it's an image */}
-                            <div className="relative w-9 h-9 bg-zinc-950 border border-zinc-800 rounded overflow-hidden shrink-0 flex items-center justify-center">
-                              {design.design_url.startsWith('data:image') || design.design_url.includes('.jpg') || design.design_url.includes('.png') || design.design_url.includes('.webp') || design.design_url.startsWith('blob:') ? (
-                                <Image src={design.design_url} alt="design-thumb" fill className="object-cover" />
-                              ) : (
-                                <span className="text-[10px] text-zinc-500 font-black">FILE</span>
-                              )}
+                      {((editingItem ? productDesigns : queuedDesigns) || []).map((design, idx) => {
+                        const isEditingThis = editingItem 
+                          ? (design.id === editingDesignId)
+                          : (idx === editingDesignIdx);
+
+                        return (
+                          <div key={design.id || idx} className="flex items-center justify-between p-2.5 bg-zinc-900 rounded border border-zinc-850 gap-4">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              {/* Visual Thumbnail if it's an image */}
+                              <div className="relative w-9 h-9 bg-zinc-950 border border-zinc-800 rounded overflow-hidden shrink-0 flex items-center justify-center">
+                                {design.design_url.startsWith('data:image') || design.design_url.includes('.jpg') || design.design_url.includes('.png') || design.design_url.includes('.webp') || design.design_url.startsWith('blob:') ? (
+                                  <Image src={design.design_url} alt="design-thumb" fill className="object-cover" />
+                                ) : (
+                                  <span className="text-[10px] text-zinc-500 font-black">FILE</span>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                {isEditingThis ? (
+                                  <div className="flex gap-2 items-center">
+                                    <input
+                                      type="text"
+                                      value={editingDesignNotes}
+                                      onChange={(e) => setEditingDesignNotes(e.target.value)}
+                                      className="px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-xs focus:outline-none flex-1 font-bold"
+                                      autoFocus
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveDesignNotes(design, idx)}
+                                      className="p-1 text-green-500 hover:bg-zinc-800 rounded"
+                                    >
+                                      <Check size={14} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingDesignId(null);
+                                        setEditingDesignIdx(null);
+                                      }}
+                                      className="p-1 text-zinc-400 hover:bg-zinc-800 rounded"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-bold text-white block truncate">{design.notes}</span>
+                                    <a 
+                                      href={design.design_url} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="text-[9px] font-black text-brand-accent hover:underline block truncate max-w-[200px]"
+                                    >
+                                      View / Download Design Source File
+                                    </a>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            <div className="min-w-0">
-                              <span className="text-xs font-bold text-white block truncate">{design.notes}</span>
-                              <a 
-                                href={design.design_url} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="text-[9px] font-black text-brand-accent hover:underline block truncate max-w-[200px]"
-                              >
-                                View / Download Design Source File
-                              </a>
-                            </div>
+                            
+                            {!isEditingThis && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditDesign(design, idx)}
+                                  className="p-1 text-zinc-500 hover:text-brand-accent transition-colors cursor-pointer"
+                                  title="Edit notes"
+                                >
+                                  <Edit size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDesign(design.id, idx)}
+                                  className="p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                                  title="Delete design"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDesign(design.id, idx)}
-                            className="p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer shrink-0"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-[10px] text-zinc-600 font-semibold italic text-center py-2">No design mockups or print files uploaded yet.</p>

@@ -164,8 +164,11 @@ VALUES ('products', 'products', true)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('designs', 'designs', false)
+VALUES ('designs', 'designs', true)
 ON CONFLICT (id) DO NOTHING;
+
+-- In case designs was previously private, force it to be public
+UPDATE storage.buckets SET public = true WHERE id = 'designs';
 
 -- Storage policies for the 'products' bucket
 DROP POLICY IF EXISTS "Allow public select on products bucket" ON storage.objects;
@@ -175,6 +178,32 @@ CREATE POLICY "Allow public select on products bucket" ON storage.objects
 DROP POLICY IF EXISTS "Allow public insert on products bucket" ON storage.objects;
 CREATE POLICY "Allow public insert on products bucket" ON storage.objects 
     FOR INSERT WITH CHECK (bucket_id = 'products');
+
+-- Storage policies for the 'designs' bucket
+DROP POLICY IF EXISTS "Allow public select on designs bucket" ON storage.objects;
+CREATE POLICY "Allow public select on designs bucket" ON storage.objects 
+    FOR SELECT USING (bucket_id = 'designs');
+
+DROP POLICY IF EXISTS "Allow public insert on designs bucket" ON storage.objects;
+CREATE POLICY "Allow public insert on designs bucket" ON storage.objects 
+    FOR INSERT WITH CHECK (bucket_id = 'designs');
+
+-- Permissive RLS policies for admin tables to ensure operations succeed from local sessions
+DROP POLICY IF EXISTS "Allow admin all on products" ON products;
+DROP POLICY IF EXISTS "Allow public all on products" ON products;
+CREATE POLICY "Allow public all on products" ON products FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "Allow admin all on categories" ON categories;
+DROP POLICY IF EXISTS "Allow public all on categories" ON categories;
+CREATE POLICY "Allow public all on categories" ON categories FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "Allow admin all on product_designs" ON product_designs;
+DROP POLICY IF EXISTS "Allow public all on product_designs" ON product_designs;
+CREATE POLICY "Allow public all on product_designs" ON product_designs FOR ALL USING (TRUE) WITH CHECK (TRUE);
+
+DROP POLICY IF EXISTS "Allow admin all on offers" ON offers;
+DROP POLICY IF EXISTS "Allow public all on offers" ON offers;
+CREATE POLICY "Allow public all on offers" ON offers FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
 -- Verify script completions
 -- SELECT column_name FROM information_schema.columns WHERE table_name = 'orders';

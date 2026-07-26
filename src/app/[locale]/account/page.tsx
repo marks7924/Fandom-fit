@@ -40,6 +40,10 @@ export default function AccountPage() {
     isLoading
   } = useStore();
 
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
   // Authentication mode states
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'guest'>('signin');
   const [email, setEmail] = useState('');
@@ -587,7 +591,7 @@ export default function AccountPage() {
                               </p>
                               <div className="flex items-center justify-between text-[9px] font-extrabold text-black/60 mt-1">
                                 <span>{new Date(o.created_at).toLocaleDateString()}</span>
-                                <span className="text-black font-black">{o.total} EGP</span>
+                                <span className="text-black font-black">{o.price} EGP</span>
                               </div>
                             </div>
                           ))}
@@ -891,7 +895,7 @@ export default function AccountPage() {
 
                             <div className="flex justify-between items-center text-xs font-black">
                               <span className="text-black/60">{locale === 'ar' ? 'الإجمالي الكلي:' : 'Total Amount:'}</span>
-                              <span className="text-brand-accent text-sm font-black">{o.total} EGP</span>
+                              <span className="text-brand-accent text-sm font-black">{o.price} EGP</span>
                             </div>
                           </div>
                         ))}

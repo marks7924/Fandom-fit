@@ -190,6 +190,7 @@ interface StoreState {
   // Product Designs CRUD
   fetchProductDesigns: (productId: string) => Promise<any[]>;
   addProductDesign: (design: { product_id: string, design_url: string, notes: string }) => Promise<any>;
+  updateProductDesign: (id: string, updates: Partial<{ design_url: string, notes: string }>) => Promise<any>;
   deleteProductDesign: (id: string) => Promise<void>;
   
   // Category CRUD
@@ -754,47 +755,54 @@ export const useStore = create<StoreState>((set, get) => ({
     };
     
     try {
-      let rewardCouponCode = '';
+      let rewardCouponCode = ''; // remains empty so buyer does not see the referrer's code
       
-      // 1. Check if there is an invited referrer phone/code (from URL ref= or manual referral coupon)
-      let referrerPhone = typeof window !== 'undefined' ? localStorage.getItem('ff_referrer_phone') : null;
+      // 1. Resolve referrer profile
+      let referrerProfile: any = null;
+      const rawReferrer = typeof window !== 'undefined' ? localStorage.getItem('ff_referrer_phone') : null;
       
-      if (referrerPhone && referrerPhone.trim().startsWith('REF-')) {
+      if (rawReferrer && rawReferrer.trim().startsWith('REF-')) {
         try {
-          const { data: refProfile } = await supabase
+          const { data } = await supabase
             .from('profiles')
-            .select('phone')
-            .eq('referral_code', referrerPhone.trim())
+            .select('*')
+            .eq('referral_code', rawReferrer.trim())
             .maybeSingle();
-          if (refProfile && refProfile.phone) {
-            referrerPhone = refProfile.phone;
+          if (data) {
+            referrerProfile = data;
           }
         } catch (e) {
-          console.warn('Could not resolve referrer phone from code:', e);
+          console.warn('Could not resolve referrer profile from code:', e);
         }
       }
 
       if (order.referral_code) {
-        const cleanRefCode = order.referral_code.trim().toLowerCase();
-        const refCoupon = get().offers.find(
-          o => o.code.trim().toLowerCase() === cleanRefCode && o.coupon_type === 'referral_reward'
-        );
-        if (refCoupon && refCoupon.referred_phone) {
-          referrerPhone = refCoupon.referred_phone;
+        const cleanRefCode = order.referral_code.trim().toUpperCase();
+        // Check if this corresponds to a profile's referral_code
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('referral_code', cleanRefCode)
+            .maybeSingle();
+          if (data) {
+            referrerProfile = data;
+          }
+        } catch (e) {
+          console.warn('Could not resolve referrer by coupon:', e);
         }
       }
 
       // Ensure referrer isn't referring themselves and referral system is enabled
       const isReferralEnabled = get().settings.referral_reward_system_enabled !== false;
-      if (referrerPhone && referrerPhone.trim() && referrerPhone.trim() !== order.customer_phone.trim() && isReferralEnabled) {
+      const isSelfReferral = referrerProfile && (
+        referrerProfile.id === get().user?.id || 
+        (referrerProfile.phone && referrerProfile.phone === order.customer_phone)
+      );
+
+      if (referrerProfile && !isSelfReferral && isReferralEnabled) {
         const randomString = Math.random().toString(36).substring(2, 8).toUpperCase();
         const thankYouCode = `THANKS-${randomString}`;
-
-        if (!rewardCouponCode) {
-          rewardCouponCode = thankYouCode;
-        } else {
-          rewardCouponCode += `, ${thankYouCode}`;
-        }
 
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 30);
@@ -802,8 +810,8 @@ export const useStore = create<StoreState>((set, get) => ({
         const newOffer = {
           title_en: 'Referral Reward (15% OFF)',
           title_ar: 'مكافأة ترشيح (خصم ١٥٪)',
-          description_en: 'Friend purchase reward! (Bound to phone: ' + referrerPhone + ')',
-          description_ar: 'مكافأة شراء صديق! (مرتبطة برقم هاتف: ' + referrerPhone + ')',
+          description_en: 'Friend purchase reward! (Bound to account: ' + (referrerProfile.phone || referrerProfile.email || referrerProfile.id) + ')',
+          description_ar: 'مكافأة شراء صديق! (مرتبطة بالحساب: ' + (referrerProfile.phone || referrerProfile.email || referrerProfile.id) + ')',
           discount_text_en: '15% OFF',
           discount_text_ar: 'خصم ١٥٪',
           code: thankYouCode,
@@ -817,45 +825,33 @@ export const useStore = create<StoreState>((set, get) => ({
           coupon_type: 'referral_reward_thank_you',
           is_one_time: true,
           is_public: false,
-          bound_phone: referrerPhone, // Bound to referrer phone!
+          bound_phone: referrerProfile.phone || undefined, // Set phone if they have it
           expires_at: expiryDate.toISOString(),
         };
 
         await safeInsertOffer(newOffer);
 
-        // Increment referrer's orders count using already-resolved referrerPhone
-        if (referrerPhone && referrerPhone.trim()) {
-          try {
-            // Try by phone first, then by referral_code
-            let refProf: any = null;
-            const byPhone = await supabase.from('profiles').select('*').eq('phone', referrerPhone.trim()).maybeSingle();
-            if (byPhone.data) {
-              refProf = byPhone.data;
-            } else {
-              const byCode = await supabase.from('profiles').select('*').eq('referral_code', referrerPhone.trim()).maybeSingle();
-              if (byCode.data) refProf = byCode.data;
-            }
-            if (refProf) {
-              await supabase
-                .from('profiles')
-                .update({ referral_orders: (refProf.referral_orders || 0) + 1 })
-                .eq('id', refProf.id);
-              // Re-sync if current user is the referrer
-              const currentUser = get().user;
-              if (currentUser && currentUser.id === refProf.id) {
-                await get().syncUserProfile();
-              }
-            }
-          } catch (e) {
-            console.warn('Could not increment referrer orders count:', e);
+        // Increment referrer's orders count
+        try {
+          await supabase
+            .from('profiles')
+            .update({ referral_orders: (referrerProfile.referral_orders || 0) + 1 })
+            .eq('id', referrerProfile.id);
+
+          // Re-sync if current user is the referrer
+          const currentUser = get().user;
+          if (currentUser && currentUser.id === referrerProfile.id) {
+            await get().syncUserProfile();
           }
+        } catch (e) {
+          console.warn('Could not increment referrer orders count:', e);
         }
       }
 
-      // 3. Save order with pre-generated reward coupon code linked
+      // 3. Save order with pre-generated reward coupon code linked (none for buyer here)
       const finalOrder = {
         ...order,
-        reward_coupon_code: rewardCouponCode || undefined,
+        reward_coupon_code: undefined,
         user_id: get().user?.id || undefined
       };
 
@@ -880,7 +876,6 @@ export const useStore = create<StoreState>((set, get) => ({
             order.items ? `Items: ${JSON.stringify(order.items)}` : null,
             order.coupon_code ? `Coupon: ${order.coupon_code}` : null,
             order.referral_code ? `Ref: ${order.referral_code}` : null,
-            rewardCouponCode ? `Reward: ${rewardCouponCode}` : null,
             order.customer_email ? `Email: ${order.customer_email}` : null,
             order.address ? `Address: ${order.governorate}, ${order.city}, ${order.address}` : null,
           ].filter(Boolean).join(' | '),
@@ -1319,6 +1314,21 @@ export const useStore = create<StoreState>((set, get) => ({
       return data?.[0] || null;
     } catch (error) {
       console.error('Error adding product design:', error);
+      return null;
+    }
+  },
+
+  updateProductDesign: async (id, updates) => {
+    try {
+      const { data, error } = await supabase
+        .from('product_designs')
+        .update(updates)
+        .eq('id', id)
+        .select();
+      if (error) throw error;
+      return data?.[0] || null;
+    } catch (error) {
+      console.error('Error updating product design:', error);
       return null;
     }
   },
