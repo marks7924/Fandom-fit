@@ -1188,6 +1188,54 @@ ${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm ===
                                     </div>
                                   </div>
 
+                                  {/* Delivery Address Details */}
+                                  <div className="space-y-3 pt-3 border-t border-black/10 text-left rtl:text-right">
+                                    <span className="text-[10px] font-black uppercase text-black/60 block">📍 Delivery Address Details</span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                      <div>
+                                        <label className="text-[9px] font-black text-black/55 block mb-1">
+                                          {locale === 'ar' ? 'المحافظة *' : 'Governorate *'}
+                                        </label>
+                                        <select
+                                          value={addrGovernorate}
+                                          onChange={(e) => setAddrGovernorate(e.target.value)}
+                                          className="w-full px-2 py-1.5 bg-white border-2 border-black rounded-lg text-xs font-bold"
+                                        >
+                                          <option value="">{locale === 'ar' ? 'اختر المحافظة...' : 'Select Governorate...'}</option>
+                                          {['Cairo', 'Giza', 'Alexandria', 'Qalyubia', 'Sharqia', 'Gharbia', 'Dakahlia', 'Monufia', 'Beheira', 'Fayoum', 'Beni Suef', 'Minya', 'Assiut', 'Sohag', 'Qena', 'Luxor', 'Aswan', 'Suez', 'Ismailia', 'Port Said', 'Damietta', 'Red Sea', 'South Sinai', 'North Sinai', 'Matrouh', 'New Valley'].map(g => (
+                                            <option key={g} value={g}>{g}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+
+                                      <div>
+                                        <label className="text-[9px] font-black text-black/55 block mb-1">
+                                          {locale === 'ar' ? 'المدينة / المنطقة *' : 'City / Area *'}
+                                        </label>
+                                        <input
+                                          type="text"
+                                          placeholder={locale === 'ar' ? 'مثال: مدينة نصر' : 'e.g. Nasr City'}
+                                          value={addrCity}
+                                          onChange={(e) => setAddrCity(e.target.value)}
+                                          className="w-full px-3 py-1.5 bg-white border-2 border-black rounded-lg text-xs font-bold"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="text-[9px] font-black text-black/55 block mb-1">
+                                          {locale === 'ar' ? 'عنوان الشارع بالتفصيل *' : 'Street Address *'}
+                                        </label>
+                                        <input
+                                          type="text"
+                                          placeholder={locale === 'ar' ? 'مثال: ١٥ شارع التحرير، شقة ٣' : 'e.g. 15 Tahrir St, Apt 3'}
+                                          value={addrStreet}
+                                          onChange={(e) => setAddrStreet(e.target.value)}
+                                          className="w-full px-3 py-1.5 bg-white border-2 border-black rounded-lg text-xs font-bold"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+
                                   {/* Payment Selection */}
                                   <div className="space-y-3 pt-2 text-left rtl:text-right">
                                     <label className="text-[10px] font-black uppercase text-black/60 block">Payment Method</label>

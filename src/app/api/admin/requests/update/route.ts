@@ -49,7 +49,22 @@ export async function POST(request: Request) {
 
     // 3. If accepted, send email via SendGrid
     if (status === 'accepted') {
-      const recipientEmail = reqData.email || '';
+      let recipientEmail = reqData.email || '';
+      if (!recipientEmail && reqData.user_id) {
+        try {
+          const { data: prof } = await supabaseClient
+            .from('profiles')
+            .select('email')
+            .eq('id', reqData.user_id)
+            .maybeSingle();
+          if (prof?.email) {
+            recipientEmail = prof.email;
+          }
+        } catch (e) {
+          console.error('Error fetching profile email fallback:', e);
+        }
+      }
+
       const customerName = reqData.customer_name || 'Valued Customer';
       const description = reqData.description || '';
       const finalPrice = price !== undefined ? price : (reqData.price || 0);
