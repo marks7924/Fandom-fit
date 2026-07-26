@@ -40,7 +40,12 @@ export default function AccountPage() {
     isLoading
   } = useStore();
 
-  if (isLoading) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || isLoading) {
     return <LoadingScreen />;
   }
 

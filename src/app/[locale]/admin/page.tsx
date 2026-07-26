@@ -363,51 +363,51 @@ export default function AdminPage() {
   // Design Upload/Link Handlers
   const handleDesignUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    const selectedFile = e.target.files[0];
+    const selectedFiles = Array.from(e.target.files);
     setIsUploadingDesign(true);
 
     try {
-      let designUrl = '';
-      if (isUsingMock) {
-        const base64 = await fileToBase64(selectedFile);
-        designUrl = base64;
-      } else {
-        const fileName = `${Date.now()}-${selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        const { data, error } = await supabase.storage.from('designs').upload(fileName, selectedFile);
-        if (error) {
-          alert(`Design upload failed: ${error.message}`);
-          setIsUploadingDesign(false);
-          return;
-        }
-        if (data) {
-          const { data: { publicUrl } } = supabase.storage.from('designs').getPublicUrl(data.path);
-          designUrl = publicUrl;
-        }
-      }
-
-      if (designUrl) {
-        if (editingItem) {
-          const saved = await addProductDesign({
-            product_id: editingItem.id,
-            design_url: designUrl,
-            notes: designNotesInput || selectedFile.name
-          });
-          if (saved) {
-            setProductDesigns(prev => [...prev, saved]);
-            setAllDesigns(prev => [...prev, saved]);
-            setDesignNotesInput('');
-          }
+      for (const file of selectedFiles) {
+        let designUrl = '';
+        if (isUsingMock) {
+          const base64 = await fileToBase64(file);
+          designUrl = base64;
         } else {
-          setQueuedDesigns(prev => [...prev, {
-            design_url: designUrl,
-            notes: designNotesInput || selectedFile.name
-          }]);
-          setDesignNotesInput('');
+          const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+          const { data, error } = await supabase.storage.from('designs').upload(fileName, file);
+          if (error) {
+            alert(`Design upload failed for ${file.name}: ${error.message}`);
+            continue;
+          }
+          if (data) {
+            const { data: { publicUrl } } = supabase.storage.from('designs').getPublicUrl(data.path);
+            designUrl = publicUrl;
+          }
+        }
+
+        if (designUrl) {
+          if (editingItem) {
+            const saved = await addProductDesign({
+              product_id: editingItem.id,
+              design_url: designUrl,
+              notes: designNotesInput || file.name
+            });
+            if (saved) {
+              setProductDesigns(prev => [...prev, saved]);
+              setAllDesigns(prev => [...prev, saved]);
+            }
+          } else {
+            setQueuedDesigns(prev => [...prev, {
+              design_url: designUrl,
+              notes: designNotesInput || file.name
+            }]);
+          }
         }
       }
+      setDesignNotesInput('');
     } catch (err: any) {
       console.error('Design upload error:', err);
-      alert('Failed to upload design file.');
+      alert('Failed to upload design files.');
     } finally {
       setIsUploadingDesign(false);
     }
@@ -1811,6 +1811,7 @@ export default function AdminPage() {
                         {isUploadingDesign ? 'Uploading...' : '⬆ Upload Design File'}
                         <input 
                           type="file" 
+                          multiple
                           disabled={isUploadingDesign}
                           onChange={handleDesignUpload} 
                           className="hidden" 
