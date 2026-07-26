@@ -7,6 +7,7 @@ import { routing } from '@/i18n/routing';
 import ScrollRestorer from '@/components/ScrollRestorer';
 import ChatWidget from '@/components/ChatWidget';
 import { notFound } from 'next/navigation';
+import CustomToastProvider from '@/components/CustomToastProvider';
 
 const inter = Inter({
   subsets: ["latin"],
@@ -136,6 +137,7 @@ export default async function LocaleLayout({
         <NextIntlClientProvider messages={messages}>
           {children}
           <ChatWidget />
+          <CustomToastProvider />
         </NextIntlClientProvider>
       </body>
     </html>
