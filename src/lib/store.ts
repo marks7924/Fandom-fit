@@ -117,6 +117,10 @@ export interface Order {
   reward_coupon_code?: string;
   created_at: string;
   user_id?: string | null;
+  order_code?: string;
+  payment_method?: string;
+  payment_receipt_url?: string;
+  rejection_reason?: string;
 }
 
 export interface CartItem {
@@ -169,10 +173,11 @@ interface StoreState {
   
   // Order Operations
   fetchOrders: () => Promise<void>;
-  addOrder: (order: Omit<Order, 'id' | 'created_at' | 'status'>) => Promise<Order | null>;
+  addOrder: (order: Omit<Order, 'id' | 'created_at'>) => Promise<Order | null>;
   fetchOrdersByPhone: (phone: string) => Promise<Order[]>;
   fetchAccountOrders: (userId?: string, phone?: string) => Promise<Order[]>;
   completeOrder: (id: string) => Promise<void>;
+  updateOrderStatus: (id: string, status: string, rejectionReason?: string) => Promise<void>;
   updateAnnouncement: (message: string) => Promise<void>;
   updateAnnouncementAr: (message: string) => Promise<void>;
   trackReferralClick: (refCode: string) => Promise<void>;
@@ -911,6 +916,11 @@ export const useStore = create<StoreState>((set, get) => ({
           customer_name: order.customer_name,
           customer_phone: order.customer_phone,
           user_id: get().user?.id || undefined,
+          status: order.status || 'pending',
+          order_code: order.order_code,
+          payment_method: order.payment_method,
+          payment_receipt_url: order.payment_receipt_url,
+          rejection_reason: order.rejection_reason,
           location: order.location || `${order.governorate || ''} ${order.city || ''}`.trim() || 'N/A',
           notes: [
             order.notes,
@@ -1092,6 +1102,35 @@ export const useStore = create<StoreState>((set, get) => ({
 
     } catch (error) {
       console.error('Error completing order:', error);
+    }
+  },
+
+  updateOrderStatus: async (id, status, rejectionReason) => {
+    try {
+      if (!isUsingMock) {
+        const { error } = await supabase
+          .from('orders')
+          .update({ 
+            status, 
+            rejection_reason: rejectionReason || null 
+          })
+          .eq('id', id);
+        if (error) throw error;
+        
+        // Sync with database
+        const { data: orders } = await supabase.from('orders').select('*');
+        if (orders) set({ orders });
+        return;
+      }
+
+      // Mock local update
+      const updatedOrders = get().orders.map(o => 
+        o.id === id ? { ...o, status, rejection_reason: rejectionReason || null } : o
+      );
+      set({ orders: updatedOrders });
+      localStorage.setItem('ff_orders', JSON.stringify(updatedOrders));
+    } catch (error) {
+      console.error('Error updating order status:', error);
     }
   },
 

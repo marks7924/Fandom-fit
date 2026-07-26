@@ -159,6 +159,34 @@ export default function AdminPage() {
     faqs: [] as any[]
   });
 
+  // Payment gateway settings states
+  const [isPaymentSessionValid, setIsPaymentSessionValid] = useState(false);
+  const [paymentPasswordInput, setPaymentPasswordInput] = useState('');
+  const [paymentPasswordError, setPaymentPasswordError] = useState('');
+  const [paymentSettingsForm, setPaymentSettingsForm] = useState({
+    paymob_api_key: '',
+    paymob_secret_key: '',
+    paymob_integration_id_card: '',
+    paymob_integration_id_fawry: '',
+    paymob_hmac_secret: '',
+    paymob_public_key: '',
+    paymob_enabled: false,
+    instapay_phone: '',
+    instapay_name: '',
+    instapay_qr_code: '',
+    instapay_link: '',
+    instapay_enabled: true
+  });
+  const [revealApiKey, setRevealApiKey] = useState(false);
+  const [revealSecretKey, setRevealSecretKey] = useState(false);
+  const [revealHmacSecret, setRevealHmacSecret] = useState(false);
+  const [revealPublicKey, setRevealPublicKey] = useState(false);
+  const [isUploadingQrCode, setIsUploadingQrCode] = useState(false);
+
+  // Orders rejection details state
+  const [rejectionReasonInput, setRejectionReasonInput] = useState<Record<string, string>>({});
+  const [showRejectBox, setShowRejectBox] = useState<Record<string, boolean>>({});
+
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingLoadingLogo, setIsUploadingLoadingLogo] = useState(false);
 
@@ -423,6 +451,34 @@ export default function AdminPage() {
       });
     }
   }, [isAuthenticated, settings]);
+
+  // Load and parse payment settings
+  useEffect(() => {
+    if (settings) {
+      try {
+        const ps = settings.payment_settings;
+        const parsed = typeof ps === 'string' ? JSON.parse(ps) : ps;
+        if (parsed) {
+          setPaymentSettingsForm({
+            paymob_api_key: parsed.paymob_api_key || '',
+            paymob_secret_key: parsed.paymob_secret_key || '',
+            paymob_integration_id_card: parsed.paymob_integration_id_card || '',
+            paymob_integration_id_fawry: parsed.paymob_integration_id_fawry || '',
+            paymob_hmac_secret: parsed.paymob_hmac_secret || '',
+            paymob_public_key: parsed.paymob_public_key || '',
+            paymob_enabled: parsed.paymob_enabled === true,
+            instapay_phone: parsed.instapay_phone || '',
+            instapay_name: parsed.instapay_name || '',
+            instapay_qr_code: parsed.instapay_qr_code || '',
+            instapay_link: parsed.instapay_link || '',
+            instapay_enabled: parsed.instapay_enabled !== false
+          });
+        }
+      } catch (e) {
+        console.error("Error loading payment settings:", e);
+      }
+    }
+  }, [settings]);
 
   // Load designs when editing a product
   useEffect(() => {
@@ -1028,6 +1084,82 @@ export default function AdminPage() {
       alert(locale === 'ar' ? `فشل رفع الملف: ${err.message}` : `Upload failed: ${err.message}`);
     } finally {
       setIsUploadingLoadingLogo(false);
+    }
+  };
+
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingQrCode(true);
+    try {
+      if (isUsingMock) {
+        const base64 = await fileToBase64(file);
+        setPaymentSettingsForm(prev => ({ ...prev, instapay_qr_code: base64 }));
+      } else {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `instapay-qr-${Date.now()}.${fileExt}`;
+        const { data, error } = await supabase.storage.from('products').upload(fileName, file);
+        if (error) throw error;
+        const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(data.path);
+        setPaymentSettingsForm(prev => ({ ...prev, instapay_qr_code: publicUrl }));
+      }
+      alert(locale === 'ar' ? '✅ تم رفع رمز انستاباي الاستجابة السريعة (QR) بنجاح!' : '✅ InstaPay QR Code uploaded successfully!');
+    } catch (err: any) {
+      alert(locale === 'ar' ? `فشل رفع الملف: ${err.message}` : `Upload failed: ${err.message}`);
+    } finally {
+      setIsUploadingQrCode(false);
+    }
+  };
+
+  const handleVerifyPaymentPassword = async () => {
+    if (!paymentPasswordInput) return;
+    try {
+      const res = await fetch('/api/admin/verify-payment-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: paymentPasswordInput })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsPaymentSessionValid(true);
+        setPaymentPasswordError('');
+      } else {
+        setPaymentPasswordError(data.error || 'Incorrect Password');
+      }
+    } catch (e) {
+      console.error(e);
+      setPaymentPasswordError('Verification error');
+    }
+  };
+
+  const handleSavePaymentSettings = async () => {
+    try {
+      const paymentSettingsJson = JSON.stringify(paymentSettingsForm);
+      const { data: currentSettings, error: fetchErr } = await supabase
+        .from('settings')
+        .select('id')
+        .limit(1)
+        .maybeSingle();
+
+      if (fetchErr || !currentSettings) {
+        alert('Failed to locate current settings record to update');
+        return;
+      }
+
+      const { error: updateErr } = await supabase
+        .from('settings')
+        .update({ payment_settings: paymentSettingsJson })
+        .eq('id', currentSettings.id);
+
+      if (updateErr) {
+        throw updateErr;
+      }
+
+      alert('Payment configurations saved successfully!');
+      await useStore.getState().fetchSettings();
+    } catch (e: any) {
+      console.error("Error saving payment settings:", e);
+      alert('Failed to save payment settings: ' + e.message);
     }
   };
 
@@ -4854,6 +4986,270 @@ export default function AdminPage() {
                 </div>
               </details>
 
+              {/* ── CARD: Payment Settings (Paymob + InstaPay) ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">💳</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Payment Gateway Settings</p>
+                      <p className="text-[10px] text-zinc-500">Configure Paymob (visa/mastercard/fawry) and InstaPay</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2 border-t border-zinc-800 space-y-5">
+                  {!isPaymentSessionValid ? (
+                    <div className="py-6 text-center space-y-3 font-mono">
+                      <span className="text-2xl block">🔒</span>
+                      <h4 className="text-xs font-black uppercase text-white">Security Verification Required</h4>
+                      <p className="text-[10px] text-zinc-400 max-w-xs mx-auto">
+                        Please enter the administrative password to view or modify sensitive payment configurations.
+                      </p>
+                      <div className="flex gap-2 justify-center max-w-xs mx-auto pt-2">
+                        <input
+                          type="password"
+                          placeholder="Password"
+                          value={paymentPasswordInput}
+                          onChange={(e) => setPaymentPasswordInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleVerifyPaymentPassword();
+                            }
+                          }}
+                          className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleVerifyPaymentPassword}
+                          className="px-4 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white rounded-lg text-xs font-black uppercase cursor-pointer"
+                        >
+                          Verify
+                        </button>
+                      </div>
+                      {paymentPasswordError && (
+                        <p className="text-[10px] font-bold text-red-500 mt-1">⚠️ {paymentPasswordError}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Session time active indicator */}
+                      <div className="flex justify-between items-center text-[10px] text-zinc-400 bg-zinc-950 p-2.5 border border-zinc-800 rounded-xl font-mono">
+                        <span className="font-bold text-green-400">🟢 Security Session Active</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsPaymentSessionValid(false);
+                            setPaymentPasswordInput('');
+                          }}
+                          className="text-red-400 hover:text-red-300 font-bold uppercase text-[9px] cursor-pointer"
+                        >
+                          Lock Settings
+                        </button>
+                      </div>
+
+                      {/* Paymob Section */}
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-black uppercase text-brand-accent border-b border-zinc-800 pb-1 flex justify-between items-center select-none">
+                          <span>Paymob Settings</span>
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-zinc-400">
+                            <input
+                              type="checkbox"
+                              checked={paymentSettingsForm.paymob_enabled}
+                              onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, paymob_enabled: e.target.checked })}
+                              className="accent-brand-accent"
+                            />
+                            Enable Paymob
+                          </label>
+                        </h4>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">API Key</label>
+                            <div className="flex gap-1.5">
+                              <input
+                                type={revealApiKey ? 'text' : 'password'}
+                                value={paymentSettingsForm.paymob_api_key}
+                                onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, paymob_api_key: e.target.value })}
+                                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-brand-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setRevealApiKey(!revealApiKey)}
+                                className="px-2.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+                              >
+                                {revealApiKey ? 'Hide' : 'Show'}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Secret Key</label>
+                            <div className="flex gap-1.5">
+                              <input
+                                type={revealSecretKey ? 'text' : 'password'}
+                                value={paymentSettingsForm.paymob_secret_key}
+                                onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, paymob_secret_key: e.target.value })}
+                                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-brand-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setRevealSecretKey(!revealSecretKey)}
+                                className="px-2.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+                              >
+                                {revealSecretKey ? 'Hide' : 'Show'}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">HMAC Secret</label>
+                            <div className="flex gap-1.5">
+                              <input
+                                type={revealHmacSecret ? 'text' : 'password'}
+                                value={paymentSettingsForm.paymob_hmac_secret}
+                                onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, paymob_hmac_secret: e.target.value })}
+                                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-brand-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setRevealHmacSecret(!revealHmacSecret)}
+                                className="px-2.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+                              >
+                                {revealHmacSecret ? 'Hide' : 'Show'}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Public Key</label>
+                            <div className="flex gap-1.5">
+                              <input
+                                type={revealPublicKey ? 'text' : 'password'}
+                                value={paymentSettingsForm.paymob_public_key}
+                                onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, paymob_public_key: e.target.value })}
+                                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-brand-accent"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setRevealPublicKey(!revealPublicKey)}
+                                className="px-2.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+                              >
+                                {revealPublicKey ? 'Hide' : 'Show'}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Card Integration ID</label>
+                            <input
+                              type="text"
+                              value={paymentSettingsForm.paymob_integration_id_card}
+                              onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, paymob_integration_id_card: e.target.value })}
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-brand-accent"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Fawry Integration ID</label>
+                            <input
+                              type="text"
+                              value={paymentSettingsForm.paymob_integration_id_fawry}
+                              onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, paymob_integration_id_fawry: e.target.value })}
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-brand-accent"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* InstaPay Section */}
+                      <div className="space-y-4 pt-2">
+                        <h4 className="text-xs font-black uppercase text-brand-accent border-b border-zinc-800 pb-1 flex justify-between items-center select-none">
+                          <span>InstaPay Settings</span>
+                          <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-zinc-400">
+                            <input
+                              type="checkbox"
+                              checked={paymentSettingsForm.instapay_enabled}
+                              onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, instapay_enabled: e.target.checked })}
+                              className="accent-brand-accent"
+                            />
+                            Enable InstaPay
+                          </label>
+                        </h4>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Phone Number</label>
+                            <input
+                              type="text"
+                              value={paymentSettingsForm.instapay_phone}
+                              onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, instapay_phone: e.target.value })}
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-brand-accent"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Account Holder Name</label>
+                            <input
+                              type="text"
+                              value={paymentSettingsForm.instapay_name}
+                              onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, instapay_name: e.target.value })}
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">QR Code Image</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={paymentSettingsForm.instapay_qr_code}
+                                onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, instapay_qr_code: e.target.value })}
+                                placeholder="Image URL or upload"
+                                className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                              />
+                              <label className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors flex items-center shrink-0">
+                                {isUploadingQrCode ? '⏳ ...' : '📁 Upload'}
+                                <input type="file" accept="image/*" onChange={handleQrUpload} className="hidden" />
+                              </label>
+                            </div>
+                            {paymentSettingsForm.instapay_qr_code && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <img src={paymentSettingsForm.instapay_qr_code} alt="QR Code Preview" className="h-8 object-contain rounded border border-zinc-800 bg-zinc-950" />
+                                <span className="text-[8px] text-zinc-500 truncate max-w-[150px]">{paymentSettingsForm.instapay_qr_code}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Payment Link (optional)</label>
+                            <input
+                              type="text"
+                              value={paymentSettingsForm.instapay_link}
+                              onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, instapay_link: e.target.value })}
+                              placeholder="e.g. instapay://link..."
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Manual Save Trigger for Payment Settings */}
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={handleSavePaymentSettings}
+                          className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold uppercase cursor-pointer border border-zinc-700 transition-colors"
+                        >
+                          Save Payment Credentials Only
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </details>
+
               {/* ── Save Button ── */}
               <button type="submit"
                 className="w-full flex items-center justify-center gap-2 py-3 bg-brand-accent hover:bg-brand-accent/90 text-white font-black rounded-xl uppercase text-sm cursor-pointer transition-colors shadow-[0_4px_0_rgba(0,0,0,0.3)]">
@@ -4878,10 +5274,14 @@ export default function AdminPage() {
               />
             </div>
 
-            <div className="flex gap-2 border-b border-zinc-800 pb-2">
+            <div className="flex gap-2 border-b border-zinc-800 pb-2 flex-wrap">
               {[
                 { id: 'all', label: locale === 'ar' ? 'كل الطلبات' : 'All Orders' },
-                { id: 'pending', label: locale === 'ar' ? 'قيد الانتظار' : 'Pending' },
+                { id: 'pending_verification', label: locale === 'ar' ? 'بانتظار التأكيد' : 'Pending Verification' },
+                { id: 'paid', label: locale === 'ar' ? 'تم الدفع' : 'Paid' },
+                { id: 'rejected', label: locale === 'ar' ? 'المرفوضة' : 'Rejected' },
+                { id: 'payment_failed', label: locale === 'ar' ? 'فشل الدفع' : 'Payment Failed' },
+                { id: 'cancelled', label: locale === 'ar' ? 'الملغية' : 'Cancelled' },
                 { id: 'completed', label: locale === 'ar' ? 'المكتملة' : 'Completed' },
               ].map((status) => (
                 <button
@@ -4907,8 +5307,8 @@ export default function AdminPage() {
                     <th className="p-4">{locale === 'ar' ? 'العميل' : 'Customer'}</th>
                     <th className="p-4">{locale === 'ar' ? 'رقم الهاتف' : 'Phone'}</th>
                     <th className="p-4">{locale === 'ar' ? 'المحافظة / العنوان' : 'Location'}</th>
-                    <th className="p-4">{locale === 'ar' ? 'المنتجات / الملاحظات' : 'Order Details'}</th>
-                    <th className="p-4 text-right">{locale === 'ar' ? 'الحالة' : 'Status'}</th>
+                    <th className="p-4">{locale === 'ar' ? 'تفاصيل الطلب والدفع' : 'Order & Payment Details'}</th>
+                    <th className="p-4 text-right">{locale === 'ar' ? 'الحالة والإجراءات' : 'Status & Actions'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800 text-xs">
@@ -4918,7 +5318,7 @@ export default function AdminPage() {
                         const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
                         if (!matchesStatus) return false;
 
-                        const code = o.id.split('-')[0].toLowerCase();
+                        const code = (o.order_code || o.id.split('-')[0]).toLowerCase();
                         const query = orderSearchQuery.toLowerCase();
                         return code.includes(query) || 
                                o.customer_name.toLowerCase().includes(query) || 
@@ -4935,87 +5335,226 @@ export default function AdminPage() {
                         );
                       }
 
-                      return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((order) => (
-                        <tr key={order.id} className="hover:bg-zinc-800/20 text-zinc-300">
-                          <td className="p-4 font-bold text-brand-accent uppercase">#{order.id.split('-')[0]}</td>
-                          <td className="p-4 font-bold text-white">{order.customer_name}</td>
-                          <td className="p-4 text-brand-accent font-semibold">{order.customer_phone}</td>
-                          <td className="p-4 max-w-xs font-semibold">{order.location}</td>
-                          <td className="p-4 max-w-sm">
-                            <div className="text-white font-bold">{order.product_name} ({order.price} EGP)</div>
-                            {order.items && Array.isArray(order.items) && (
-                              <div className="mt-1.5 space-y-2 bg-zinc-950 p-2.5 border border-zinc-800 rounded">
-                                {order.items.map((item: any, idx: number) => {
-                                  const itemDesigns = allDesigns.filter(d => d.product_id === item.product_id);
-                                  return (
-                                    <div key={idx} className="text-[10px] space-y-1 py-1 border-b border-zinc-900 last:border-b-0">
-                                      <div className="flex items-center justify-between text-zinc-300">
-                                        <span>
-                                          • {item.product_name} ({item.size}) x{item.quantity}
-                                        </span>
-                                        <span className="text-[9px] text-zinc-500 font-bold">
-                                          ({item.fabric})
-                                        </span>
-                                      </div>
-                                      
-                                      {itemDesigns.length > 0 && (
-                                        <div className="pl-3.5 pt-1 space-y-1 border-l-2 border-brand-accent/30">
-                                          <span className="text-[8px] text-zinc-500 block uppercase font-bold">Designs:</span>
-                                          {itemDesigns.map((d, dIdx) => (
-                                            <div key={d.id || dIdx} className="flex items-center gap-2 text-[9px] text-zinc-300">
-                                              <span>🎨 {d.notes || 'Design file'}</span>
-                                              <a 
-                                                href={d.design_url} 
-                                                target="_blank" 
-                                                rel="noreferrer" 
-                                                className="text-[8px] font-black text-brand-accent hover:underline bg-zinc-900 border border-zinc-800 px-1 py-0.5 rounded"
-                                              >
-                                                Open Reference
-                                              </a>
-                                            </div>
-                                          ))}
+                      return filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((order) => {
+                        const badgeColors: Record<string, string> = {
+                          pending_payment: 'bg-orange-950/40 text-orange-400 border border-orange-900',
+                          pending_verification: 'bg-blue-950/40 text-blue-400 border border-blue-900',
+                          paid: 'bg-green-950/40 text-green-400 border border-green-900',
+                          payment_failed: 'bg-red-950/40 text-red-400 border border-red-900',
+                          rejected: 'bg-red-950/40 text-red-400 border border-red-900',
+                          cancelled: 'bg-zinc-800 text-zinc-400 border border-zinc-700',
+                          refunded: 'bg-zinc-800 text-zinc-500 border border-zinc-750',
+                          in_progress: 'bg-cyan-950/40 text-cyan-400 border border-cyan-900',
+                          shipped: 'bg-purple-950/40 text-purple-400 border border-purple-900',
+                          confirmed: 'bg-green-950/40 text-green-400 border border-green-900',
+                          completed: 'bg-green-950/50 text-green-400 border border-green-900'
+                        };
+
+                        return (
+                          <tr key={order.id} className="hover:bg-zinc-800/20 text-zinc-300">
+                            <td className="p-4 font-bold text-brand-accent uppercase">
+                              {order.order_code || `#${order.id.split('-')[0]}`}
+                            </td>
+                            <td className="p-4 font-bold text-white">{order.customer_name}</td>
+                            <td className="p-4 text-brand-accent font-semibold">{order.customer_phone}</td>
+                            <td className="p-4 max-w-xs font-semibold">{order.location}</td>
+                            <td className="p-4 max-w-sm space-y-2">
+                              <div className="text-white font-bold">{order.product_name} ({order.price} EGP)</div>
+                              {order.items && Array.isArray(order.items) && (
+                                <div className="mt-1.5 space-y-2 bg-zinc-950 p-2.5 border border-zinc-800 rounded">
+                                  {order.items.map((item: any, idx: number) => {
+                                    const itemDesigns = allDesigns.filter(d => d.product_id === item.product_id);
+                                    return (
+                                      <div key={idx} className="text-[10px] space-y-1 py-1 border-b border-zinc-900 last:border-b-0">
+                                        <div className="flex items-center justify-between text-zinc-300">
+                                          <span>
+                                            • {item.product_name} ({item.size}) x{item.quantity}
+                                          </span>
+                                          <span className="text-[9px] text-zinc-500 font-bold">
+                                            ({item.fabric})
+                                          </span>
                                         </div>
-                                      )}
+                                        
+                                        {itemDesigns.length > 0 && (
+                                          <div className="pl-3.5 pt-1 space-y-1 border-l-2 border-brand-accent/30">
+                                            <span className="text-[8px] text-zinc-500 block uppercase font-bold">Designs:</span>
+                                            {itemDesigns.map((d, dIdx) => (
+                                              <div key={d.id || dIdx} className="flex items-center gap-2 text-[9px] text-zinc-300">
+                                                <span>🎨 {d.notes || 'Design file'}</span>
+                                                <a 
+                                                  href={d.design_url} 
+                                                  target="_blank" 
+                                                  rel="noreferrer" 
+                                                  className="text-[8px] font-black text-brand-accent hover:underline bg-zinc-900 border border-zinc-800 px-1 py-0.5 rounded"
+                                                >
+                                                  Open Reference
+                                                </a>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              
+                              {/* Payment info detail block */}
+                              <div className="text-[10px] text-zinc-400 mt-1.5 font-bold space-y-1 bg-zinc-950 p-2 border border-zinc-850 rounded">
+                                <div className="flex justify-between">
+                                  <span>PAYMENT METHOD:</span>
+                                  <span className="text-white">
+                                    {order.payment_method === 'instapay' ? 'InstaPay Manual' : order.payment_method?.startsWith('paymob') ? 'Pay Online (Paymob)' : 'Cash on Delivery (COD)'}
+                                  </span>
+                                </div>
+                                {order.coupon_code && (
+                                  <div className="text-green-500 text-[9px] uppercase">
+                                    🎟️ Coupon: {order.coupon_code}
+                                  </div>
+                                )}
+                                {order.referral_code && (
+                                  <div className="text-blue-400 text-[9px] uppercase">
+                                    🔗 Referred By: {order.referral_code}
+                                  </div>
+                                )}
+                                {order.reward_coupon_code && (
+                                  <div className="text-amber-500 text-[9px] uppercase font-black">
+                                    🎁 Reward Issued: {order.reward_coupon_code}
+                                  </div>
+                                )}
+
+                                {/* InstaPay Receipt Screenshot Preview & Download */}
+                                {order.payment_method === 'instapay' && order.payment_receipt_url && (
+                                  <div className="mt-2 space-y-1.5 border-t border-zinc-850 pt-2 select-none">
+                                    <span className="text-[8px] uppercase font-bold text-zinc-500 block">Transaction Screenshot:</span>
+                                    <div className="relative w-28 aspect-[3/4] border border-zinc-800 rounded bg-zinc-900 overflow-hidden group">
+                                      <img
+                                        src={order.payment_receipt_url}
+                                        alt="InstaPay Receipt"
+                                        className="w-full h-full object-cover"
+                                      />
+                                      <a
+                                        href={order.payment_receipt_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[9px] text-white font-black uppercase transition-opacity"
+                                      >
+                                        Open Image
+                                      </a>
                                     </div>
-                                  );
-                                })}
+                                    <a
+                                      href={order.payment_receipt_url}
+                                      download={`receipt-${order.order_code || order.id}.jpg`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-block px-2 py-0.5 bg-zinc-850 hover:bg-zinc-800 text-[8px] font-bold text-white border border-zinc-700 rounded transition-colors"
+                                    >
+                                      Download Screenshot
+                                    </a>
+                                  </div>
+                                )}
+                                {order.rejection_reason && (
+                                  <div className="text-red-400 text-[9.5px] border-t border-zinc-850 pt-1 mt-1">
+                                    REJECTION NOTE: "{order.rejection_reason}"
+                                  </div>
+                                )}
                               </div>
-                            )}
-                            <div className="text-[10px] text-zinc-400 mt-1.5 font-bold space-y-0.5">
-                              {order.coupon_code && (
-                                <div className="text-green-500 text-[9px] uppercase">
-                                  🎟️ Coupon: {order.coupon_code}
+
+                              <div className="text-[10px] text-zinc-500 mt-1 whitespace-pre-wrap">{order.notes}</div>
+                            </td>
+                            <td className="p-4 text-right space-y-2.5">
+                              {/* Status Badge */}
+                              <div>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${badgeColors[order.status] || 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>
+                                  {order.status}
+                                </span>
+                              </div>
+
+                              {/* Manual Status Select Dropdown */}
+                              <div>
+                                <select
+                                  value={order.status}
+                                  onChange={async (e) => {
+                                    const nextStatus = e.target.value;
+                                    if (nextStatus === 'rejected') {
+                                      setShowRejectBox(prev => ({ ...prev, [order.id]: true }));
+                                    } else {
+                                      await useStore.getState().updateOrderStatus(order.id, nextStatus);
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-white text-[10px] font-bold focus:outline-none focus:border-brand-accent cursor-pointer"
+                                >
+                                  <option value="pending_payment">Pending Payment</option>
+                                  <option value="pending_verification">Pending Verification</option>
+                                  <option value="paid">Paid</option>
+                                  <option value="payment_failed">Payment Failed</option>
+                                  <option value="rejected">Rejected</option>
+                                  <option value="in_progress">In Progress</option>
+                                  <option value="shipped">Shipped</option>
+                                  <option value="completed">Completed</option>
+                                  <option value="cancelled">Cancelled</option>
+                                  <option value="refunded">Refunded</option>
+                                </select>
+                              </div>
+
+                              {/* Quick actions for Pending Verification */}
+                              {order.payment_method === 'instapay' && order.status === 'pending_verification' && (
+                                <div className="flex justify-end gap-1.5">
+                                  <button
+                                    onClick={async () => {
+                                      await useStore.getState().updateOrderStatus(order.id, 'paid');
+                                    }}
+                                    className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] uppercase font-black transition-colors cursor-pointer"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShowRejectBox(prev => ({ ...prev, [order.id]: true }));
+                                    }}
+                                    className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] uppercase font-black transition-colors cursor-pointer"
+                                  >
+                                    Reject
+                                  </button>
                                 </div>
                               )}
-                              {order.referral_code && (
-                                <div className="text-blue-400 text-[9px] uppercase">
-                                  🔗 Referred By: {order.referral_code}
+
+                              {/* Inline Rejection Reason Box */}
+                              {showRejectBox[order.id] && (
+                                <div className="mt-2 text-left space-y-2 bg-zinc-950 p-2 border border-zinc-800 rounded max-w-[200px] ml-auto">
+                                  <textarea
+                                    placeholder="Enter rejection reason..."
+                                    value={rejectionReasonInput[order.id] || ''}
+                                    onChange={(e) => setRejectionReasonInput({ ...rejectionReasonInput, [order.id]: e.target.value })}
+                                    className="w-full p-1.5 bg-zinc-900 border border-zinc-800 rounded text-[10px] text-white focus:outline-none"
+                                    rows={2}
+                                  />
+                                  <div className="flex gap-1 justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowRejectBox(prev => ({ ...prev, [order.id]: false }))}
+                                      className="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[9px] uppercase font-bold cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const reason = rejectionReasonInput[order.id] || 'Invalid payment receipt';
+                                        await useStore.getState().updateOrderStatus(order.id, 'rejected', reason);
+                                        setShowRejectBox(prev => ({ ...prev, [order.id]: false }));
+                                      }}
+                                      className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-[9px] uppercase font-bold cursor-pointer"
+                                    >
+                                      Confirm
+                                    </button>
+                                  </div>
                                 </div>
                               )}
-                              {order.reward_coupon_code && (
-                                <div className="text-amber-500 text-[9px] uppercase font-black">
-                                  🎁 Reward Issued: {order.reward_coupon_code}
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-[10px] text-zinc-500 mt-1 whitespace-pre-wrap">{order.notes}</div>
-                          </td>
-                        <td className="p-4 text-right">
-                          {order.status === 'completed' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-950/50 text-green-400 border border-green-900 uppercase">
-                              {locale === 'ar' ? 'مكتمل' : 'Completed'}
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => completeOrder(order.id)}
-                              className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] uppercase font-black transition-colors cursor-pointer"
-                            >
-                              {locale === 'ar' ? 'تحديد كمكتمل' : 'Mark Completed'}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                      ))
+                            </td>
+                          </tr>
+                        );
+                      })
                     })()
                   ) : (
                     <tr>

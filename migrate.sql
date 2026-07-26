@@ -279,3 +279,27 @@ CREATE POLICY "Allow public all on offers" ON offers FOR ALL USING (TRUE) WITH C
 -- SELECT column_name FROM information_schema.columns WHERE table_name = 'orders';
 -- SELECT column_name FROM information_schema.columns WHERE table_name = 'profiles';
 -- SELECT column_name FROM information_schema.columns WHERE table_name = 'offers';
+
+-- PAYMENT INTEGRATION: Alter orders table
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_code VARCHAR(100) UNIQUE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'cod';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_receipt_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+-- Seeding default payment settings
+INSERT INTO settings (key, value) VALUES
+('payment_settings', '{
+  "paymob_api_key": "",
+  "paymob_secret_key": "",
+  "paymob_integration_id_card": "",
+  "paymob_integration_id_fawry": "",
+  "paymob_hmac_secret": "",
+  "paymob_public_key": "",
+  "paymob_enabled": false,
+  "instapay_phone": "01012345678",
+  "instapay_name": "Fandom Fit",
+  "instapay_qr_code": "/placeholders/qr_mock.png",
+  "instapay_link": "https://instapay.eg/mock-link",
+  "instapay_enabled": true
+}')
+ON CONFLICT (key) DO NOTHING;

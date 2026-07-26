@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useStore } from '@/lib/store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Phone, Calendar, ClipboardList, MapPin, BadgeCheck, Loader2 } from 'lucide-react';
+import { X, Search, Phone, Calendar, ClipboardList, MapPin, BadgeCheck, Loader2, Upload, CreditCard } from 'lucide-react';
 
 export default function TrackOrderModal() {
   const locale = useLocale();
@@ -14,6 +14,8 @@ export default function TrackOrderModal() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [isUploadingMap, setIsUploadingMap] = useState<Record<string, boolean>>({});
+  const [retryingPaymentId, setRetryingPaymentId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isTrackOrderOpen) {
@@ -69,6 +71,83 @@ export default function TrackOrderModal() {
   };
 
   const t = locale === 'ar' ? texts.ar : texts.en;
+
+  const handleResubmitReceipt = async (orderId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      alert(locale === 'ar' ? 'حجم الملف يتجاوز الحد الأقصى (١٠ ميجابايت)' : 'File size exceeds the 10MB limit');
+      return;
+    }
+
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf'];
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!allowedExtensions.includes(fileExt)) {
+      alert(locale === 'ar' ? 'صيغة الملف غير مدعومة. يرجى رفع ملف JPG أو PNG أو PDF' : 'Unsupported file format. Please upload JPG, PNG, or PDF');
+      return;
+    }
+
+    setIsUploadingMap(prev => ({ ...prev, [orderId]: true }));
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/payment/receipt-upload', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      
+      if (data.success && data.url) {
+        const updateRes = await fetch('/api/payment/resubmit-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, receiptUrl: data.url })
+        });
+        const updateData = await updateRes.json();
+        
+        if (updateData.success) {
+          alert(locale === 'ar' ? 'تم إعادة إرسال الإيصال بنجاح!' : 'Receipt resubmitted successfully!');
+          const results = await fetchOrdersByPhone(phone.trim());
+          setOrders(results);
+        } else {
+          alert(updateData.error || (locale === 'ar' ? 'فشل تحديث الطلب' : 'Failed to update order'));
+        }
+      } else {
+        alert(data.error || (locale === 'ar' ? 'فشل رفع الملف' : 'Upload failed'));
+      }
+    } catch (err) {
+      console.error(err);
+      alert(locale === 'ar' ? 'حدث خطأ في الشبكة' : 'Network error occurred');
+    } finally {
+      setIsUploadingMap(prev => ({ ...prev, [orderId]: false }));
+    }
+  };
+
+  const handleRetryPayment = async (orderId: string) => {
+    setRetryingPaymentId(orderId);
+    try {
+      const res = await fetch('/api/payment/paymob/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, paymentMethod: 'card' })
+      });
+      const data = await res.json();
+      if (data.success && data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+      } else {
+        alert(locale === 'ar' ? 'فشل تحويل بوابة الدفع المباشر، يرجى المحاولة لاحقاً.' : 'Payment gateway redirection failed, please try again later.');
+      }
+    } catch (err) {
+      console.error("Retry payment error:", err);
+      alert(locale === 'ar' ? 'حدث خطأ في الشبكة' : 'Network error occurred');
+    } finally {
+      setRetryingPaymentId(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,10 +258,36 @@ export default function TrackOrderModal() {
               {!isSearching && orders.length > 0 && (
                 <div className="space-y-6 pb-6 select-text">
                   {orders.map((order) => {
-                    const shortCode = order.id.split('-')[0].toUpperCase();
+                    const shortCode = order.order_code || `#${order.id.split('-')[0].toUpperCase()}`;
                     const formattedDate = new Date(order.created_at).toLocaleDateString(locale, {
                       year: 'numeric', month: 'long', day: 'numeric'
                     });
+
+                    // Local helper for mapped statuses
+                    const getStatusBadge = (status: string) => {
+                      const labels: Record<string, { en: string, ar: string, classes: string }> = {
+                        pending_payment: { en: 'Pending Payment', ar: 'في انتظار الدفع', classes: 'bg-orange-50 text-orange-700 border-orange-300' },
+                        pending_verification: { en: 'Waiting for Verification', ar: 'في انتظار مراجعة الدفع', classes: 'bg-blue-50 text-blue-700 border-blue-300' },
+                        paid: { en: 'Paid', ar: 'تم الدفع', classes: 'bg-green-50 text-green-700 border-green-300' },
+                        payment_failed: { en: 'Payment Failed', ar: 'فشل الدفع', classes: 'bg-red-50 text-red-700 border-red-300' },
+                        rejected: { en: 'Payment Rejected', ar: 'تم رفض الدفع', classes: 'bg-red-50 text-red-700 border-red-300' },
+                        cancelled: { en: 'Cancelled', ar: 'ملغي', classes: 'bg-zinc-50 text-zinc-600 border-zinc-300' },
+                        refunded: { en: 'Refunded', ar: 'تم الاسترجاع', classes: 'bg-zinc-50 text-zinc-500 border-zinc-300' },
+                        in_progress: { en: 'In Progress', ar: 'قيد التنفيذ', classes: 'bg-cyan-50 text-cyan-700 border-cyan-300' },
+                        shipped: { en: 'Shipped & Dispatched', ar: 'تم الشحن', classes: 'bg-purple-50 text-purple-700 border-purple-300' },
+                        confirmed: { en: 'Confirmed', ar: 'مؤكد', classes: 'bg-green-50 text-green-700 border-green-300' },
+                        pending: { en: 'Pending Confirmation', ar: 'قيد المراجعة', classes: 'bg-yellow-50 text-yellow-700 border-yellow-300' },
+                        completed: { en: 'Completed & Dispatched', ar: 'مكتمل وتم الشحن', classes: 'bg-green-50 text-green-700 border-green-300' }
+                      };
+
+                      const match = labels[status] || labels.pending;
+                      return {
+                        text: locale === 'ar' ? match.ar : match.en,
+                        classes: match.classes
+                      };
+                    };
+
+                    const badge = getStatusBadge(order.status);
 
                     return (
                       <div 
@@ -199,19 +304,15 @@ export default function TrackOrderModal() {
                               {t.order_code}
                             </span>
                             <span className="text-sm font-black text-brand-accent uppercase tracking-wider">
-                              #{shortCode}
+                              {shortCode}
                             </span>
                           </div>
                           <div className="text-right">
                             <span className="text-[10px] font-black uppercase text-black/55 block">
                               {t.status}
                             </span>
-                            <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border-2 border-black ${
-                              order.status === 'completed' 
-                                ? 'bg-green-100 text-green-700 border-green-800' 
-                                : 'bg-yellow-100 text-yellow-700 border-yellow-800'
-                            }`}>
-                              {order.status === 'completed' ? t.completed : t.pending}
+                            <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border-2 ${badge.classes}`}>
+                              {badge.text}
                             </span>
                           </div>
                         </div>
@@ -250,6 +351,79 @@ export default function TrackOrderModal() {
                               <span className="text-brand-accent font-black text-sm">{order.price} EGP</span>
                             </div>
                           </div>
+
+                          {/* Payment Method Badge */}
+                          {order.payment_method && (
+                            <div className="flex items-start gap-2 border-t border-black/5 pt-2">
+                              <span className="text-black/50 shrink-0 mt-0.5">💳</span>
+                              <div>
+                                <span className="font-bold text-black/60 text-[10px] block uppercase leading-none mb-0.5">{locale === 'ar' ? 'طريقة الدفع' : 'Payment Method'}</span>
+                                <span className="uppercase font-black text-[10px]">
+                                  {order.payment_method === 'instapay' ? 'InstaPay' : order.payment_method.startsWith('paymob') ? 'Pay Online (Paymob)' : 'Cash on Delivery (COD)'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Rejection reason message */}
+                          {order.status === 'rejected' && order.rejection_reason && (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 mt-2 font-semibold">
+                              <span className="font-black uppercase block text-[9px] text-red-800 mb-0.5">{locale === 'ar' ? 'سبب الرفض:' : 'Rejection Reason:'}</span>
+                              <p>{order.rejection_reason}</p>
+                            </div>
+                          )}
+
+                          {/* Reupload receipt for rejected manual payments */}
+                          {order.status === 'rejected' && (
+                            <div className="mt-3 pt-3 border-t border-black/5 space-y-2">
+                              <span className="text-[9px] font-black uppercase text-black/60 block flex items-center gap-1">
+                                <Upload size={11} className="text-brand-accent" />
+                                {locale === 'ar' ? 'إعادة رفع إيصال الدفع للتأكيد:' : 'Resubmit receipt screenshot:'}
+                              </span>
+                              <div className="relative">
+                                <input
+                                  type="file"
+                                  accept="image/*,application/pdf"
+                                  disabled={isUploadingMap[order.id]}
+                                  onChange={(e) => handleResubmitReceipt(order.id, e)}
+                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                />
+                                <div className="border border-dashed border-black/35 rounded-xl py-2 px-3 text-center bg-zinc-50 flex items-center justify-center gap-2 hover:bg-zinc-100 transition-colors cursor-pointer select-none">
+                                  {isUploadingMap[order.id] ? (
+                                    <>
+                                      <Loader2 className="animate-spin text-brand-accent" size={14} />
+                                      <span className="text-[9px] font-black text-black/60 uppercase">{locale === 'ar' ? 'جاري الرفع...' : 'Uploading...'}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Upload size={14} className="text-black/30" />
+                                      <span className="text-[9px] font-black text-black/60 uppercase">{locale === 'ar' ? 'اضغط لاختيار صورة إيصال جديدة' : 'Click to select new screenshot'}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Retry payment button for failed automatic checkout */}
+                          {(order.status === 'pending_payment' || order.status === 'payment_failed') && order.payment_method?.startsWith('paymob') && (
+                            <div className="mt-3 pt-3 border-t border-black/5">
+                              <button
+                                type="button"
+                                onClick={() => handleRetryPayment(order.id)}
+                                disabled={retryingPaymentId === order.id}
+                                className="w-full py-2 bg-brand-accent hover:bg-brand-accent/90 text-white font-black uppercase border-2 border-black rounded-xl text-center text-[10px] tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]"
+                              >
+                                {retryingPaymentId === order.id ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <CreditCard size={12} />
+                                )}
+                                {locale === 'ar' ? 'إعادة محاولة الدفع الإلكتروني' : 'Retry Online Payment'}
+                              </button>
+                            </div>
+                          )}
+
                         </div>
 
                       </div>

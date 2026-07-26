@@ -127,6 +127,10 @@ CREATE TABLE IF NOT EXISTS orders (
     location VARCHAR(255) NOT NULL,
     notes TEXT,
     status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'completed'
+    order_code VARCHAR(100) UNIQUE,
+    payment_method VARCHAR(50) DEFAULT 'cod',
+    payment_receipt_url TEXT,
+    rejection_reason TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
