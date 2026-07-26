@@ -149,7 +149,7 @@ export default function Hero() {
           </div>
 
           {/* Hero Media Showcase */}
-          <div className="lg:col-span-5 flex justify-center relative select-none">
+          <div className="lg:col-span-5 flex flex-col items-center relative select-none">
             {/* Overlapping Card / Picture frame style */}
             <motion.div 
               initial={{ rotate: -3 }}
@@ -191,11 +191,16 @@ export default function Hero() {
                 <span className="text-xs font-black uppercase px-2 py-0.5 bg-black text-white rounded">Premium</span>
               </div>
 
-              {/* Overlapping secondary sticker - nested inside the polaroid card so it is always relative and never cut off on phone screens */}
-              <div className="absolute -bottom-4 -left-6 bg-[#81B29A] text-black border-3 border-black px-3 py-1.5 sm:px-4 sm:py-2.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-sm sm:text-lg rotate-[15deg] cursor-pointer z-10 whitespace-nowrap">
-                🎮 100% Egyptian Cotton!
-              </div>
             </motion.div>
+
+            {/* Cotton sticker — lives OUTSIDE the card so section overflow:hidden cannot clip it.
+                Negative margin-top pulls it up to visually overlap the bottom of the card. */}
+            <div
+              className="self-start ml-0 sm:-ml-4 -mt-3 sm:-mt-6 bg-[#81B29A] text-black border-3 border-black px-3 py-1.5 sm:px-4 sm:py-2.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-lg font-handwriting text-sm sm:text-lg whitespace-nowrap z-10 relative"
+              style={{ transform: 'rotate(15deg)' }}
+            >
+              🎮 100% Egyptian Cotton!
+            </div>
           </div>
 
         </div>
