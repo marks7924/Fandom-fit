@@ -1156,7 +1156,7 @@ export default function AdminPage() {
       }
 
       alert('Payment configurations saved successfully!');
-      await useStore.getState().fetchSettings();
+      await useStore.getState().fetchInitialData();
     } catch (e: any) {
       console.error("Error saving payment settings:", e);
       alert('Failed to save payment settings: ' + e.message);

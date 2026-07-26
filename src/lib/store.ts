@@ -118,9 +118,9 @@ export interface Order {
   created_at: string;
   user_id?: string | null;
   order_code?: string;
-  payment_method?: string;
-  payment_receipt_url?: string;
-  rejection_reason?: string;
+  payment_method?: string | null;
+  payment_receipt_url?: string | null;
+  rejection_reason?: string | null;
 }
 
 export interface CartItem {
