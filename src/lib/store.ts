@@ -968,33 +968,39 @@ export const useStore = create<StoreState>((set, get) => ({
         // Decrement stock levels for ordered items
         if (order.items && Array.isArray(order.items)) {
           for (const item of order.items) {
-            const prod = get().products.find(p => p.id === item.product_id);
-            if (prod) {
-              const currentStock = prod.stock_quantities || { S: 10, M: 15, L: 8, XL: 2, XXL: 0 };
-              const sizeKey = (item.size || 'M').toUpperCase();
-              const oldQty = currentStock[sizeKey] !== undefined ? currentStock[sizeKey] : 10;
-              const newQty = Math.max(0, oldQty - (item.quantity || 1));
-              
-              const updatedStock = {
-                ...currentStock,
-                [sizeKey]: newQty
-              };
+            try {
+              const prod = get().products.find(p => p.id === item.product_id);
+              if (prod) {
+                const currentStock = prod.stock_quantities || { S: 10, M: 15, L: 8, XL: 2, XXL: 0 };
+                const sizeKey = (item.size || 'M').toUpperCase();
+                const oldQty = currentStock[sizeKey] !== undefined ? currentStock[sizeKey] : 10;
+                const newQty = Math.max(0, oldQty - (item.quantity || 1));
+                
+                const updatedStock = {
+                  ...currentStock,
+                  [sizeKey]: newQty
+                };
 
-              // Check if all sizes are 0, and auto-update is_in_stock to false if so
-              const totalStock = Object.values(updatedStock).reduce((sum, q) => Number(sum) + Number(q), 0);
-              const isInStock = totalStock > 0;
+                // Check if all sizes are 0, and auto-update is_in_stock to false if so
+                const totalStock = Object.values(updatedStock).reduce((sum, q) => Number(sum) + Number(q), 0);
+                const isInStock = totalStock > 0;
 
-              // Save to Database
-              await supabase.from('products').update({ 
-                stock_quantities: updatedStock,
-                is_in_stock: isInStock
-              }).eq('id', prod.id);
+                // Save to Database
+                const { error: stockErr } = await supabase.from('products').update({ 
+                  stock_quantities: updatedStock,
+                  is_in_stock: isInStock
+                }).eq('id', prod.id);
 
-              // Update local state list
-              const updatedProducts = get().products.map(p => 
-                p.id === prod.id ? { ...p, stock_quantities: updatedStock, is_in_stock: isInStock } : p
-              );
-              set({ products: updatedProducts });
+                if (!stockErr) {
+                  // Update local state list
+                  const updatedProducts = get().products.map(p => 
+                    p.id === prod.id ? { ...p, stock_quantities: updatedStock, is_in_stock: isInStock } : p
+                  );
+                  set({ products: updatedProducts });
+                }
+              }
+            } catch (stockErr) {
+              console.warn('Non-critical error updating stock level:', stockErr);
             }
           }
         }

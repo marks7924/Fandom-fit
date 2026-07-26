@@ -7,7 +7,7 @@ import supabase, { isUsingMock } from '@/lib/supabase';
 import { 
   LayoutDashboard, ShoppingBag, FolderOpen, Ticket, Palette, Settings, 
   LogOut, Plus, Edit, Trash2, Copy, Eye, EyeOff, ToggleLeft, ToggleRight, Check, Save, X, ShoppingCart, Tag,
-  MessageSquare, Users, BarChart3, Bot, Trophy, ShieldAlert
+  MessageSquare, Users, BarChart3, Bot, Trophy, ShieldAlert, Mail
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -1329,6 +1329,7 @@ export default function AdminPage() {
               { id: 'orders', name: locale === 'ar' ? 'الطلبات' : 'Orders', icon: <ShoppingCart size={16} />, cat: 'orders' },
               { id: 'designs-explorer', name: locale === 'ar' ? 'التصاميم والطباعة' : 'Designs Explorer', icon: <Palette size={16} />, cat: 'orders' },
               { id: 'chats', name: locale === 'ar' ? 'المحادثات المباشرة' : 'Live Chat', icon: <MessageSquare size={16} />, cat: 'orders' },
+              { id: 'email-sender', name: locale === 'ar' ? 'مرسل البريد الإلكتروني' : 'Email Sender', icon: <Mail size={16} />, cat: 'orders' },
               { id: 'users', name: locale === 'ar' ? 'إدارة المستخدمين' : 'Users Management', icon: <Users size={16} />, cat: 'managemental' },
               { id: 'analytics', name: locale === 'ar' ? 'تحليلات الموقع' : 'Web Analytics', icon: <BarChart3 size={16} />, cat: 'managemental' },
               { id: 'settings', name: t('sidebar.settings'), icon: <Settings size={16} />, cat: 'managemental' },
@@ -3851,7 +3852,7 @@ export default function AdminPage() {
                                                setEmailModalRecipient(userProfile.email);
                                                setEmailModalSubject('');
                                                setEmailModalBody('');
-                                               setIsEmailModalOpen(true);
+                                               setActiveTab('email-sender');
                                              }}
                                              className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-brand-accent rounded text-[8px] uppercase font-bold border border-zinc-750 cursor-pointer"
                                            >
@@ -3910,7 +3911,7 @@ export default function AdminPage() {
                                                 setEmailModalRecipient(req.email || '');
                                                 setEmailModalSubject('');
                                                 setEmailModalBody('');
-                                                setIsEmailModalOpen(true);
+                                                setActiveTab('email-sender');
                                               }}
                                               className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-brand-accent rounded text-[8px] uppercase font-bold border border-zinc-750 cursor-pointer inline-block ml-1.5 align-middle"
                                             >
@@ -6655,6 +6656,117 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* TAB: EMAIL SENDER FORM */}
+        {activeTab === 'email-sender' && (
+          <div className="space-y-6 text-white font-mono max-w-xl mx-auto bg-zinc-900 border-4 border-black p-8 rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mt-8 select-text">
+            <div className="border-b border-zinc-850 pb-4 mb-6">
+              <h2 className="text-2xl font-black uppercase text-brand-accent flex items-center gap-2">
+                ✉️ {locale === 'ar' ? 'مرسل البريد الإلكتروني' : 'Email Sender'}
+              </h2>
+              <p className="text-[10px] text-zinc-500 uppercase mt-1 tracking-wider leading-relaxed">
+                {locale === 'ar' 
+                  ? 'أرسل رسالة بريد إلكتروني مخصصة مباشرة إلى أي مستخدم عبر خدمة SendGrid' 
+                  : 'Dispatch a custom email notification directly to any customer via SendGrid service'}
+              </p>
+            </div>
+
+            <div className="space-y-5 text-left">
+              <div>
+                <label className="text-[10px] uppercase font-black text-zinc-400 block mb-1">
+                  {locale === 'ar' ? 'البريد الإلكتروني للمستلم *' : 'Recipient Email Address *'}
+                </label>
+                <input
+                  type="email"
+                  placeholder="customer@example.com"
+                  value={emailModalRecipient}
+                  onChange={(e) => setEmailModalRecipient(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-zinc-950 border-2 border-zinc-850 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-brand-accent select-text"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] uppercase font-black text-zinc-400 block mb-1">
+                  {locale === 'ar' ? 'عنوان الرسالة / الموضوع *' : 'Email Subject / Title *'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={locale === 'ar' ? 'مثال: تحديث بخصوص طلبك من Fandom Fit' : 'e.g. Update regarding your Fandom Fit order'}
+                  value={emailModalSubject}
+                  onChange={(e) => setEmailModalSubject(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-zinc-950 border-2 border-zinc-850 rounded-xl text-white text-xs font-sans focus:outline-none focus:border-brand-accent select-text"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] uppercase font-black text-zinc-400 block mb-1">
+                  {locale === 'ar' ? 'نص الرسالة *' : 'Message Body *'}
+                </label>
+                <textarea
+                  rows={8}
+                  placeholder={locale === 'ar' ? 'اكتب نص البريد الإلكتروني هنا بالتفصيل...' : 'Type the message details to deliver here...'}
+                  value={emailModalBody}
+                  onChange={(e) => setEmailModalBody(e.target.value)}
+                  className="w-full px-4 py-3 bg-zinc-950 border-2 border-zinc-850 rounded-xl text-white text-xs font-sans focus:outline-none focus:border-brand-accent whitespace-pre-wrap select-text"
+                />
+                
+                <div className="bg-[#E07A5F]/10 border border-[#E07A5F]/30 rounded-xl p-3 text-[10px] font-bold text-brand-accent leading-relaxed mt-2.5 flex items-start gap-2">
+                  <span>💡</span>
+                  <p>
+                    {locale === 'ar'
+                      ? 'ملاحظة: سيتم إضافة تنبيه تلقائي في نهاية البريد الإلكتروني لإرشاد المستخدمين للتحقق من مجلق البريد العشوائي (Spam).'
+                      : 'Note: A fallback instructions banner will be automatically appended to advise customers to check their Spam or Junk folder.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-zinc-800">
+                <button
+                  type="button"
+                  disabled={isEmailSending}
+                  onClick={async () => {
+                    if (!emailModalRecipient.trim() || !emailModalSubject.trim() || !emailModalBody.trim()) {
+                      alert(locale === 'ar' ? 'الرجاء ملء جميع حقول البريد الإلكتروني.' : 'Please fill in all email fields (recipient, subject, and message).');
+                      return;
+                    }
+                    setIsEmailSending(true);
+                    try {
+                      const res = await fetch('/api/admin/send-custom-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          email: emailModalRecipient.trim(),
+                          subject: emailModalSubject.trim(),
+                          message: emailModalBody.trim()
+                        })
+                      });
+
+                      const data = await res.json();
+                      if (!res.ok || !data.success) {
+                        throw new Error(data.error || 'Failed to dispatch email');
+                      }
+
+                      alert((locale === 'ar' ? 'تم إرسال البريد الإلكتروني بنجاح إلى ' : 'Email sent successfully to ') + emailModalRecipient);
+                      setEmailModalRecipient('');
+                      setEmailModalSubject('');
+                      setEmailModalBody('');
+                    } catch (e: any) {
+                      console.error(e);
+                      alert((locale === 'ar' ? 'خطأ أثناء الإرسال: ' : 'Error sending email: ') + e.message);
+                    } finally {
+                      setIsEmailSending(false);
+                    }
+                  }}
+                  className="w-full py-3 bg-brand-accent hover:bg-brand-accent/95 text-white text-xs font-black rounded-xl uppercase border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all cursor-pointer disabled:opacity-50 font-mono"
+                >
+                  {isEmailSending 
+                    ? (locale === 'ar' ? 'جاري الإرسال...' : 'Sending...') 
+                    : (locale === 'ar' ? 'إرسال البريد الإلكتروني ➔' : 'Send Email Message ➔')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TAB: USERS ACCOUNTS MANAGEMENT */}
         {activeTab === 'users' && (
           <div className="space-y-6 text-white font-mono">
@@ -6734,7 +6846,7 @@ export default function AdminPage() {
                                   setEmailModalRecipient(u.email);
                                   setEmailModalSubject('');
                                   setEmailModalBody('');
-                                  setIsEmailModalOpen(true);
+                                  setActiveTab('email-sender');
                                 }}
                                 className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded text-[10px] uppercase border border-black shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] cursor-pointer"
                               >
@@ -6894,74 +7006,6 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Custom Email Dispatcher Modal */}
-            {isEmailModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 font-mono select-none">
-                <div className="bg-zinc-900 border-4 border-black p-6 rounded-3xl max-w-lg w-full text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-                  <div className="flex justify-between items-center border-b border-zinc-850 pb-3 mb-4">
-                    <h3 className="text-sm font-black uppercase text-brand-accent flex items-center gap-1.5">
-                      ✉️ Email Customer via SendGrid
-                    </h3>
-                    <button onClick={() => setIsEmailModalOpen(false)} className="text-zinc-400 hover:text-white"><X size={16} /></button>
-                  </div>
-
-                  <div className="space-y-4 text-left font-mono">
-                    <div>
-                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">To (Recipient)</label>
-                      <input
-                        type="email"
-                        disabled
-                        value={emailModalRecipient}
-                        className="w-full px-3 py-2 bg-zinc-950/60 border border-zinc-850 rounded-lg text-zinc-400 text-xs font-mono select-text cursor-not-allowed"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Subject</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Update regarding your custom Fandom Fit request"
-                        value={emailModalSubject}
-                        onChange={(e) => setEmailModalSubject(e.target.value)}
-                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-sans select-text"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-1">Message Body</label>
-                      <textarea
-                        rows={6}
-                        placeholder="Type your email message details here..."
-                        value={emailModalBody}
-                        onChange={(e) => setEmailModalBody(e.target.value)}
-                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-850 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-sans whitespace-pre-wrap select-text"
-                      />
-                      <span className="text-[8px] text-zinc-500 block mt-1.5 leading-normal">
-                        * Note: This email will be delivered securely via SendGrid. A default notice will be appended to advise the user to check their Spam/Junk folder.
-                      </span>
-                    </div>
-
-                    <div className="flex gap-3 pt-3 border-t border-zinc-800">
-                      <button
-                        type="button"
-                        onClick={() => setIsEmailModalOpen(false)}
-                        className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold rounded-lg uppercase cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isEmailSending}
-                        onClick={handleSendCustomEmail}
-                        className="flex-1 py-2 bg-brand-accent hover:bg-brand-accent/95 text-white text-xs font-black rounded-lg uppercase border border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        {isEmailSending ? 'Sending...' : 'Send Email ➔'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
