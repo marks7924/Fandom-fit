@@ -242,6 +242,7 @@ export default function AdminPage() {
   const [designsSearchQuery, setDesignsSearchQuery] = useState('');
   const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
   const [requestSearchQuery, setRequestSearchQuery] = useState('');
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Record<string, boolean>>({});
 
   // Sizing & Fabric dynamic options states
   const [sizeOptions, setSizeOptions] = useState(['S', 'M', 'L', 'XL', 'XXL', '3XL']);
@@ -1272,6 +1273,277 @@ export default function AdminPage() {
       </div>
     );
   }
+
+  const handlePrintOrders = (targetOrders: any[]) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Fandom Fit - Shipping Labels</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+            body {
+              font-family: 'Inter', sans-serif;
+              margin: 0;
+              padding: 0;
+              background: #fff;
+              color: #000;
+              -webkit-print-color-adjust: exact;
+            }
+            .label-card {
+              width: 100%;
+              max-width: 800px;
+              margin: 20px auto;
+              padding: 20px;
+              border: 3px solid #000;
+              border-radius: 16px;
+              box-sizing: border-box;
+              page-break-after: always;
+              position: relative;
+            }
+            .header {
+              border-bottom: 3px solid #000;
+              padding-bottom: 12px;
+              margin-bottom: 15px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+            .brand {
+              font-size: 22px;
+              font-weight: 900;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .title {
+              font-size: 11px;
+              font-weight: 900;
+              background: #000;
+              color: #fff;
+              padding: 4px 8px;
+              text-transform: uppercase;
+              border-radius: 6px;
+            }
+            .grid {
+              display: grid;
+              grid-template-cols: 1fr 1fr;
+              gap: 15px;
+              margin-bottom: 15px;
+            }
+            .section-title {
+              font-size: 10px;
+              font-weight: 900;
+              color: #666;
+              text-transform: uppercase;
+              margin-bottom: 4px;
+            }
+            .info-box {
+              background: #f8f8f8;
+              border: 2px solid #000;
+              border-radius: 10px;
+              padding: 10px;
+            }
+            .info-text {
+              font-size: 13px;
+              font-weight: 700;
+              line-height: 1.4;
+            }
+            .items-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 15px 0;
+            }
+            .items-table th, .items-table td {
+              border: 2px solid #000;
+              padding: 8px;
+              font-size: 11px;
+              text-align: left;
+            }
+            .items-table th {
+              background: #f0f0f0;
+              font-weight: 950;
+              text-transform: uppercase;
+            }
+            .total-row {
+              font-weight: 900;
+              font-size: 14px;
+              text-align: right;
+              margin-top: 10px;
+              padding-top: 10px;
+              border-top: 2px dashed #000;
+            }
+            .notes {
+              font-size: 10px;
+              font-weight: 700;
+              background: #fff9e6;
+              border: 2px dashed #ffc107;
+              padding: 10px;
+              border-radius: 10px;
+              margin-top: 10px;
+            }
+            @media print {
+              body {
+                margin: 0;
+                padding: 0;
+              }
+              .label-card {
+                margin: 0;
+                border: 3px solid #000;
+                page-break-after: always;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          \${targetOrders.map(o => {
+            const itemsList = o.items || [];
+            return \`
+              <div class="label-card">
+                <div class="header">
+                  <div class="brand">Fandom Fit</div>
+                  <div class="title">Shipping Label</div>
+                </div>
+                
+                <div class="grid">
+                  <div>
+                    <div class="section-title">Ship To (Recipient):</div>
+                    <div class="info-box">
+                      <div class="info-text" style="font-size: 15px; font-weight: 900;">\${o.customer_name}</div>
+                      <div class="info-text" style="font-family: monospace; font-size: 14px;">📞 \${o.customer_phone}</div>
+                      \${o.customer_email ? \`<div class="info-text" style="font-size: 11px; font-weight: 500; color: #555;">✉️ \${o.customer_email}</div>\` : ''}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div class="section-title">Delivery Address:</div>
+                    <div class="info-box">
+                      <div class="info-text">\${o.governorate || ''} - \${o.city || ''}</div>
+                      <div class="info-text" style="font-weight: 500; font-size: 12px; margin-top: 2px;">\${o.address || o.location}</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="grid">
+                  <div>
+                    <div class="section-title">Order Code:</div>
+                    <div class="info-box" style="font-family: monospace; font-weight: 900; font-size: 14px;">
+                      \${o.order_code || o.id.substring(0, 8).toUpperCase()}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div class="section-title">Payment Mode:</div>
+                    <div class="info-box" style="font-weight: 900; font-size: 12px; text-transform: uppercase;">
+                      \${o.payment_method === 'cod' ? 'Cash on Delivery (COD)' : o.payment_method.toUpperCase()}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="section-title">Items Spec Breakdown:</div>
+                <table class="items-table">
+                  <thead>
+                    <tr>
+                      <th>Item Description</th>
+                      <th style="width: 80px;">Size</th>
+                      <th style="width: 100px;">Fabric</th>
+                      <th style="width: 100px;">Fit</th>
+                      <th style="width: 60px; text-align: center;">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    \${itemsList.map((item: any) => \`
+                      <tr>
+                        <td style="font-weight: 900;">\${item.product_name || item.product?.name_en || 'Custom Product'}</td>
+                        <td>\${item.size || 'M'}</td>
+                        <td>\${item.fabric || 'Standard Cotton'}</td>
+                        <td>\${item.fit_type || item.fitType || 'Oversized'}</td>
+                        <td style="text-align: center; font-weight: 900;">x\${item.quantity || 1}</td>
+                      </tr>
+                    \`).join('')}
+                  </tbody>
+                </table>
+
+                \${o.notes ? \`
+                  <div class="section-title">Customer Shipping Notes:</div>
+                  <div class="notes">\${o.notes}</div>
+                \` : ''}
+
+                <div class="total-row">
+                  Amount to Collect: <span style="font-size: 18px; font-weight: 900;">\${o.price} EGP</span>
+                </div>
+              </div>
+            \`;
+          }).join('')}
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const handleExportToExcel = (targetOrders: any[]) => {
+    const headers = [
+      'Order Code',
+      'Status',
+      'Created Date',
+      'Customer Name',
+      'Phone Number',
+      'Email',
+      'Governorate',
+      'City',
+      'Address',
+      'Items Ordered',
+      'Total Price (EGP)',
+      'Payment Method',
+      'Notes'
+    ];
+
+    const rows = targetOrders.map(o => {
+      const itemsString = (o.items || []).map((i: any) => 
+        `\${i.product_name || i.product?.name_en || 'Item'} (\${i.size || 'M'}, \${i.fabric || 'Standard'}, \${i.fit_type || i.fitType || 'Oversized'} x\${i.quantity || 1})`
+      ).join('; ');
+
+      return [
+        o.order_code || o.id,
+        o.status,
+        new Date(o.created_at).toLocaleDateString(),
+        o.customer_name,
+        o.customer_phone,
+        o.customer_email || '',
+        o.governorate || '',
+        o.city || '',
+        (o.address || o.location || '').replace(/"/g, '""'),
+        itemsString.replace(/"/g, '""'),
+        o.price,
+        o.payment_method,
+        (o.notes || '').replace(/\\n/g, ' ').replace(/"/g, '""')
+      ];
+    });
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(val => `"\${val}"`).join(','))
+    ].join('\\r\\n');
+
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `fandom-fit-orders-\${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // MAIN ADMIN INTERFACE
   return (
@@ -5763,11 +6035,115 @@ export default function AdminPage() {
               ))}
             </div>
 
+            {/* Bulk Actions & Exports Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-zinc-900 border border-zinc-800 p-4 rounded-2xl font-mono text-left">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const filtered = orders.filter(o => {
+                      const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+                      if (!matchesStatus) return false;
+                      const code = (o.order_code || o.id.split('-')[0]).toLowerCase();
+                      const query = orderSearchQuery.toLowerCase();
+                      const rejectionMatch = o.rejection_reason && o.rejection_reason.toLowerCase().includes(query);
+                      return code.includes(query) || o.customer_name.toLowerCase().includes(query) || o.customer_phone.includes(query) || !!rejectionMatch;
+                    });
+                    
+                    const selectedList = filtered.filter(o => selectedOrderIds[o.id]);
+                    const toPrint = selectedList.length > 0 ? selectedList : filtered;
+                    handlePrintOrders(toPrint);
+                  }}
+                  className="px-4 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] text-xs font-black uppercase rounded-xl cursor-pointer flex items-center gap-1.5 transition-all hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                >
+                  🖨️ {locale === 'ar' ? 'طباعة الفواتير / البوالص' : 'Print Shipping Labels'}
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    const filtered = orders.filter(o => {
+                      const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+                      if (!matchesStatus) return false;
+                      const code = (o.order_code || o.id.split('-')[0]).toLowerCase();
+                      const query = orderSearchQuery.toLowerCase();
+                      const rejectionMatch = o.rejection_reason && o.rejection_reason.toLowerCase().includes(query);
+                      return code.includes(query) || o.customer_name.toLowerCase().includes(query) || o.customer_phone.includes(query) || !!rejectionMatch;
+                    });
+                    
+                    const selectedList = filtered.filter(o => selectedOrderIds[o.id]);
+                    const toExport = selectedList.length > 0 ? selectedList : filtered;
+                    handleExportToExcel(toExport);
+                  }}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] text-xs font-black uppercase rounded-xl cursor-pointer flex items-center gap-1.5 transition-all hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+                >
+                  📊 {locale === 'ar' ? 'تصدير إكسل (CSV)' : 'Export Excel (CSV)'}
+                </button>
+              </div>
+
+              {(() => {
+                const totalFiltered = orders.filter(o => {
+                  const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+                  if (!matchesStatus) return false;
+                  const code = (o.order_code || o.id.split('-')[0]).toLowerCase();
+                  const query = orderSearchQuery.toLowerCase();
+                  const rejectionMatch = o.rejection_reason && o.rejection_reason.toLowerCase().includes(query);
+                  return code.includes(query) || o.customer_name.toLowerCase().includes(query) || o.customer_phone.includes(query) || !!rejectionMatch;
+                });
+                const selectedCount = totalFiltered.filter(o => selectedOrderIds[o.id]).length;
+                
+                return (
+                  <span className="text-[10px] uppercase font-bold text-zinc-400">
+                    {selectedCount > 0 
+                      ? (locale === 'ar' ? `تم تحديد ${selectedCount} من أصل ${totalFiltered.length}` : `${selectedCount} of ${totalFiltered.length} selected for actions`) 
+                      : (locale === 'ar' ? 'تطبق الإجراءات على الكل إذا لم يتم تحديد خيار' : 'Actions apply to all filtered orders if none checked')}
+                  </span>
+                );
+              })()}
+            </div>
+
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[950px] text-left font-mono">
                 <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
                   <tr>
+                    <th className="p-4 w-[50px] text-center">
+                      <input
+                        type="checkbox"
+                        checked={orders && (() => {
+                          const filtered = orders.filter(o => {
+                            const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+                            if (!matchesStatus) return false;
+                            const code = (o.order_code || o.id.split('-')[0]).toLowerCase();
+                            const query = orderSearchQuery.toLowerCase();
+                            const rejectionMatch = o.rejection_reason && o.rejection_reason.toLowerCase().includes(query);
+                            return code.includes(query) || o.customer_name.toLowerCase().includes(query) || o.customer_phone.includes(query) || !!rejectionMatch;
+                          });
+                          return filtered.length > 0 && filtered.every(o => selectedOrderIds[o.id]);
+                        })()}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          const filtered = orders.filter(o => {
+                            const matchesStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter;
+                            if (!matchesStatus) return false;
+                            const code = (o.order_code || o.id.split('-')[0]).toLowerCase();
+                            const query = orderSearchQuery.toLowerCase();
+                            const rejectionMatch = o.rejection_reason && o.rejection_reason.toLowerCase().includes(query);
+                            return code.includes(query) || o.customer_name.toLowerCase().includes(query) || o.customer_phone.includes(query) || !!rejectionMatch;
+                          });
+                          const nextSelected = { ...selectedOrderIds };
+                          filtered.forEach(o => {
+                            if (checked) {
+                              nextSelected[o.id] = true;
+                            } else {
+                              delete nextSelected[o.id];
+                            }
+                          });
+                          setSelectedOrderIds(nextSelected);
+                        }}
+                        className="cursor-pointer rounded border-zinc-700 bg-zinc-950 text-brand-accent focus:ring-brand-accent focus:ring-offset-zinc-900"
+                      />
+                    </th>
                     <th className="p-4">{locale === 'ar' ? 'الكود' : 'Code'}</th>
                     <th className="p-4">{locale === 'ar' ? 'العميل' : 'Customer'}</th>
                     <th className="p-4">{locale === 'ar' ? 'رقم الهاتف' : 'Phone'}</th>
@@ -5795,7 +6171,7 @@ export default function AdminPage() {
                       if (filtered.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={6} className="p-8 text-center text-zinc-500 font-semibold">
+                            <td colSpan={7} className="p-8 text-center text-zinc-500 font-semibold">
                               {locale === 'ar' ? 'لم يتم العثور على نتائج.' : 'No matching orders found.'}
                             </td>
                           </tr>
@@ -5819,6 +6195,25 @@ export default function AdminPage() {
 
                         return (
                           <tr key={order.id} className="hover:bg-zinc-800/20 text-zinc-300">
+                            <td className="p-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={!!selectedOrderIds[order.id]}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setSelectedOrderIds(prev => {
+                                    const copy = { ...prev };
+                                    if (checked) {
+                                      copy[order.id] = true;
+                                    } else {
+                                      delete copy[order.id];
+                                    }
+                                    return copy;
+                                  });
+                                }}
+                                className="cursor-pointer rounded border-zinc-700 bg-zinc-950 text-brand-accent focus:ring-brand-accent focus:ring-offset-zinc-900"
+                              />
+                            </td>
                             <td className="p-4 font-bold text-brand-accent uppercase">
                               {order.order_code || `#${order.id.split('-')[0]}`}
                             </td>
@@ -5964,6 +6359,17 @@ export default function AdminPage() {
                                 </select>
                               </div>
 
+                              {/* Individual Order Print Button */}
+                              <div className="pt-1 select-none">
+                                <button
+                                  type="button"
+                                  onClick={() => handlePrintOrders([order])}
+                                  className="w-full px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-500 text-white rounded text-[9px] font-black uppercase transition-all cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  🖨️ {locale === 'ar' ? 'البوليصة' : 'Label'}
+                                </button>
+                              </div>
+
                               {/* Quick actions for Pending Verification */}
                               {order.payment_method === 'instapay' && order.status === 'pending_verification' && (
                                 <div className="flex justify-end gap-1.5">
@@ -6025,7 +6431,7 @@ export default function AdminPage() {
                     })()
                   ) : (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-zinc-500 font-semibold">
+                      <td colSpan={7} className="p-8 text-center text-zinc-500 font-semibold">
                         {locale === 'ar' ? 'لا توجد طلبات بعد.' : 'No orders logged on this system yet.'}
                       </td>
                     </tr>
