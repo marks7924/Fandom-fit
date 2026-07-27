@@ -755,6 +755,17 @@ export const useStore = create<StoreState>((set, get) => ({
 
   fetchOrders: async () => {
     try {
+      if (!isUsingMock) {
+        const fourteenDaysAgo = new Date();
+        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+        // Clean up expired rejected tickets
+        await supabase
+          .from('orders')
+          .delete()
+          .lt('created_at', fourteenDaysAgo.toISOString())
+          .like('rejection_reason', '%[Problem Code:%');
+      }
+
       const { data: orders } = await supabase.from('orders').select('*');
       if (orders) {
         set({ orders });
@@ -1134,14 +1145,15 @@ export const useStore = create<StoreState>((set, get) => ({
   updateOrderStatus: async (id, status, rejectionReason) => {
     try {
       if (!isUsingMock) {
-        const { error } = await supabase
-          .from('orders')
-          .update({ 
-            status, 
-            rejection_reason: rejectionReason || null 
-          })
-          .eq('id', id);
-        if (error) throw error;
+        const res = await fetch('/api/admin/orders/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: id, status, rejectionReason })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Failed to update order status');
+        }
         
         // Sync with database
         const { data: orders } = await supabase.from('orders').select('*');
@@ -1149,12 +1161,30 @@ export const useStore = create<StoreState>((set, get) => ({
         return;
       }
 
-      // Mock local update
+      // Mock local update matching server behavior
+      let finalRejectionReason = rejectionReason || null;
+      if (status === 'rejected' || status === 'payment_failed') {
+        const randLetters = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const problemCode = `ERR-${randLetters}`;
+        finalRejectionReason = `[Problem Code: ${problemCode}] Rejection note: ${rejectionReason || 'Invalid payment receipt screenshot'}`;
+      }
+
       const updatedOrders = get().orders.map(o => 
-        o.id === id ? { ...o, status, rejection_reason: rejectionReason || null } : o
+        o.id === id ? { ...o, status, rejection_reason: finalRejectionReason } : o
       );
-      set({ orders: updatedOrders });
-      localStorage.setItem('ff_orders', JSON.stringify(updatedOrders));
+      
+      // Perform 14-day mock cleanup
+      const fourteenDaysAgo = new Date();
+      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+      const cleanedOrders = updatedOrders.filter(o => {
+        const isOldRejected = o.rejection_reason && 
+                              o.rejection_reason.includes('[Problem Code:') && 
+                              new Date(o.created_at).getTime() < fourteenDaysAgo.getTime();
+        return !isOldRejected;
+      });
+
+      set({ orders: cleanedOrders });
+      localStorage.setItem('ff_orders', JSON.stringify(cleanedOrders));
     } catch (error) {
       console.error('Error updating order status:', error);
     }

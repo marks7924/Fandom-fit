@@ -240,6 +240,8 @@ export default function AdminPage() {
 
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [designsSearchQuery, setDesignsSearchQuery] = useState('');
+  const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
+  const [requestSearchQuery, setRequestSearchQuery] = useState('');
 
   // Sizing & Fabric dynamic options states
   const [sizeOptions, setSizeOptions] = useState(['S', 'M', 'L', 'XL', 'XXL', '3XL']);
@@ -1386,6 +1388,69 @@ export default function AdminPage() {
         {activeTab === 'dashboard' && (
           <div className="space-y-8">
             <h2 className="text-3xl font-black uppercase text-white">{t('sidebar.dashboard')}</h2>
+
+            {/* Quick Lookup Bar */}
+            <div className="bg-zinc-900 border-4 border-black p-6 rounded-3xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-w-xl text-left font-mono">
+              <h3 className="text-xs font-black uppercase tracking-wider text-[#E07A5F] mb-2">🔍 Quick Code Lookup</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter Order Code or Problem Code..."
+                  value={dashboardSearchQuery}
+                  onChange={(e) => setDashboardSearchQuery(e.target.value)}
+                  className="flex-1 px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-xs focus:outline-none focus:border-brand-accent font-mono select-text"
+                />
+                {dashboardSearchQuery && (
+                  <button
+                    onClick={() => setDashboardSearchQuery('')}
+                    className="px-3 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-xl cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              
+              {dashboardSearchQuery.trim() && (() => {
+                const query = dashboardSearchQuery.trim().toLowerCase();
+                const matchedOrders = orders.filter(o => {
+                  const code = (o.order_code || o.id.split('-')[0]).toLowerCase();
+                  const rejCode = o.rejection_reason && o.rejection_reason.toLowerCase().includes(query);
+                  return code.includes(query) || !!rejCode;
+                });
+
+                if (matchedOrders.length === 0) {
+                  return (
+                    <p className="text-[10px] font-bold text-zinc-500 mt-3 italic">
+                      No matching orders or problem codes found.
+                    </p>
+                  );
+                }
+
+                return (
+                  <div className="mt-4 space-y-3 border-t border-zinc-850 pt-3">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Search Results:</span>
+                    {matchedOrders.map(o => (
+                      <div key={o.id} className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-left select-text">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-white font-mono font-bold text-xs select-all">{o.order_code || o.id.substring(0, 8)}</span>
+                          <span className="px-1.5 py-0.5 bg-zinc-800 text-[8px] uppercase font-bold text-brand-accent rounded border border-zinc-700">{o.status}</span>
+                        </div>
+                        <div className="text-[10px] space-y-1 mt-1 text-zinc-300">
+                          <p><strong className="text-zinc-500 font-bold block">Customer:</strong> {o.customer_name} ({o.customer_phone})</p>
+                          {o.customer_email && <p><strong className="text-zinc-500 font-bold block">Email:</strong> {o.customer_email}</p>}
+                          <p><strong className="text-zinc-500 font-bold block">Total:</strong> {o.price} EGP | <strong className="text-zinc-500 font-bold block">Payment:</strong> {o.payment_method}</p>
+                          {o.rejection_reason && (
+                            <p className="text-[#E07A5F] bg-[#E07A5F]/10 border border-[#E07A5F]/20 p-1.5 rounded mt-1 font-mono text-[9px] whitespace-pre-wrap">
+                              {o.rejection_reason}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
 
             {/* ────── OUT-OF-STOCK & LOW STOCK ALERTS ────── */}
             {(() => {
@@ -3701,7 +3766,16 @@ export default function AdminPage() {
         {/* TAB 5: CUSTOM DESIGN REQUESTS */}
         {activeTab === 'requests' && (
           <div className="space-y-6">
-            <h2 className="text-3xl font-black uppercase text-white">{t('sidebar.custom_requests')}</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h2 className="text-3xl font-black uppercase text-white">{t('sidebar.custom_requests')}</h2>
+              <input
+                type="text"
+                value={requestSearchQuery}
+                onChange={(e) => setRequestSearchQuery(e.target.value)}
+                placeholder={locale === 'ar' ? 'ابحث بالاسم، انستغرام، أو الكود...' : 'Search by name, Instagram, or code...'}
+                className="w-full sm:max-w-xs px-3.5 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono select-text"
+              />
+            </div>
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
@@ -3717,7 +3791,34 @@ export default function AdminPage() {
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-zinc-800 text-xs">
-                   {customRequests.map((req) => (
+                   {(() => {
+                      const query = requestSearchQuery.toLowerCase().trim();
+                      const filteredRequests = customRequests.filter(req => {
+                        if (!query) return true;
+                        const clientName = (req.customer_name || '').toLowerCase();
+                        const clientIg = (req.instagram_username || '').toLowerCase();
+                        const clientEmail = (req.email || '').toLowerCase();
+                        const clientPhone = (req.customer_phone || '').toLowerCase();
+                        const reqId = req.id.toLowerCase();
+                        
+                        const directMatch = clientName.includes(query) || 
+                                           clientIg.includes(query) || 
+                                           clientEmail.includes(query) || 
+                                           clientPhone.includes(query) || 
+                                           reqId.includes(query);
+                                           
+                        if (directMatch) return true;
+
+                        const matchingOrder = orders.find(o => {
+                          const hasReqId = o.notes && o.notes.toLowerCase().includes(req.id.toLowerCase().substring(0, 8));
+                          const hasProblemCode = o.rejection_reason && o.rejection_reason.toLowerCase().includes(query);
+                          return hasReqId && hasProblemCode;
+                        });
+
+                        return !!matchingOrder;
+                      });
+                      return filteredRequests;
+                    })().map((req) => (
                      <Fragment key={req.id}>
                        <tr className="hover:bg-zinc-800/20 text-zinc-300">
                          <td className="p-4">
@@ -5684,9 +5785,11 @@ export default function AdminPage() {
 
                         const code = (o.order_code || o.id.split('-')[0]).toLowerCase();
                         const query = orderSearchQuery.toLowerCase();
+                        const rejectionMatch = o.rejection_reason && o.rejection_reason.toLowerCase().includes(query);
                         return code.includes(query) || 
                                o.customer_name.toLowerCase().includes(query) || 
-                               o.customer_phone.includes(query);
+                               o.customer_phone.includes(query) ||
+                               !!rejectionMatch;
                       });
                       
                       if (filtered.length === 0) {
