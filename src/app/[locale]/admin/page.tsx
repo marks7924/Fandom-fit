@@ -1278,6 +1278,102 @@ export default function AdminPage() {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    let labelsHtml = '';
+    targetOrders.forEach(o => {
+      const itemsList = o.items || [];
+      let itemsTableRows = '';
+      itemsList.forEach((item: any) => {
+        const prodName = item.product_name || item.product?.name_en || 'Custom Product';
+        const size = item.size || 'M';
+        const fabric = item.fabric || 'Standard Cotton';
+        const fit = item.fit_type || item.fitType || 'Oversized';
+        const qty = item.quantity || 1;
+        itemsTableRows += `
+          <tr>
+            <td style="font-weight: 900;">${prodName}</td>
+            <td>${size}</td>
+            <td>${fabric}</td>
+            <td>${fit}</td>
+            <td style="text-align: center; font-weight: 900;">x${qty}</td>
+          </tr>
+        `;
+      });
+
+      const customerEmailHtml = o.customer_email 
+        ? `<div class="info-text" style="font-size: 11px; font-weight: 500; color: #555;">✉️ ${o.customer_email}</div>` 
+        : '';
+
+      const notesHtml = o.notes 
+        ? `<div class="section-title">Customer Shipping Notes:</div><div class="notes">${o.notes}</div>` 
+        : '';
+
+      labelsHtml += `
+        <div class="label-card">
+          <div class="header">
+            <div class="brand">Fandom Fit</div>
+            <div class="title">Shipping Label</div>
+          </div>
+          
+          <div class="grid">
+            <div>
+              <div class="section-title">Ship To (Recipient):</div>
+              <div class="info-box">
+                <div class="info-text" style="font-size: 15px; font-weight: 900;">${o.customer_name}</div>
+                <div class="info-text" style="font-family: monospace; font-size: 14px;">📞 ${o.customer_phone}</div>
+                ${customerEmailHtml}
+              </div>
+            </div>
+            
+            <div>
+              <div class="section-title">Delivery Address:</div>
+              <div class="info-box">
+                <div class="info-text">${o.governorate || ''} - ${o.city || ''}</div>
+                <div class="info-text" style="font-weight: 500; font-size: 12px; margin-top: 2px;">${o.address || o.location}</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="grid">
+            <div>
+              <div class="section-title">Order Code:</div>
+              <div class="info-box" style="font-family: monospace; font-weight: 900; font-size: 14px;">
+                ${o.order_code || o.id.substring(0, 8).toUpperCase()}
+              </div>
+            </div>
+            
+            <div>
+              <div class="section-title">Payment Mode:</div>
+              <div class="info-box" style="font-weight: 900; font-size: 12px; text-transform: uppercase;">
+                ${o.payment_method === 'cod' ? 'Cash on Delivery (COD)' : o.payment_method.toUpperCase()}
+              </div>
+            </div>
+          </div>
+
+          <div class="section-title">Items Spec Breakdown:</div>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Item Description</th>
+                <th style="width: 80px;">Size</th>
+                <th style="width: 100px;">Fabric</th>
+                <th style="width: 100px;">Fit</th>
+                <th style="width: 60px; text-align: center;">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsTableRows}
+            </tbody>
+          </table>
+
+          ${notesHtml}
+
+          <div class="total-row">
+            Amount to Collect: <span style="font-size: 18px; font-weight: 900;">${o.price} EGP</span>
+          </div>
+        </div>
+      `;
+    });
+
     const htmlContent = `
       <html>
         <head>
@@ -1397,85 +1493,7 @@ export default function AdminPage() {
           </style>
         </head>
         <body>
-          \${targetOrders.map(o => {
-            const itemsList = o.items || [];
-            return \`
-              <div class="label-card">
-                <div class="header">
-                  <div class="brand">Fandom Fit</div>
-                  <div class="title">Shipping Label</div>
-                </div>
-                
-                <div class="grid">
-                  <div>
-                    <div class="section-title">Ship To (Recipient):</div>
-                    <div class="info-box">
-                      <div class="info-text" style="font-size: 15px; font-weight: 900;">\${o.customer_name}</div>
-                      <div class="info-text" style="font-family: monospace; font-size: 14px;">📞 \${o.customer_phone}</div>
-                      \${o.customer_email ? \`<div class="info-text" style="font-size: 11px; font-weight: 500; color: #555;">✉️ \${o.customer_email}</div>\` : ''}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div class="section-title">Delivery Address:</div>
-                    <div class="info-box">
-                      <div class="info-text">\${o.governorate || ''} - \${o.city || ''}</div>
-                      <div class="info-text" style="font-weight: 500; font-size: 12px; margin-top: 2px;">\${o.address || o.location}</div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="grid">
-                  <div>
-                    <div class="section-title">Order Code:</div>
-                    <div class="info-box" style="font-family: monospace; font-weight: 900; font-size: 14px;">
-                      \${o.order_code || o.id.substring(0, 8).toUpperCase()}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div class="section-title">Payment Mode:</div>
-                    <div class="info-box" style="font-weight: 900; font-size: 12px; text-transform: uppercase;">
-                      \${o.payment_method === 'cod' ? 'Cash on Delivery (COD)' : o.payment_method.toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="section-title">Items Spec Breakdown:</div>
-                <table class="items-table">
-                  <thead>
-                    <tr>
-                      <th>Item Description</th>
-                      <th style="width: 80px;">Size</th>
-                      <th style="width: 100px;">Fabric</th>
-                      <th style="width: 100px;">Fit</th>
-                      <th style="width: 60px; text-align: center;">Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    \${itemsList.map((item: any) => \`
-                      <tr>
-                        <td style="font-weight: 900;">\${item.product_name || item.product?.name_en || 'Custom Product'}</td>
-                        <td>\${item.size || 'M'}</td>
-                        <td>\${item.fabric || 'Standard Cotton'}</td>
-                        <td>\${item.fit_type || item.fitType || 'Oversized'}</td>
-                        <td style="text-align: center; font-weight: 900;">x\${item.quantity || 1}</td>
-                      </tr>
-                    \`).join('')}
-                  </tbody>
-                </table>
-
-                \${o.notes ? \`
-                  <div class="section-title">Customer Shipping Notes:</div>
-                  <div class="notes">\${o.notes}</div>
-                \` : ''}
-
-                <div class="total-row">
-                  Amount to Collect: <span style="font-size: 18px; font-weight: 900;">\${o.price} EGP</span>
-                </div>
-              </div>
-            \`;
-          }).join('')}
+          ${labelsHtml}
           <script>
             window.onload = function() {
               window.print();
@@ -1508,9 +1526,14 @@ export default function AdminPage() {
     ];
 
     const rows = targetOrders.map(o => {
-      const itemsString = (o.items || []).map((i: any) => 
-        `\${i.product_name || i.product?.name_en || 'Item'} (\${i.size || 'M'}, \${i.fabric || 'Standard'}, \${i.fit_type || i.fitType || 'Oversized'} x\${i.quantity || 1})`
-      ).join('; ');
+      const itemsString = (o.items || []).map((i: any) => {
+        const name = i.product_name || i.product?.name_en || 'Item';
+        const size = i.size || 'M';
+        const fabric = i.fabric || 'Standard';
+        const fit = i.fit_type || i.fitType || 'Oversized';
+        const qty = i.quantity || 1;
+        return `${name} (${size}, ${fabric}, ${fit} x${qty})`;
+      }).join('; ');
 
       return [
         o.order_code || o.id,
@@ -1525,20 +1548,20 @@ export default function AdminPage() {
         itemsString.replace(/"/g, '""'),
         o.price,
         o.payment_method,
-        (o.notes || '').replace(/\\n/g, ' ').replace(/"/g, '""')
+        (o.notes || '').replace(/\n/g, ' ').replace(/"/g, '""')
       ];
     });
 
     const csvContent = [
       headers.join(','),
-      ...rows.map(row => row.map(val => `"\${val}"`).join(','))
-    ].join('\\r\\n');
+      ...rows.map(row => row.map(val => `"${val}"`).join(','))
+    ].join('\r\n');
 
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `fandom-fit-orders-\${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute('download', `fandom-fit-orders-${new Date().toISOString().slice(0,10)}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
