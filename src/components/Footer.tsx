@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { Globe } from 'lucide-react';
+import { Globe, X } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import BrandLogo from './BrandLogo';
 import EditableText from './EditableText';
 import { useStore } from '@/lib/store';
+import { motion, AnimatePresence } from 'framer-motion';
 
 function FacebookIcon({ size = 20, className = '' }: { size?: number; className?: string }) {
   return (
@@ -30,6 +32,7 @@ export default function Footer() {
   const tn = useTranslations('nav');
   const locale = useLocale();
   const { settings } = useStore();
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
 
   const currentYear = new Date().getFullYear();
 
@@ -152,6 +155,13 @@ export default function Footer() {
               defaultAr={`© ${currentYear} فاندوم فيت. جميع الحقوق محفوظة.`} 
             />
           </span>
+          <button 
+            type="button"
+            onClick={() => setIsTermsOpen(true)}
+            className="text-[10px] font-black uppercase tracking-widest text-[#EDE0D0]/45 hover:text-brand-accent transition-colors cursor-pointer border-b border-[#EDE0D0]/20 pb-0.5"
+          >
+            {locale === 'ar' ? 'الشروط والسياسات' : 'Terms & Policies'}
+          </button>
           <span className="text-[9px] font-black uppercase tracking-wider text-brand-accent">
             <EditableText
               textKey="footer_rights"
@@ -162,6 +172,62 @@ export default function Footer() {
         </div>
 
       </div>
+
+      {/* Terms & Policies Modal Overlay */}
+      <AnimatePresence>
+        {isTermsOpen && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm select-none">
+            {/* Backdrop click to close */}
+            <div className="absolute inset-0 cursor-pointer" onClick={() => setIsTermsOpen(false)} />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-lg bg-[#EDE0D0] border-4 border-black p-6 rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] z-10 flex flex-col max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b-3 border-black pb-3 mb-4">
+                <h3 className="text-lg font-black uppercase tracking-wider text-black flex items-center gap-1.5">
+                  📜 {locale === 'ar' ? 'الشروط والسياسات' : 'Terms & Policies'}
+                </h3>
+                <button 
+                  onClick={() => setIsTermsOpen(false)}
+                  className="p-1 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer text-black"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Scrollable Terms Content */}
+              <div className="flex-1 overflow-y-auto pr-2 space-y-4 text-xs font-semibold text-black/80 font-mono leading-relaxed text-left rtl:text-right select-text">
+                {(() => {
+                  const defaultTermsEn = `FANDOM FIT - TERMS & POLICIES\n\n1. Return & Exchange Policy\n- Returns and exchanges are accepted within 14 days of delivery.\n- Items must be unused, in their original packaging, and with all tags attached.\n- To initiate a return or exchange, contact our customer support team directly via our Instagram handle.\n- Shipping fees for returns and exchanges are paid by the customer unless the product is defective or incorrect.\n\n2. Custom Design Requests Policy\n- Custom apparel is specially made to order based on your inputs.\n- No returns or exchanges are accepted for custom designs unless there is a clear manufacturing defect or a size mismatch caused by our team.\n- Pricing for custom requests is decided after review and is final once accepted and checked out.\n\n3. Payment & Delivery\n- Cash on Delivery (COD) orders require a 50% upfront payment for custom requests.\n- Paymob credit/debit card transactions are processed securely.\n- Standard shipping takes 3-5 business days across Egypt.`;
+
+                  const defaultTermsAr = `فاندوم فيت - الشروط والسياسات\n\n١. سياسة الاسترجاع والاستبدال\n- يُقبل الاسترجاع والاستبدال خلال ١٤ يوماً من تاريخ استلام الطلب.\n- يجب أن تكون المنتجات غير مستخدمة، في تغليفها الأصلي، ومع جميع الملصقات التابعة لها.\n- لبدء عملية الإرجاع أو الاستبدال، يرجى التواصل مع خدمة العملاء عبر حسابنا على إنستغرام.\n- يتحمل العميل مصاريف الشحن للاسترجاع والاستبدال إلا في حالة وجود عيب مصنعي في المنتج.\n\n٢. سياسة طلبات التفصيل الخاصة\n- يتم تصنيع طلبات التفصيل الخاصة بناءً على اختياراتك ومواصفاتك الفردية.\n- لا يُقبل استرجاع أو استبدال منتجات التفصيل الخاصة إلا في حالة وجود عيب مصنعي واضح أو اختلاف في المقاسات ناتج عن فريقنا.\n- يتم تحديد أسعار التصاميم الخاصة بعد مراجعتها وتعتبر نهائية بمجرد الدفع.\n\n٣. الدفع والتوصيل\n- تتطلب طلبات الدفع عند الاستلام (COD) للتفصيل الخاص دفع ٥٠٪ مقدماً.\n- يتم معالجة جميع معاملات بطاقات الائتمان عبر بوابة Paymob بأمان تام.\n- يستغرق التوصيل العادي من ٣ إلى ٥ أيام عمل لجميع المحافظات المصرية.`;
+
+                  const text = (locale === 'ar' ? (settings.terms_ar || defaultTermsAr) : (settings.terms_en || defaultTermsEn)) as string;
+                  return text.split('\n').map((line: string, i: number) => {
+                    if (!line.trim()) return <div key={i} className="h-2" />;
+                    return <p key={i}>{line}</p>;
+                  });
+                })()}
+              </div>
+
+              {/* Footer close button */}
+              <div className="mt-4 pt-3 border-t-2 border-dashed border-black/20 flex justify-end">
+                <button
+                  onClick={() => setIsTermsOpen(false)}
+                  className="px-5 py-2 bg-black hover:bg-brand-accent text-[#EDE0D0] hover:text-white border-2 border-black rounded-xl font-black uppercase text-[10px] cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all active:translate-y-0.5"
+                >
+                  {locale === 'ar' ? 'إغلاق النافذة' : 'Close Details'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </footer>
   );
 }

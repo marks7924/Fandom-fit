@@ -165,6 +165,8 @@ export default function AdminPage() {
     delivery_fee: 50,
     chat_widget_enabled: true,
     hero_product_id: '',
+    terms_en: '',
+    terms_ar: '',
     account_fields: {} as Record<string, string>,
     text_overrides: {} as Record<string, string>,
     why_choose_us: [] as any[],
@@ -468,6 +470,8 @@ export default function AdminPage() {
         delivery_fee: Number(settings.delivery_fee ?? 50),
         chat_widget_enabled: settings.chat_widget_enabled !== false,
         hero_product_id: settings.hero_product_id || '',
+        terms_en: settings.terms_en || '',
+        terms_ar: settings.terms_ar || '',
         account_fields: customAccFields,
         text_overrides: customOverrides,
         why_choose_us: Array.isArray(customWhy) ? customWhy : [],
@@ -4732,6 +4736,52 @@ export default function AdminPage() {
                     <p className="text-[9px] text-zinc-500 mt-1">
                       Toggle the floating support chat bubble globally on your storefront homepages.
                     </p>
+                  </div>
+
+                </div>
+              </details>
+
+              {/* ── CARD: Terms & Policies ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📜</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Terms & Policies</p>
+                      <p className="text-[10px] text-zinc-500">Edit storefront terms, returns & exchanging policies</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-3 border-t border-zinc-800 space-y-4 font-mono">
+                  
+                  {/* English Terms Textarea */}
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">
+                      📜 English Terms & Policies (Returns & Exchanging)
+                    </label>
+                    <textarea 
+                      rows={8}
+                      value={settingsForm.terms_en}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, terms_en: e.target.value })}
+                      placeholder="Enter the English terms & policies..."
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent resize-y font-mono" 
+                    />
+                  </div>
+
+                  {/* Arabic Terms Textarea */}
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">
+                      📜 الترجمة العربية للشروط والسياسات
+                    </label>
+                    <textarea 
+                      rows={8}
+                      value={settingsForm.terms_ar}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, terms_ar: e.target.value })}
+                      placeholder="أدخل الشروط والسياسات باللغة العربية..."
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent resize-y text-right font-mono" 
+                      dir="rtl"
+                    />
                   </div>
 
                 </div>
