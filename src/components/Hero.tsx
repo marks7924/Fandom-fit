@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
+import { useStore } from '@/lib/store';
 import { ArrowRight } from 'lucide-react';
 import InstagramIcon from './InstagramIcon';
 import Image from 'next/image';
@@ -55,6 +56,8 @@ const LightningDoodle = () => (
 export default function Hero() {
   const t = useTranslations('hero');
   const [bannerError, setBannerError] = useState(false);
+  const { settings, products, setPreviewProduct, addToCart, setIsCartOpen } = useStore();
+  const heroProduct = products.find(p => p.id === settings.hero_product_id);
 
   // Floating animations configs
   const floatAnimation = (delay: number) => ({
@@ -160,8 +163,52 @@ export default function Hero() {
               {/* Decorative Red pushpin / tape */}
               <div className="absolute -top-3 left-[40%] w-16 h-6 bg-[#E07A5F]/85 border-2 border-black/40 rotate-[15deg] shadow-sm"></div>
               
-              <div className="bg-[#EDE0D0] border-3 border-black overflow-hidden relative aspect-[4/5] rounded-md flex items-center justify-center">
-                {!bannerError ? (
+              <div className="bg-[#EDE0D0] border-3 border-black overflow-hidden relative aspect-[4/5] rounded-md flex items-center justify-center group/polaroid">
+                {heroProduct ? (
+                  <>
+                    <Image
+                      src={(heroProduct.images && heroProduct.images[0]) || '/placeholders/arcade_front.jpg'}
+                      alt={heroProduct.name_en}
+                      fill
+                      priority
+                      unoptimized
+                      className="object-cover transition-transform duration-300 group-hover/polaroid:scale-105"
+                    />
+                    
+                    {/* Hover Action Overlay */}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/polaroid:opacity-100 transition-opacity duration-200 flex flex-col justify-center items-center gap-3 p-4 z-10">
+                      <h4 className="text-white text-xs font-black uppercase tracking-wider text-center max-w-[200px]">
+                        {heroProduct.name_en}
+                      </h4>
+                      <p className="text-brand-accent text-xs font-bold font-mono">
+                        {heroProduct.price} EGP
+                      </p>
+                      
+                      <div className="flex flex-col gap-2 w-full max-w-[160px]">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewProduct(heroProduct)}
+                          className="w-full py-2 bg-white hover:bg-zinc-100 text-black border-2 border-black rounded-lg text-[10px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all cursor-pointer"
+                        >
+                          🔍 Quick View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const defaultSize = heroProduct.available_sizes?.[0] || 'M';
+                            const defaultFabric = heroProduct.material_options?.[0] || 'Standard Cotton';
+                            const defaultFit = heroProduct.fit_type === 'regular' ? 'regular' : 'oversized';
+                            addToCart(heroProduct, defaultSize, defaultFabric, 1, defaultFit);
+                            setIsCartOpen(true);
+                          }}
+                          className="w-full py-2 bg-brand-accent hover:bg-brand-accent/95 text-white border-2 border-black rounded-lg text-[10px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all cursor-pointer"
+                        >
+                          🛒 Add To Cart
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : !bannerError ? (
                   <Image
                     src="/banners/hero_featured.jpg"
                     alt="Featured Fandom Tee"
@@ -188,8 +235,12 @@ export default function Hero() {
                 )}
               </div>
               <div className="absolute bottom-3 left-4 right-4 flex justify-between items-center">
-                <span className="font-handwriting text-xl text-black">New Season Drop</span>
-                <span className="text-xs font-black uppercase px-2 py-0.5 bg-black text-white rounded">Premium</span>
+                <span className="font-handwriting text-xl text-black">
+                  {heroProduct ? heroProduct.name_en : 'New Season Drop'}
+                </span>
+                <span className="text-xs font-black uppercase px-2 py-0.5 bg-black text-white rounded">
+                  {heroProduct ? `${heroProduct.price} EGP` : 'Premium'}
+                </span>
               </div>
 
               {/* Cotton sticker — absolute to the polaroid card (no overflow:hidden on card).

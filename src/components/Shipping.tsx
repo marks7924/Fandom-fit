@@ -2,6 +2,7 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { MapPin, ShieldCheck, Compass } from 'lucide-react';
+import EditableText from './EditableText';
 
 export default function Shipping() {
   const t = useTranslations('shipping');
@@ -19,15 +20,15 @@ export default function Shipping() {
           <div className="lg:col-span-6 p-8 sm:p-12 flex flex-col justify-center border-b-3 lg:border-b-0 lg:border-r-3 border-black">
             <span className="flex items-center gap-2 text-xs font-black uppercase text-brand-accent tracking-widest mb-4">
               <MapPin size={16} />
-              {locale === 'ar' ? 'تغطية الشحن بالكامل' : 'EGYPT DELIVERY COVERAGE'}
+              <EditableText textKey="shipping_badge" defaultEn="EGYPT DELIVERY COVERAGE" defaultAr="تغطية الشحن بالكامل" />
             </span>
 
             <h2 className="text-4xl font-black uppercase text-black leading-tight">
-              {t('title')}
+              <EditableText textKey="shipping_title" defaultEn="Egypt-Wide Shipping" defaultAr="شحن لجميع أنحاء مصر" />
             </h2>
 
             <p className="mt-4 text-lg font-semibold text-black/75 font-handwriting">
-              {t('subtitle')}
+              <EditableText textKey="shipping_subtitle" defaultEn="From Alexandria to Aswan, we've got you covered." defaultAr="من الإسكندرية لأسوان، طلبك متأمن وواصل لعندك." />
             </p>
 
             <div className="mt-8 space-y-4">
@@ -37,9 +38,11 @@ export default function Shipping() {
                   <MapPin size={18} />
                 </div>
                 <div>
-                  <h4 className="text-sm font-black uppercase text-black">{t('governorates')}</h4>
+                  <h4 className="text-sm font-black uppercase text-black">
+                    <EditableText textKey="shipping_point1_title" defaultEn="All Egyptian Governorates Covered" defaultAr="تغطية كافة محافظات مصر" />
+                  </h4>
                   <p className="text-xs font-semibold text-black/50 font-handwriting mt-0.5">
-                    {locale === 'ar' ? 'القاهرة، الجيزة، الإسكندرية، محافظات الدلتا، القناة، والصعيد.' : 'Cairo, Giza, Alexandria, Delta governorates, Canal, and Upper Egypt.'}
+                    <EditableText textKey="shipping_point1_desc" defaultEn="Cairo, Giza, Alexandria, Delta governorates, Canal, and Upper Egypt." defaultAr="القاهرة، الجيزة، الإسكندرية، محافظات الدلتا، القناة، والصعيد." />
                   </p>
                 </div>
               </div>
@@ -50,9 +53,11 @@ export default function Shipping() {
                   <Compass className="text-black" size={18} />
                 </div>
                 <div>
-                  <h4 className="text-sm font-black uppercase text-black">{t('duration')}</h4>
+                  <h4 className="text-sm font-black uppercase text-black">
+                    <EditableText textKey="shipping_point2_title" defaultEn="Delivery in 3-5 working days" defaultAr="التوصيل خلال ٣ إلى ٥ أيام عمل" />
+                  </h4>
                   <p className="text-xs font-semibold text-black/50 font-handwriting mt-0.5">
-                    {locale === 'ar' ? 'نشحن مباشرة لباب منزلك خلال ٣ إلى ٥ أيام عمل.' : 'Shipped direct to your doorstep in 3 to 5 business days.'}
+                    <EditableText textKey="shipping_point2_desc" defaultEn="Shipped direct to your doorstep in 3 to 5 business days." defaultAr="نشحن مباشرة لباب منزلك خلال ٣ إلى ٥ أيام عمل." />
                   </p>
                 </div>
               </div>
@@ -63,9 +68,11 @@ export default function Shipping() {
                   <ShieldCheck size={18} />
                 </div>
                 <div>
-                  <h4 className="text-sm font-black uppercase text-black">{t('packaging')}</h4>
+                  <h4 className="text-sm font-black uppercase text-black">
+                    <EditableText textKey="shipping_point3_title" defaultEn="Secure Collector's Packaging" defaultAr="تغليف مميز وحماية فائقة" />
+                  </h4>
                   <p className="text-xs font-semibold text-black/50 font-handwriting mt-0.5">
-                    {locale === 'ar' ? 'تغليف متين ومقاوم للمياه يحمي ملابسك تماماً.' : 'Water-resistant solid boxes protecting your custom apparel.'}
+                    <EditableText textKey="shipping_point3_desc" defaultEn="Water-resistant solid boxes protecting your custom apparel." defaultAr="تغليف متين ومقاوم للمياه يحمي ملابسك تماماً." />
                   </p>
                 </div>
               </div>
@@ -94,10 +101,10 @@ export default function Shipping() {
               
               <div className="mt-6 border-2 border-dashed border-[#EDE0D0]/30 p-4 rounded-xl text-center w-full">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#F2CC8F] block">
-                  {locale === 'ar' ? 'أسعار الشحن:' : 'FLAT SHIPPING RATE'}
+                  <EditableText textKey="shipping_flat_rate_label" defaultEn="FLAT SHIPPING RATE" defaultAr="أسعار الشحن:" />
                 </span>
                 <span className="text-xl font-black text-[#EDE0D0] mt-1 block">
-                  {locale === 'ar' ? '٥٠ جنيه فقط لجميع المحافظات!' : 'Only 50 EGP Egypt-wide!'}
+                  <EditableText textKey="shipping_flat_rate_value" defaultEn="Only 50 EGP Egypt-wide!" defaultAr="٥٠ جنيه فقط لجميع المحافظات!" />
                 </span>
               </div>
             </div>

@@ -164,6 +164,7 @@ export default function AdminPage() {
     loading_logo_url: '',
     delivery_fee: 50,
     chat_widget_enabled: true,
+    hero_product_id: '',
     account_fields: {} as Record<string, string>,
     text_overrides: {} as Record<string, string>,
     why_choose_us: [] as any[],
@@ -466,6 +467,7 @@ export default function AdminPage() {
         loading_logo_url: settings.loading_logo_url || '',
         delivery_fee: Number(settings.delivery_fee ?? 50),
         chat_widget_enabled: settings.chat_widget_enabled !== false,
+        hero_product_id: settings.hero_product_id || '',
         account_fields: customAccFields,
         text_overrides: customOverrides,
         why_choose_us: Array.isArray(customWhy) ? customWhy : [],
@@ -4522,6 +4524,27 @@ export default function AdminPage() {
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-zinc-800/50">
+                    <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
+                      🌟 Hero Polaroid Featured Product
+                    </label>
+                    <select
+                      value={settingsForm.hero_product_id}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, hero_product_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent cursor-pointer"
+                    >
+                      <option value="">-- Use Default Illustrated Polaroid Image --</option>
+                      {products && products.map((prod) => (
+                        <option key={prod.id} value={prod.id}>
+                          {prod.name_en} ({prod.price} EGP)
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[9px] text-zinc-500 mt-1">
+                      Choose a product from your catalog to render directly inside the home hero Polaroid frame. Visitors will be able to preview or buy it directly from the hero section!
+                    </p>
                   </div>
                 </div>
               </details>

@@ -141,11 +141,19 @@ export default function WhyChooseUs() {
               </div>
 
               <h3 className="text-lg font-black uppercase text-black">
-                {reason.title}
+                <EditableText
+                  textKey={`why_choose_us_reason_title_${idx}`}
+                  defaultEn={locale === 'ar' ? '' : reason.title}
+                  defaultAr={locale === 'ar' ? reason.title : ''}
+                />
               </h3>
               
               <p className="mt-2 text-xs font-semibold text-black/60 font-handwriting leading-relaxed">
-                {reason.desc}
+                <EditableText
+                  textKey={`why_choose_us_reason_desc_${idx}`}
+                  defaultEn={locale === 'ar' ? '' : reason.desc}
+                  defaultAr={locale === 'ar' ? reason.desc : ''}
+                />
               </p>
             </motion.div>
           ))}

@@ -69,9 +69,15 @@ export default function FAQ() {
                 {/* Header Toggle */}
                 <button
                   onClick={() => setOpenIdx(isOpen ? null : idx)}
-                  className="w-full flex items-center justify-between p-5 text-left rtl:text-right font-black uppercase text-sm sm:text-base text-black hover:bg-black/[0.02] cursor-pointer"
+                  className="w-full flex items-center justify-between p-5 text-left rtl:text-right font-black uppercase text-sm sm:text-base text-black hover:bg-black/[0.02] cursor-pointer animate-none"
                 >
-                  <span className="pr-4">{item.q}</span>
+                  <span className="pr-4">
+                    <EditableText
+                      textKey={`faq_q_${idx}`}
+                      defaultEn={locale === 'ar' ? '' : item.q}
+                      defaultAr={locale === 'ar' ? item.q : ''}
+                    />
+                  </span>
                   {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                 </button>
 
@@ -86,7 +92,11 @@ export default function FAQ() {
                       className="overflow-hidden border-t border-black/10"
                     >
                       <div className="p-5 text-xs sm:text-sm font-semibold text-black/75 leading-relaxed font-handwriting bg-[#EDE0D0]/10">
-                        {item.a}
+                        <EditableText
+                          textKey={`faq_a_${idx}`}
+                          defaultEn={locale === 'ar' ? '' : item.a}
+                          defaultAr={locale === 'ar' ? item.a : ''}
+                        />
                       </div>
                     </motion.div>
                   )}
