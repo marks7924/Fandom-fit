@@ -497,6 +497,26 @@ export default function AdminPage() {
     }
   }, [isAuthenticated, settings]);
 
+  // ── Supabase Realtime: auto-refresh orders when new ones arrive ──────────
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const channel = supabase
+      .channel('admin-orders-live')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+        fetchAdminRequests();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, fetchOrders, fetchAdminRequests]);
+
   // Load and parse payment settings
   useEffect(() => {
     if (settings) {
@@ -6543,6 +6563,7 @@ export default function AdminPage() {
                     <th className="p-4">{locale === 'ar' ? 'العميل' : 'Customer'}</th>
                     <th className="p-4">{locale === 'ar' ? 'رقم الهاتف' : 'Phone'}</th>
                     <th className="p-4">{locale === 'ar' ? 'المحافظة / العنوان' : 'Location'}</th>
+                    <th className="p-4">{locale === 'ar' ? 'التاريخ' : 'Date'}</th>
                     <th className="p-4">{locale === 'ar' ? 'تفاصيل الطلب والدفع' : 'Order & Payment Details'}</th>
                     <th className="p-4 text-right">{locale === 'ar' ? 'الحالة والإجراءات' : 'Status & Actions'}</th>
                   </tr>
@@ -6628,6 +6649,10 @@ export default function AdminPage() {
                             </td>
                             <td className="p-4 text-brand-accent font-semibold">{order.customer_phone}</td>
                             <td className="p-4 max-w-xs font-semibold">{order.location}</td>
+                            <td className="p-4 whitespace-nowrap">
+                              <div className="text-zinc-300 font-bold">{new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                              <div className="text-zinc-500 text-[9px]">{new Date(order.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
+                            </td>
                             <td className="p-4 max-w-sm space-y-2">
                               <div className="text-white font-bold">{order.product_name} ({order.price} EGP)</div>
                               {order.items && Array.isArray(order.items) && (
@@ -6670,65 +6695,117 @@ export default function AdminPage() {
                               )}
                               
                               {/* Payment info detail block */}
-                              <div className="text-[10px] text-zinc-400 mt-1.5 font-bold space-y-1 bg-zinc-950 p-2 border border-zinc-850 rounded">
-                                <div className="flex justify-between">
-                                  <span>PAYMENT METHOD:</span>
-                                  <span className="text-white">
-                                    {order.payment_method === 'instapay' ? 'InstaPay Manual' : order.payment_method?.startsWith('paymob') ? 'Pay Online (Paymob)' : 'Cash on Delivery (COD)'}
-                                  </span>
-                                </div>
-                                {order.coupon_code && (
-                                  <div className="text-green-500 text-[9px] uppercase">
-                                    🎟️ Coupon: {order.coupon_code}
+                                <div className="text-[10px] text-zinc-400 mt-1.5 font-bold space-y-1 bg-zinc-950 p-2 border border-zinc-850 rounded">
+                                  <div className="flex justify-between">
+                                    <span>PAYMENT METHOD:</span>
+                                    <span className="text-white">
+                                      {order.payment_method === 'instapay' ? 'InstaPay Manual' : order.payment_method?.startsWith('paymob') ? 'Pay Online (Paymob)' : 'Cash on Delivery (COD)'}
+                                    </span>
                                   </div>
-                                )}
-                                {order.referral_code && (
-                                  <div className="text-blue-400 text-[9px] uppercase">
-                                    🔗 Referred By: {order.referral_code}
-                                  </div>
-                                )}
-                                {order.reward_coupon_code && (
-                                  <div className="text-amber-500 text-[9px] uppercase font-black">
-                                    🎁 Reward Issued: {order.reward_coupon_code}
-                                  </div>
-                                )}
+                                  {/* Total / Due breakdown for upfront-paid orders */}
+                                  {(() => {
+                                    const notes = order.notes || '';
+                                    const total = Number(order.price || 0);
+                                    // COD: parse balance due from notes
+                                    const codBalanceMatch = notes.match(/Balance due on delivery:\s*(\d+(?:\.\d+)?)\s*EGP/);
+                                    const codDepositMatch = notes.match(/upfront\.\s*Balance/i);
+                                    // Edit price rise: extra due for online
+                                    const editDueMatch = notes.match(/Price rose by \+(\d+(?:\.\d+)?)\s*EGP/);
 
-                                {/* Receipt Screenshot Preview & Download */}
-                                {order.payment_receipt_url && (
-                                  <div className="mt-2 space-y-1.5 border-t border-zinc-850 pt-2 select-none">
-                                    <span className="text-[8px] uppercase font-bold text-zinc-500 block">Transaction Screenshot:</span>
-                                    <div className="relative w-28 aspect-[3/4] border border-zinc-800 rounded bg-zinc-900 overflow-hidden group">
-                                      <img
-                                        src={order.payment_receipt_url}
-                                        alt="InstaPay Receipt"
-                                        className="w-full h-full object-cover"
-                                      />
+                                    if (codBalanceMatch && codDepositMatch) {
+                                      const due = Number(codBalanceMatch[1]);
+                                      const paid = total - due;
+                                      return (
+                                        <>
+                                          <div className="flex justify-between text-[9px] border-t border-zinc-800 pt-1 mt-1">
+                                            <span className="text-zinc-400">TOTAL:</span>
+                                            <span className="text-white font-black">{total} EGP</span>
+                                          </div>
+                                          <div className="flex justify-between text-[9px]">
+                                            <span className="text-green-400">PAID UPFRONT:</span>
+                                            <span className="text-green-400 font-black">{paid} EGP</span>
+                                          </div>
+                                          <div className="flex justify-between text-[9px]">
+                                            <span className="text-amber-400">DUE ON DELIVERY:</span>
+                                            <span className="text-amber-400 font-black">{due} EGP</span>
+                                          </div>
+                                        </>
+                                      );
+                                    } else if (editDueMatch) {
+                                      const extraDue = Number(editDueMatch[1]);
+                                      return (
+                                        <>
+                                          <div className="flex justify-between text-[9px] border-t border-zinc-800 pt-1 mt-1">
+                                            <span className="text-zinc-400">TOTAL:</span>
+                                            <span className="text-white font-black">{total} EGP</span>
+                                          </div>
+                                          <div className="flex justify-between text-[9px]">
+                                            <span className="text-amber-400">EXTRA DUE (EDIT):</span>
+                                            <span className="text-amber-400 font-black">+{extraDue} EGP</span>
+                                          </div>
+                                        </>
+                                      );
+                                    } else {
+                                      return (
+                                        <div className="flex justify-between text-[9px] border-t border-zinc-800 pt-1 mt-1">
+                                          <span className="text-zinc-400">TOTAL:</span>
+                                          <span className="text-white font-black">{total} EGP</span>
+                                        </div>
+                                      );
+                                    }
+                                  })()}
+                                  {order.coupon_code && (
+                                    <div className="text-green-500 text-[9px] uppercase">
+                                      🎟️ Coupon: {order.coupon_code}
+                                    </div>
+                                  )}
+                                  {order.referral_code && (
+                                    <div className="text-blue-400 text-[9px] uppercase">
+                                      🔗 Referred By: {order.referral_code}
+                                    </div>
+                                  )}
+                                  {order.reward_coupon_code && (
+                                    <div className="text-amber-500 text-[9px] uppercase font-black">
+                                      🎁 Reward Issued: {order.reward_coupon_code}
+                                    </div>
+                                  )}
+
+                                  {/* Receipt Screenshot Preview & Download */}
+                                  {order.payment_receipt_url && (
+                                    <div className="mt-2 space-y-1.5 border-t border-zinc-800 pt-2 select-none">
+                                      <span className="text-[8px] uppercase font-bold text-zinc-500 block">Transaction Screenshot:</span>
+                                      <div className="relative w-28 aspect-[3/4] border border-zinc-800 rounded bg-zinc-900 overflow-hidden group">
+                                        <img
+                                          src={order.payment_receipt_url}
+                                          alt="InstaPay Receipt"
+                                          className="w-full h-full object-cover"
+                                        />
+                                        <a
+                                          href={order.payment_receipt_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[9px] text-white font-black uppercase transition-opacity"
+                                        >
+                                          Open Image
+                                        </a>
+                                      </div>
                                       <a
                                         href={order.payment_receipt_url}
+                                        download={`receipt-${order.order_code || order.id}.jpg`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[9px] text-white font-black uppercase transition-opacity"
+                                        className="inline-block px-2 py-0.5 bg-zinc-850 hover:bg-zinc-800 text-[8px] font-bold text-white border border-zinc-700 rounded transition-colors"
                                       >
-                                        Open Image
+                                        Download Screenshot
                                       </a>
                                     </div>
-                                    <a
-                                      href={order.payment_receipt_url}
-                                      download={`receipt-${order.order_code || order.id}.jpg`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-block px-2 py-0.5 bg-zinc-850 hover:bg-zinc-800 text-[8px] font-bold text-white border border-zinc-700 rounded transition-colors"
-                                    >
-                                      Download Screenshot
-                                    </a>
-                                  </div>
-                                )}
-                                {order.rejection_reason && (
-                                  <div className="text-red-400 text-[9.5px] border-t border-zinc-850 pt-1 mt-1">
-                                    REJECTION NOTE: "{order.rejection_reason}"
-                                  </div>
-                                )}
-                              </div>
+                                  )}
+                                  {order.rejection_reason && (
+                                    <div className="text-red-400 text-[9.5px] border-t border-zinc-800 pt-1 mt-1">
+                                      REJECTION NOTE: "{order.rejection_reason}"
+                                    </div>
+                                  )}
+                                </div>
 
                               <div className="text-[10px] text-zinc-500 mt-1 whitespace-pre-wrap">{order.notes}</div>
                             </td>
