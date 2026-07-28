@@ -274,9 +274,11 @@ export default function CheckoutModal() {
   };
 
   const getFieldStatus = (fieldName: string) => {
+    if (fieldName === 'email') return 'required';
+
     const defaults: Record<string, string> = {
       name: 'required',
-      email: 'optional',
+      email: 'required',
       phone: 'required',
       governorate: 'required',
       city: 'required',
@@ -356,16 +358,38 @@ export default function CheckoutModal() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (getFieldStatus('name') === 'required' && !name) return;
-    if (getFieldStatus('phone') === 'required' && !phone) return;
-    if (getFieldStatus('email') === 'required' && !email) return;
-    if (getFieldStatus('governorate') === 'required' && !governorate) return;
-    if (getFieldStatus('city') === 'required' && !city) return;
-    if (getFieldStatus('address') === 'required' && !address) return;
-    if (getFieldStatus('notes') === 'required' && !notes) return;
+    if (!name.trim()) {
+      alert(locale === 'ar' ? 'الرجاء إدخال الاسم بالكامل.' : 'Please enter your full name.');
+      return;
+    }
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) {
+      alert(locale === 'ar' ? 'الرجاء إدخال رقم الهاتف.' : 'Please enter your phone number.');
+      return;
+    }
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      alert(locale === 'ar' ? 'الرجاء إدخال البريد الإلكتروني.' : 'Please enter your email.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      alert(locale === 'ar' ? 'الرجاء إدخال بريد إلكتروني صحيح.' : 'Please enter a valid email address.');
+      return;
+    }
+    if (!governorate) {
+      alert(locale === 'ar' ? 'الرجاء اختيار المحافظة.' : 'Please select your governorate.');
+      return;
+    }
+    if (!city.trim()) {
+      alert(locale === 'ar' ? 'الرجاء إدخال المدينة / المنطقة.' : 'Please enter your city/region.');
+      return;
+    }
+    if (!address.trim()) {
+      alert(locale === 'ar' ? 'الرجاء إدخال عنوان التوصيل بالتفصيل.' : 'Please enter your detailed delivery address.');
+      return;
+    }
 
     // Phone format Egyptian check if phone is visible/provided
-    const cleanPhone = phone.trim();
     if (getFieldStatus('phone') !== 'hidden' && cleanPhone && !/^01[0-25]\d{8}$/.test(cleanPhone)) {
       alert(locale === 'ar' ? 'الرجاء إدخال رقم موبايل مصري صحيح (مثال: 01012345678)' : 'Please enter a valid Egyptian mobile number (e.g. 01012345678)');
       return;

@@ -1535,6 +1535,30 @@ export default function AdminPage() {
       'Notes'
     ];
 
+    const getStatusLabel = (status: string) => {
+      const labels: Record<string, string> = {
+        pending: 'Pending',
+        pending_verification: 'Pending Verification',
+        completed: 'Completed',
+        rejected: 'Rejected',
+        shipping: 'Shipping',
+        ready_to_ship: 'Ready To Ship',
+        pending_payment: 'Pending Payment'
+      };
+      return labels[status] || status;
+    };
+
+    const getPaymentMethodLabel = (pm: string) => {
+      const labels: Record<string, string> = {
+        cod: 'Cash on Delivery (COD)',
+        instapay: 'Instapay Transfer',
+        paymob_card: 'Credit/Debit Card',
+        paymob_fawry: 'Fawry Payment'
+      };
+      return labels[pm] || pm;
+    };
+
+    let totalItemsCount = 0;
     const rows = targetOrders.map(o => {
       const itemsString = (o.items || []).map((i: any) => {
         const name = i.product_name || i.product?.name_en || 'Item';
@@ -1542,29 +1566,45 @@ export default function AdminPage() {
         const fabric = i.fabric || 'Standard';
         const fit = i.fit_type || i.fitType || 'Oversized';
         const qty = i.quantity || 1;
+        totalItemsCount += Number(qty);
         return `${name} (${size}, ${fabric}, ${fit} x${qty})`;
-      }).join('; ');
+      }).join('\n');
 
       return [
-        o.order_code || o.id,
-        o.status,
+        o.order_code || o.id.split('-')[0].toUpperCase(),
+        getStatusLabel(o.status),
         new Date(o.created_at).toLocaleDateString(),
         o.customer_name,
         o.customer_phone,
-        o.customer_email || '',
+        o.customer_email || 'No Email',
         o.governorate || '',
         o.city || '',
         (o.address || o.location || '').replace(/"/g, '""'),
         itemsString.replace(/"/g, '""'),
-        o.price,
-        o.payment_method,
+        `${o.price} EGP`,
+        getPaymentMethodLabel(o.payment_method),
         (o.notes || '').replace(/\n/g, ' ').replace(/"/g, '""')
       ];
     });
 
+    const totalRevenue = targetOrders.reduce((sum, o) => sum + (Number(o.price) || 0), 0);
+
+    const summaryRows = [
+      [],
+      ['SUMMARY STATISTICS', '', '', '', '', '', '', '', '', '', '', '', ''],
+      ['Total Exported Orders', `${targetOrders.length} orders`, '', '', '', '', '', '', '', '', '', '', ''],
+      ['Total Apparel Items', `${totalItemsCount} pieces`, '', '', '', '', '', '', '', '', '', '', ''],
+      ['Total Sales Volume', `${totalRevenue} EGP`, '', '', '', '', '', '', '', '', '', '', '']
+    ];
+
     const csvContent = [
+      'sep=,',
+      `"FANDOM FIT - EXPORTED ORDERS REPORT",,,,,,,,,,,,`,
+      `"Generated On: ${new Date().toLocaleString()}",,,,,,,,,,,,`,
+      `,,,,,,,,,,,,`,
       headers.join(','),
-      ...rows.map(row => row.map(val => `"${val}"`).join(','))
+      ...rows.map(row => row.map(val => `"${val}"`).join(',')),
+      ...summaryRows.map(row => row.map(val => `"${val}"`).join(','))
     ].join('\r\n');
 
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
