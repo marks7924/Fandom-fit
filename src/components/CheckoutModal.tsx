@@ -216,11 +216,11 @@ export default function CheckoutModal() {
 
   if (isSingle) {
     subtotal = singleItemPrice;
-    shippingFee = subtotal > 0 ? 50 : 0;
+    shippingFee = subtotal > 0 ? Number(settings.delivery_fee ?? 50) : 0;
   } else {
     const cottonEnabled = settings.cotton_reward_system_enabled !== false;
     const autoOffers = settings.auto_applied_offers || [];
-    const totals = getCartTotals(cart, cottonEnabled, autoOffers, thresholdOffers);
+    const totals = getCartTotals(cart, cottonEnabled, autoOffers, thresholdOffers, Number(settings.delivery_fee ?? 50));
     subtotal = totals.subtotal;
     cottonDiscount = totals.cottonDiscount;
     autoAppliedDiscount = totals.autoAppliedDiscount;

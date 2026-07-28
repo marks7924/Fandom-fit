@@ -188,6 +188,17 @@ export default function CustomDesignForm() {
                   {t('form_title')}
                 </h3>
 
+                <div className="mb-6 p-4 bg-amber-50 border-3 border-black rounded-xl shadow-[3px_3px_0px_rgba(0,0,0,1)] text-left font-mono">
+                  <h4 className="text-xs font-black uppercase text-amber-700 flex items-center gap-1.5 mb-1">
+                    🏷️ {locale === 'ar' ? 'تحديد السعر لاحقاً' : 'Price Decided Later'}
+                  </h4>
+                  <p className="text-[10px] font-bold text-zinc-600 leading-normal">
+                    {locale === 'ar' 
+                      ? 'يرجى تقديم تفاصيل التصميم الخاصة بك. سنقوم بمراجعة فكرتك وتحديد السعر النهائي لاحقاً. بمجرد القبول، ستتلقى بريداً إلكترونياً للدفع.' 
+                      : 'Please submit your design ideas first. The Fandom Fit team will review your request and set the price later. Once accepted, you will receive an email notice to customize and checkout.'}
+                  </p>
+                </div>
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   
                   {/* Topic selector */}

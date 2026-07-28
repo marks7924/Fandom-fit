@@ -194,8 +194,9 @@ export default function ChatWidget() {
   // If blocked, show blocked state in the toggle button
   const isUserBlocked = isConnected && activeChat?.is_blocked;
 
+  const isChatVisible = settings.chat_widget_enabled !== false;
   const isHomePage = pathname === '/' || pathname === '/en' || pathname === '/ar' || pathname === '/en/' || pathname === '/ar/';
-  if (!isHomePage || isCartOpen) {
+  if (!isChatVisible || !isHomePage || isCartOpen) {
     return null;
   }
 

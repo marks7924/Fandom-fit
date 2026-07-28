@@ -54,7 +54,7 @@ export default function CartDrawer() {
     thresholdOfferName,
     shipping, 
     finalTotal 
-  } = getCartTotals(cart, cottonEnabled, autoOffers, thresholdOffers);
+  } = getCartTotals(cart, cottonEnabled, autoOffers, thresholdOffers, Number(settings.delivery_fee ?? 50));
   const shippingFee = shipping;
 
   // Discount Calculation
@@ -141,12 +141,23 @@ export default function CartDrawer() {
                 {cart.reduce((sum, item) => sum + item.quantity, 0)}
               </span>
             </div>
-            <button
-              onClick={() => setIsCartOpen(false)}
-              className="p-1 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              {cart.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => useStore.getState().clearCart()}
+                  className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 border-2 border-black text-red-600 text-[9px] font-black uppercase rounded-lg transition-colors cursor-pointer shadow-[1.5px_1.5px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5"
+                >
+                  {locale === 'ar' ? 'تفريغ السلة' : 'Clear All'}
+                </button>
+              )}
+              <button
+                onClick={() => setIsCartOpen(false)}
+                className="p-1.5 border-2 border-black rounded-lg hover:bg-black/5 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {/* Cart Items List */}

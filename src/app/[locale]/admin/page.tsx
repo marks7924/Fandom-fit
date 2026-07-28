@@ -162,6 +162,8 @@ export default function AdminPage() {
     favicon_url: '',
     logo_url: '',
     loading_logo_url: '',
+    delivery_fee: 50,
+    chat_widget_enabled: true,
     account_fields: {} as Record<string, string>,
     text_overrides: {} as Record<string, string>,
     why_choose_us: [] as any[],
@@ -462,6 +464,8 @@ export default function AdminPage() {
         favicon_url: settings.favicon_url || '',
         logo_url: settings.logo_url || '',
         loading_logo_url: settings.loading_logo_url || '',
+        delivery_fee: Number(settings.delivery_fee ?? 50),
+        chat_widget_enabled: settings.chat_widget_enabled !== false,
         account_fields: customAccFields,
         text_overrides: customOverrides,
         why_choose_us: Array.isArray(customWhy) ? customWhy : [],
@@ -4647,6 +4651,66 @@ export default function AdminPage() {
                       placeholder="مثال: شحن مجاني للطلبات فوق ١٠٠٠ جنيه!"
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent text-right font-arabic" />
                   </div>
+                </div>
+              </details>
+
+              {/* ── CARD: Shipping & Live Chat Support ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🚚</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Shipping & Communication</p>
+                      <p className="text-[10px] text-zinc-500">Delivery fees and live chat toggle</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-3 border-t border-zinc-800 space-y-4 font-mono">
+                  
+                  {/* Delivery Fee Input */}
+                  <div>
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1">
+                      🚚 Standard Delivery Fee (EGP)
+                    </label>
+                    <input 
+                      type="number" 
+                      min={0}
+                      value={settingsForm.delivery_fee}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, delivery_fee: Number(e.target.value) })}
+                      className="w-full max-w-[200px] px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" 
+                    />
+                    <p className="text-[9px] text-zinc-500 mt-1">
+                      Sets the default flat-rate delivery charge calculated at checkout for all orders (unless overridden by active free shipping offers).
+                    </p>
+                  </div>
+
+                  {/* Chat Toggle Switch */}
+                  <div className="pt-2 border-t border-zinc-850">
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1.5">
+                      💬 Live Chat Floating Widget Visibility
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsForm({ ...settingsForm, chat_widget_enabled: !settingsForm.chat_widget_enabled })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        settingsForm.chat_widget_enabled ? 'bg-brand-accent' : 'bg-zinc-800'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          settingsForm.chat_widget_enabled ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-xs font-bold text-zinc-300 ml-2 align-middle uppercase select-none">
+                      {settingsForm.chat_widget_enabled ? 'Visible / Enabled' : 'Hidden / Disabled'}
+                    </span>
+                    <p className="text-[9px] text-zinc-500 mt-1">
+                      Toggle the floating support chat bubble globally on your storefront homepages.
+                    </p>
+                  </div>
+
                 </div>
               </details>
 

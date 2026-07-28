@@ -2290,7 +2290,8 @@ export const getCartTotals = (
   cart: CartItem[], 
   cottonEnabled: boolean = true, 
   autoOffers: any[] = [],
-  thresholdOffersList: any[] = []
+  thresholdOffersList: any[] = [],
+  deliveryFee: number = 50
 ): CartTotals => {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
@@ -2357,7 +2358,7 @@ export const getCartTotals = (
     }
   }
   
-  const shipping = freeDelivery ? 0 : (subtotal > 0 ? 50 : 0);
+  const shipping = freeDelivery ? 0 : (subtotal > 0 ? deliveryFee : 0);
   const finalTotal = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount + shipping);
   
   return {
