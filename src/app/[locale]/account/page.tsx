@@ -235,24 +235,10 @@ export default function AccountPage() {
       }
 
       if (action === 'cancel') {
-        const confirmed = window.confirm(locale === 'ar'
-          ? `هل أنت متأكد أنك تريد إلغاء الطلب #${ord.order_code}؟`
-          : `Are you sure you want to cancel order #${ord.order_code}?`);
-        if (!confirmed) return;
-
-        const res = await fetch('/api/orders/cancel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: orderIdParam, cancelToken: tokenParam })
-        });
-        const json = await res.json();
-        if (json.success) {
-          alert(locale === 'ar' ? 'تم إلغاء طلبك بنجاح.' : 'Your order has been cancelled successfully.');
-        } else {
-          alert(locale === 'ar'
-            ? 'فشل الإلغاء: ' + (json.error || 'خطأ غير معروف')
-            : 'Cancellation failed: ' + (json.error || 'Unknown error'));
-        }
+        // Open the cancel reason modal — don't auto-cancel with window.confirm()
+        setCancellingOrder(ord);
+        setCancelReason('');
+        setCancelOrEditToken(tokenParam);
       } else if (action === 'edit') {
         setCancelOrEditToken(tokenParam);
         setEditingOrder(ord);
