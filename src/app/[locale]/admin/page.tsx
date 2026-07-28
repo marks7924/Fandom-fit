@@ -6743,6 +6743,15 @@ export default function AdminPage() {
                                             <span className="text-amber-400">DUE ON DELIVERY:</span>
                                             <span className="text-amber-400 font-black">{due} EGP</span>
                                           </div>
+                                           {/* Printable Shipment Amount Box */}
+                                           <div className="mt-1.5 p-1 bg-zinc-900 border border-dashed border-zinc-700 text-white rounded text-center select-all print:border-black print:text-black">
+                                             <div className="text-[7.5px] uppercase tracking-wider font-extrabold text-zinc-500 print:text-black">
+                                               {locale === 'ar' ? 'المبلغ المطلوب تحصيله للشحن:' : 'COLLECT FOR SHIPMENT:'}
+                                             </div>
+                                             <div className="text-xs font-black text-brand-accent print:text-black underline">
+                                               {due} EGP
+                                             </div>
+                                           </div>
                                         </>
                                       );
                                     } else if (editDueMatch) {

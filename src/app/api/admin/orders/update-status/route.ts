@@ -178,10 +178,10 @@ export async function POST(request: Request) {
           const defaultRejectedHtml = `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 2px solid #000; border-radius: 16px; background-color: #FFFDF9; box-shadow: 6px 6px 0px #000;">
               <h2 style="color: #E07A5F; font-size: 24px; font-weight: 900; text-transform: uppercase; margin-bottom: 5px;">Fandom Fit</h2>
-              <span style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase; tracking-wider: 2px; display: block; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">⚠️ Payment Rejected</span>
+              <span style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase; tracking-wider: 2px; display: block; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">⚠️ Payment Verification Refused</span>
               
               <p style="font-size: 14px; font-weight: bold; color: #000; line-height: 1.6;">Dear <strong>{customerName}</strong>,</p>
-              <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6;">We were unable to verify your manual payment transfer receipt for order reference: <strong>{orderCode}</strong>.</p>
+              <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6;">We have reviewed your payment transfer screenshot receipt for order <strong>{orderCode}</strong>, but the amount transferred does not match the required amount.</p>
               
               <div style="background-color: #FDF2F0; border: 2px solid #E07A5F; border-radius: 12px; padding: 15px; margin: 20px 0; font-family: monospace;">
                 <p style="margin: 0; font-size: 10px; font-weight: 900; color: #E07A5F; text-transform: uppercase;">Reason for Rejection:</p>
@@ -190,14 +190,18 @@ export async function POST(request: Request) {
                 <p style="margin: 0; font-size: 10px; font-weight: 900; color: #E07A5F; text-transform: uppercase;">Instagram Problem Code:</p>
                 <p style="margin: 4px 0 0 0; font-size: 20px; font-weight: 900; color: #E07A5F; letter-spacing: 1px;">{problemCode}</p>
               </div>
-              
-              <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6; margin-bottom: 25px;">
-                <strong>What should I do?</strong><br>
-                Please contact our support team immediately on Instagram at <a href="https://www.instagram.com/fandom.__.fit" style="color: #E07A5F; font-weight: bold; text-decoration: underline;">@fandom.__.fit</a>. Provide our team with your order details and quote the <strong>Problem Code: {problemCode}</strong> so we can locate your record and verify your transfer manually.
-              </p>
+
+              <div style="background-color: #FFF8E7; border: 2px solid #F2CC8F; border-radius: 12px; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 12px; font-weight: 900; color: #7C6300;">⏰ Critical Action Required within 2 Days:</p>
+                <p style="margin: 8px 0 0 0; font-size: 12px; font-weight: 600; color: #7C6300; line-height: 1.6;">
+                  Please contact our support team on Instagram at <a href="https://www.instagram.com/fandom.__.fit" style="color: #E07A5F; font-weight: bold; text-decoration: underline;">@fandom.__.fit</a> within <strong>2 days</strong> to resolve this issue and send the correct amount. 
+                  <br><br>
+                  If you do not contact us within 2 days, <strong>your order will be cancelled</strong> and any partially paid money will be refunded soon.
+                </p>
+              </div>
               
               <p style="font-size: 10px; font-weight: bold; color: #777; line-height: 1.5; border-top: 1px dashed rgba(0,0,0,0.15); padding-top: 15px; margin-top: 25px;">
-                * Crucial: Under store policies, refused order codes and tickets are held in buffer and automatically deleted after <strong>14 days</strong> from submission. Please reach out to us on Instagram promptly. Check your <strong>Spam/Junk folder</strong> if you do not receive our notifications.
+                Fandom Fit — Wear What You Love. Always quote your Instagram Problem Code: <strong>{problemCode}</strong>.
               </p>
             </div>
           `;

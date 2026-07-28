@@ -96,6 +96,40 @@ export async function POST(request: Request) {
       });
     }
 
+    // Parse COD deposit/balance if applicable
+    const notesStr = order.notes || '';
+    const codBalanceMatch = notesStr.match(/Balance due on delivery:\s*(\d+(?:\.\d+)?)\s*EGP/);
+    const codDepositMatch = notesStr.match(/upfront\.\s*Balance/i);
+    const isCod = (order.payment_method || '').toLowerCase().startsWith('cod');
+    
+    let totalPaidDueHtml = `
+      <div style="padding-top: 15px; margin-top: 5px; display: flex; justify-content: space-between; font-size: 14px; font-weight: 900; color: #E07A5F;">
+        <span>Total Price:</span>
+        <span style="font-family: monospace;">${price} EGP</span>
+      </div>
+    `;
+
+    if (isCod && codBalanceMatch && codDepositMatch) {
+      const due = Number(codBalanceMatch[1]);
+      const paid = price - due;
+      totalPaidDueHtml = `
+        <div style="padding-top: 12px; border-top: 2px solid #000; margin-top: 10px; font-size: 12px; font-weight: bold; color: #333;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span>Total Order Value:</span>
+            <span style="font-family: monospace;">${price} EGP</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px; color: #2A9D8F;">
+            <span>Upfront Deposit Paid (10% or 50% + Ship):</span>
+            <span style="font-family: monospace;">${paid} EGP</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 900; color: #E07A5F; padding-top: 5px; border-top: 1px dashed rgba(0,0,0,0.1);">
+            <span>Remaining Balance Due on Delivery:</span>
+            <span style="font-family: monospace;">${due} EGP</span>
+          </div>
+        </div>
+      `;
+    }
+
     const replacePlaceholders = (template: string) => {
       return template
         .replace(/{customerName}/g, customerName)
@@ -106,7 +140,8 @@ export async function POST(request: Request) {
         .replace(/{itemsHtml}/g, itemsHtml)
         .replace(/{cancelLink}/g, cancelLink)
         .replace(/{editLink}/g, editLink)
-        .replace(/{websiteUrl}/g, websiteUrl);
+        .replace(/{websiteUrl}/g, websiteUrl)
+        .replace(/{totalPaidDueHtml}/g, totalPaidDueHtml);
     };
 
     const defaultSubject = `Your Fandom Fit Order Confirmation! 📦 (Code: {orderCode})`;
@@ -135,10 +170,7 @@ export async function POST(request: Request) {
         <h4 style="font-size: 12px; font-weight: 900; uppercase; margin-bottom: 10px; color: #000;">Items Ordered:</h4>
         <div style="border: 2px solid #000; border-radius: 12px; background-color: #fff; padding: 15px; margin-bottom: 25px;">
           {itemsHtml}
-          <div style="padding-top: 15px; margin-top: 5px; display: flex; justify-content: space-between; font-size: 14px; font-weight: 900; color: #E07A5F;">
-            <span>Total Paid/Due:</span>
-            <span style="font-family: monospace;">{price}</span>
-          </div>
+          {totalPaidDueHtml}
         </div>
         
         <p style="font-size: 12px; font-weight: 600; color: #333; line-height: 1.6; margin-bottom: 15px;">We will contact you via phone/WhatsApp when the package is out for delivery.</p>
