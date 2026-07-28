@@ -71,37 +71,58 @@ export async function POST(request: Request) {
       `;
     }
 
-    // Determine estimated arrival time (standard streetwear delivery in Egypt)
-    const arrivalTime = '2-4 Business Days';
+    // Fetch settings override templates
+    const { data: settingsList } = await supabase
+      .from('settings')
+      .select('*');
+    
+    const settings: Record<string, any> = {};
+    if (settingsList) {
+      settingsList.forEach((s: any) => {
+        settings[s.key] = s.value;
+      });
+    }
 
-    const emailHtml = `
+    const replacePlaceholders = (template: string) => {
+      return template
+        .replace(/{customerName}/g, customerName)
+        .replace(/{orderCode}/g, orderCode)
+        .replace(/{price}/g, `${price} EGP`)
+        .replace(/{location}/g, location)
+        .replace(/{paymentMethod}/g, paymentMethod.replace(/_/g, ' ').toUpperCase())
+        .replace(/{itemsHtml}/g, itemsHtml)
+        .replace(/{websiteUrl}/g, 'https://fandom-fit.vercel.app');
+    };
+
+    const defaultSubject = `Your Fandom Fit Order Confirmation! 📦 (Code: {orderCode})`;
+    const defaultHtml = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 2px solid #000; border-radius: 16px; background-color: #FFFDF9; box-shadow: 6px 6px 0px #000;">
         <h2 style="color: #E07A5F; font-size: 24px; font-weight: 900; text-transform: uppercase; margin-bottom: 5px;">Fandom Fit</h2>
         <span style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase; tracking-wider: 2px; display: block; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">📦 Order Confirmation Receipt</span>
         
-        <p style="font-size: 14px; font-weight: bold; color: #000; line-height: 1.6;">Dear <strong>${customerName}</strong>,</p>
+        <p style="font-size: 14px; font-weight: bold; color: #000; line-height: 1.6;">Dear <strong>{customerName}</strong>,</p>
         <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6;">Thank you for shopping with us! We have received your order and are preparing it for delivery. Here are your order details:</p>
         
         <div style="background-color: #EDE0D0; border: 2px solid #000; border-radius: 12px; padding: 15px; margin: 20px 0; font-family: monospace;">
           <p style="margin: 0; font-size: 10px; font-weight: 900; color: rgba(0,0,0,0.5); text-transform: uppercase;">Order Code:</p>
-          <p style="margin: 4px 0 12px 0; font-size: 14px; font-weight: 900; color: #000;">${orderCode}</p>
+          <p style="margin: 4px 0 12px 0; font-size: 14px; font-weight: 900; color: #000;">{orderCode}</p>
           
           <p style="margin: 0; font-size: 10px; font-weight: 900; color: rgba(0,0,0,0.5); text-transform: uppercase;">Estimated Delivery Time:</p>
-          <p style="margin: 4px 0 12px 0; font-size: 14px; font-weight: 950; color: #E07A5F;">${arrivalTime}</p>
+          <p style="margin: 4px 0 12px 0; font-size: 14px; font-weight: 950; color: #E07A5F;">2-4 Business Days</p>
 
           <p style="margin: 0; font-size: 10px; font-weight: 900; color: rgba(0,0,0,0.5); text-transform: uppercase;">Delivery Address:</p>
-          <p style="margin: 4px 0 12px 0; font-size: 11px; font-weight: bold; color: #333;">${location}</p>
+          <p style="margin: 4px 0 12px 0; font-size: 11px; font-weight: bold; color: #333;">{location}</p>
           
           <p style="margin: 0; font-size: 10px; font-weight: 900; color: rgba(0,0,0,0.5); text-transform: uppercase;">Payment Method:</p>
-          <p style="margin: 4px 0 0 0; font-size: 11px; font-weight: bold; color: #333; text-transform: uppercase;">${paymentMethod.replace(/_/g, ' ')}</p>
+          <p style="margin: 4px 0 0 0; font-size: 11px; font-weight: bold; color: #333; text-transform: uppercase;">{paymentMethod}</p>
         </div>
 
         <h4 style="font-size: 12px; font-weight: 900; uppercase; margin-bottom: 10px; color: #000;">Items Ordered:</h4>
         <div style="border: 2px solid #000; border-radius: 12px; background-color: #fff; padding: 15px; margin-bottom: 25px;">
-          ${itemsHtml}
+          {itemsHtml}
           <div style="padding-top: 15px; margin-top: 5px; display: flex; justify-content: space-between; font-size: 14px; font-weight: 900; color: #E07A5F;">
             <span>Total Paid/Due:</span>
-            <span style="font-family: monospace;">${price} EGP</span>
+            <span style="font-family: monospace;">{price}</span>
           </div>
         </div>
         
@@ -112,6 +133,12 @@ export async function POST(request: Request) {
         </div>
       </div>
     `;
+
+    const rawSubject = settings.email_template_confirmation_subject || defaultSubject;
+    const rawHtml = settings.email_template_confirmation_body || defaultHtml;
+
+    const emailSubject = replacePlaceholders(rawSubject);
+    const emailHtml = replacePlaceholders(rawHtml);
 
     const sendgridRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
@@ -129,7 +156,7 @@ export async function POST(request: Request) {
           email: sendgridFromEmail,
           name: 'Fandom Fit'
         },
-        subject: `Your Fandom Fit Order Confirmation! 📦 (Code: ${orderCode})`,
+        subject: emailSubject,
         content: [
           {
             type: 'text/html',

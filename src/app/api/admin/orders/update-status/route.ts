@@ -68,25 +68,49 @@ export async function POST(request: Request) {
 
     if (recipientEmail && sendgridApiKey && sendgridFromEmail) {
       try {
+        // Fetch settings override templates
+        const { data: settingsList } = await supabaseClient
+          .from('settings')
+          .select('*');
+        
+        const settings: Record<string, any> = {};
+        if (settingsList) {
+          settingsList.forEach((s: any) => {
+            settings[s.key] = s.value;
+          });
+        }
+
+        const replacePlaceholders = (template: string) => {
+          return template
+            .replace(/{customerName}/g, order.customer_name || 'Valued Customer')
+            .replace(/{orderCode}/g, order.order_code || order.id)
+            .replace(/{price}/g, `${order.price} EGP`)
+            .replace(/{location}/g, order.location || 'N/A')
+            .replace(/{paymentMethod}/g, (order.payment_method || '').replace(/_/g, ' ').toUpperCase())
+            .replace(/{rejectionReason}/g, rejectionReason || 'Invalid or unreadable screenshot.')
+            .replace(/{problemCode}/g, problemCode)
+            .replace(/{websiteUrl}/g, websiteUrl);
+        };
+
         let subject = '';
         let htmlValue = '';
 
         if (status === 'paid' || status === 'completed' || status === 'in_progress') {
-          subject = 'Your payment was accepted! Work has started 🎉';
-          htmlValue = `
+          const defaultApprovedSubject = 'Your payment was accepted! Work has started 🎉';
+          const defaultApprovedHtml = `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 2px solid #000; border-radius: 16px; background-color: #FFFDF9; box-shadow: 6px 6px 0px #000;">
               <h2 style="color: #2A9D8F; font-size: 24px; font-weight: 900; text-transform: uppercase; margin-bottom: 5px;">Fandom Fit</h2>
               <span style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase; tracking-wider: 2px; display: block; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">🛡️ Payment Verified</span>
               
-              <p style="font-size: 14px; font-weight: bold; color: #000; line-height: 1.6;">Dear <strong>${order.customer_name}</strong>,</p>
+              <p style="font-size: 14px; font-weight: bold; color: #000; line-height: 1.6;">Dear <strong>{customerName}</strong>,</p>
               <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6;">Awesome news! Your InstaPay manual payment transfer receipt has been successfully verified by our accounting team.</p>
               
               <div style="background-color: #EDE0D0; border: 2px solid #000; border-radius: 12px; padding: 15px; margin: 20px 0; font-family: monospace;">
                 <p style="margin: 0; font-size: 10px; font-weight: 900; color: rgba(0,0,0,0.5); text-transform: uppercase;">Order Reference Code:</p>
-                <p style="margin: 4px 0 12px 0; font-size: 13px; font-weight: bold; color: #000;">${order.order_code || order.id}</p>
+                <p style="margin: 4px 0 12px 0; font-size: 13px; font-weight: bold; color: #000;">{orderCode}</p>
                 
                 <p style="margin: 0; font-size: 10px; font-weight: 900; color: rgba(0,0,0,0.5); text-transform: uppercase;">Amount Paid:</p>
-                <p style="margin: 4px 0 0 0; font-size: 18px; font-weight: 900; color: #2A9D8F;">${order.price} EGP</p>
+                <p style="margin: 4px 0 0 0; font-size: 18px; font-weight: 900; color: #2A9D8F;">{price}</p>
               </div>
               
               <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6; margin-bottom: 25px;">
@@ -94,7 +118,7 @@ export async function POST(request: Request) {
               </p>
               
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${websiteUrl}/account" style="background-color: #2A9D8F; color: #fff; text-decoration: none; padding: 14px 28px; border: 2px solid #000; border-radius: 12px; font-size: 12px; font-weight: 900; text-transform: uppercase; box-shadow: 4px 4px 0px #000; display: inline-block;">Track My Order ➔</a>
+                <a href="{websiteUrl}/account" style="background-color: #2A9D8F; color: #fff; text-decoration: none; padding: 14px 28px; border: 2px solid #000; border-radius: 12px; font-size: 12px; font-weight: 900; text-transform: uppercase; box-shadow: 4px 4px 0px #000; display: inline-block;">Track My Order ➔</a>
               </div>
               
               <p style="font-size: 10px; font-weight: 600; color: #999; line-height: 1.5; border-top: 1px dashed rgba(0,0,0,0.15); padding-top: 15px; margin-top: 25px;">
@@ -102,27 +126,33 @@ export async function POST(request: Request) {
               </p>
             </div>
           `;
+          
+          const rawSubject = settings.email_template_approved_subject || defaultApprovedSubject;
+          const rawHtml = settings.email_template_approved_body || defaultApprovedHtml;
+          
+          subject = replacePlaceholders(rawSubject);
+          htmlValue = replacePlaceholders(rawHtml);
         } else if (status === 'rejected' || status === 'payment_failed') {
-          subject = 'Action Required: Payment Verification Failed ⚠️';
-          htmlValue = `
+          const defaultRejectedSubject = 'Action Required: Payment Verification Failed ⚠️';
+          const defaultRejectedHtml = `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 2px solid #000; border-radius: 16px; background-color: #FFFDF9; box-shadow: 6px 6px 0px #000;">
               <h2 style="color: #E07A5F; font-size: 24px; font-weight: 900; text-transform: uppercase; margin-bottom: 5px;">Fandom Fit</h2>
               <span style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase; tracking-wider: 2px; display: block; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">⚠️ Payment Rejected</span>
               
-              <p style="font-size: 14px; font-weight: bold; color: #000; line-height: 1.6;">Dear <strong>${order.customer_name}</strong>,</p>
-              <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6;">We were unable to verify your manual payment transfer receipt for order reference: <strong>${order.order_code || order.id}</strong>.</p>
+              <p style="font-size: 14px; font-weight: bold; color: #000; line-height: 1.6;">Dear <strong>{customerName}</strong>,</p>
+              <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6;">We were unable to verify your manual payment transfer receipt for order reference: <strong>{orderCode}</strong>.</p>
               
               <div style="background-color: #FDF2F0; border: 2px solid #E07A5F; border-radius: 12px; padding: 15px; margin: 20px 0; font-family: monospace;">
                 <p style="margin: 0; font-size: 10px; font-weight: 900; color: #E07A5F; text-transform: uppercase;">Reason for Rejection:</p>
-                <p style="margin: 4px 0 12px 0; font-size: 12px; font-weight: bold; color: #000;">${rejectionReason || 'Invalid or unreadable transaction screenshot upload.'}</p>
+                <p style="margin: 4px 0 12px 0; font-size: 12px; font-weight: bold; color: #000;">{rejectionReason}</p>
                 
                 <p style="margin: 0; font-size: 10px; font-weight: 900; color: #E07A5F; text-transform: uppercase;">Instagram Problem Code:</p>
-                <p style="margin: 4px 0 0 0; font-size: 20px; font-weight: 900; color: #E07A5F; letter-spacing: 1px;">${problemCode}</p>
+                <p style="margin: 4px 0 0 0; font-size: 20px; font-weight: 900; color: #E07A5F; letter-spacing: 1px;">{problemCode}</p>
               </div>
               
               <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6; margin-bottom: 25px;">
                 <strong>What should I do?</strong><br>
-                Please contact our support team immediately on Instagram at <a href="https://www.instagram.com/fandom.__.fit" style="color: #E07A5F; font-weight: bold; text-decoration: underline;">@fandom.__.fit</a>. Provide our team with your order details and quote the <strong>Problem Code: ${problemCode}</strong> so we can locate your record and verify your transfer manually.
+                Please contact our support team immediately on Instagram at <a href="https://www.instagram.com/fandom.__.fit" style="color: #E07A5F; font-weight: bold; text-decoration: underline;">@fandom.__.fit</a>. Provide our team with your order details and quote the <strong>Problem Code: {problemCode}</strong> so we can locate your record and verify your transfer manually.
               </p>
               
               <p style="font-size: 10px; font-weight: bold; color: #777; line-height: 1.5; border-top: 1px dashed rgba(0,0,0,0.15); padding-top: 15px; margin-top: 25px;">
@@ -130,8 +160,14 @@ export async function POST(request: Request) {
               </p>
             </div>
           `;
+          
+          const rawSubject = settings.email_template_rejected_subject || defaultRejectedSubject;
+          const rawHtml = settings.email_template_rejected_body || defaultRejectedHtml;
+          
+          subject = replacePlaceholders(rawSubject);
+          htmlValue = replacePlaceholders(rawHtml);
         }
-
+ 
         if (subject && htmlValue) {
           const sendgridRes = await fetch('https://api.sendgrid.com/v3/mail/send', {
             method: 'POST',
@@ -146,7 +182,7 @@ export async function POST(request: Request) {
               content: [{ type: 'text/html', value: htmlValue }]
             })
           });
-
+ 
           if (!sendgridRes.ok) {
             const errBody = await sendgridRes.text();
             console.error('SendGrid email delivery failed:', errBody);

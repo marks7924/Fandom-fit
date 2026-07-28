@@ -167,6 +167,12 @@ export default function AdminPage() {
     hero_product_id: '',
     terms_en: '',
     terms_ar: '',
+    email_template_confirmation_subject: '',
+    email_template_confirmation_body: '',
+    email_template_approved_subject: '',
+    email_template_approved_body: '',
+    email_template_rejected_subject: '',
+    email_template_rejected_body: '',
     account_fields: {} as Record<string, string>,
     text_overrides: {} as Record<string, string>,
     why_choose_us: [] as any[],
@@ -472,6 +478,12 @@ export default function AdminPage() {
         hero_product_id: settings.hero_product_id || '',
         terms_en: settings.terms_en || '',
         terms_ar: settings.terms_ar || '',
+        email_template_confirmation_subject: settings.email_template_confirmation_subject || '',
+        email_template_confirmation_body: settings.email_template_confirmation_body || '',
+        email_template_approved_subject: settings.email_template_approved_subject || '',
+        email_template_approved_body: settings.email_template_approved_body || '',
+        email_template_rejected_subject: settings.email_template_rejected_subject || '',
+        email_template_rejected_body: settings.email_template_rejected_body || '',
         account_fields: customAccFields,
         text_overrides: customOverrides,
         why_choose_us: Array.isArray(customWhy) ? customWhy : [],
@@ -4822,6 +4834,113 @@ export default function AdminPage() {
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent resize-y text-right font-mono" 
                       dir="rtl"
                     />
+                  </div>
+
+                </div>
+              </details>
+
+              {/* ── CARD: Email Templates ── */}
+              <details className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none hover:bg-zinc-800/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">✉️</span>
+                    <div>
+                      <p className="text-sm font-black text-white uppercase">Transactional Email Templates</p>
+                      <p className="text-[10px] text-zinc-500">Edit automated checkout and status confirmation emails</p>
+                    </div>
+                  </div>
+                  <span className="text-zinc-500 text-xs font-bold group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="px-5 pb-5 pt-3 border-t border-zinc-800 space-y-5 font-mono">
+                  
+                  {/* Dynamic Badge list of placeholders */}
+                  <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl">
+                    <p className="text-[9px] uppercase font-bold text-brand-accent mb-1.5">💡 Available Template Placeholders</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['{customerName}', '{orderCode}', '{price}', '{location}', '{paymentMethod}', '{rejectionReason}', '{problemCode}', '{websiteUrl}', '{itemsHtml}'].map(ph => (
+                        <code key={ph} className="text-[8px] bg-zinc-900 text-zinc-300 border border-zinc-800 px-1.5 py-0.5 rounded font-mono select-all">
+                          {ph}
+                        </code>
+                      ))}
+                    </div>
+                    <p className="text-[8px] text-zinc-500 mt-2">
+                      Placeholders will be automatically replaced with current order details upon delivery. HTML tags are fully supported.
+                    </p>
+                  </div>
+
+                  {/* Template 1: Checkout Order Confirmation */}
+                  <div className="space-y-2 pt-2 border-t border-zinc-850">
+                    <p className="text-[10px] font-bold text-zinc-300 uppercase">📦 1. Order Confirmation (Send immediately on Checkout)</p>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-1">Subject</label>
+                      <input 
+                        type="text" 
+                        value={settingsForm.email_template_confirmation_subject}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, email_template_confirmation_subject: e.target.value })}
+                        placeholder="Subject..."
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-1">Body HTML Template</label>
+                      <textarea 
+                        rows={6}
+                        value={settingsForm.email_template_confirmation_body}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, email_template_confirmation_body: e.target.value })}
+                        placeholder="Body HTML content..."
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono resize-y" 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Template 2: Payment Verified / Approved */}
+                  <div className="space-y-2 pt-2 border-t border-zinc-850">
+                    <p className="text-[10px] font-bold text-zinc-300 uppercase">🛡️ 2. Payment Verified (Approved by accounting)</p>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-1">Subject</label>
+                      <input 
+                        type="text" 
+                        value={settingsForm.email_template_approved_subject}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, email_template_approved_subject: e.target.value })}
+                        placeholder="Subject..."
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-1">Body HTML Template</label>
+                      <textarea 
+                        rows={6}
+                        value={settingsForm.email_template_approved_body}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, email_template_approved_body: e.target.value })}
+                        placeholder="Body HTML content..."
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono resize-y" 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Template 3: Payment Verification Failed */}
+                  <div className="space-y-2 pt-2 border-t border-zinc-850">
+                    <p className="text-[10px] font-bold text-zinc-300 uppercase">⚠️ 3. Action Required (Payment verification rejected)</p>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-1">Subject</label>
+                      <input 
+                        type="text" 
+                        value={settingsForm.email_template_rejected_subject}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, email_template_rejected_subject: e.target.value })}
+                        placeholder="Subject..."
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] uppercase font-bold text-zinc-500 block mb-1">Body HTML Template</label>
+                      <textarea 
+                        rows={6}
+                        value={settingsForm.email_template_rejected_body}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, email_template_rejected_body: e.target.value })}
+                        placeholder="Body HTML content..."
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-white text-xs focus:outline-none focus:border-brand-accent font-mono resize-y" 
+                      />
+                    </div>
                   </div>
 
                 </div>
