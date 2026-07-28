@@ -161,6 +161,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'No valid fields provided for update' }, { status: 400 });
     }
 
+    // 5b. Always stamp [Order Edited by Customer] into the notes field,
+    //     regardless of whether items changed or only address/name changed.
+    const EDIT_STAMP = '[Order Edited by Customer]';
+    const existingNotes = (safeUpdates.notes || order.notes || '');
+    if (!existingNotes.includes(EDIT_STAMP)) {
+      safeUpdates.notes = `${EDIT_STAMP} | ${existingNotes}`.replace(/ \| $/, '');
+    } else {
+      // Stamp is already there (items branch set it) — keep as-is
+      if (!safeUpdates.notes) safeUpdates.notes = existingNotes;
+    }
+
     // 6. Apply updates
     const { error: updateErr } = await supabase
       .from('orders')

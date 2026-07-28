@@ -6589,7 +6589,7 @@ export default function AdminPage() {
                         };
 
                         return (
-                          <tr key={order.id} className="hover:bg-zinc-800/20 text-zinc-300">
+                          <tr key={order.id} className={`text-zinc-300 transition-colors ${order.notes && order.notes.includes('[Order Edited by Customer]') ? 'bg-red-950/25 hover:bg-red-950/40 border-l-2 border-red-500' : 'hover:bg-zinc-800/20'}`}>
                             <td className="p-4 text-center">
                               <input
                                 type="checkbox"
