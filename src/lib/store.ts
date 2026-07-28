@@ -957,7 +957,7 @@ export const useStore = create<StoreState>((set, get) => ({
           payment_method: order.payment_method,
           payment_receipt_url: order.payment_receipt_url,
           rejection_reason: order.rejection_reason,
-          cancel_token: cancelToken,
+          // cancel_token intentionally omitted from minimal fallback (column may not exist yet in DB)
           location: order.location || `${order.governorate || ''} ${order.city || ''}`.trim() || 'N/A',
           notes: [
             order.notes,
