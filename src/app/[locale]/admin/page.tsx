@@ -6604,8 +6604,8 @@ export default function AdminPage() {
                                   </div>
                                 )}
 
-                                {/* InstaPay Receipt Screenshot Preview & Download */}
-                                {order.payment_method === 'instapay' && order.payment_receipt_url && (
+                                {/* Receipt Screenshot Preview & Download */}
+                                {order.payment_receipt_url && (
                                   <div className="mt-2 space-y-1.5 border-t border-zinc-850 pt-2 select-none">
                                     <span className="text-[8px] uppercase font-bold text-zinc-500 block">Transaction Screenshot:</span>
                                     <div className="relative w-28 aspect-[3/4] border border-zinc-800 rounded bg-zinc-900 overflow-hidden group">
