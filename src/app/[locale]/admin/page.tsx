@@ -6610,7 +6610,12 @@ export default function AdminPage() {
                               />
                             </td>
                             <td className="p-4 font-bold text-brand-accent uppercase">
-                              {order.order_code || `#${order.id.split('-')[0]}`}
+                              <div>{order.order_code || `#${order.id.split('-')[0]}`}</div>
+                              {order.notes && order.notes.includes('[Order Edited by Customer]') && (
+                                <span className="inline-block mt-1 px-1.5 py-0.5 bg-red-950/60 border border-red-500 text-red-500 rounded text-[9px] font-black uppercase">
+                                  {locale === 'ar' ? 'تم التعديل' : 'Edited'}
+                                </span>
+                              )}
                             </td>
                             <td className="p-4 font-bold text-white flex items-center gap-1.5">
                               {getCancelledCount(order.customer_phone) > 1 && (
@@ -6882,7 +6887,12 @@ export default function AdminPage() {
                       return cancelled.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((order) => (
                         <tr key={order.id} className="hover:bg-zinc-800/20 text-zinc-300">
                           <td className="p-4 font-bold text-brand-accent uppercase">
-                            {order.order_code || `#${order.id.split('-')[0]}`}
+                            <div>{order.order_code || `#${order.id.split('-')[0]}`}</div>
+                            {order.notes && order.notes.includes('[Order Edited by Customer]') && (
+                              <span className="inline-block mt-1 px-1.5 py-0.5 bg-red-950/60 border border-red-500 text-red-500 rounded text-[9px] font-black uppercase">
+                                {locale === 'ar' ? 'تم التعديل' : 'Edited'}
+                              </span>
+                            )}
                           </td>
                           <td className="p-4">
                             <div className="font-bold text-white flex items-center gap-1.5">

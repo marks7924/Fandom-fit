@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
       const specsStr = updatedItems.map((i: any) => `${i.product_name}: ${i.fabric}/${i.fit_type || 'oversized'}`).join(', ');
       
-      let reconstructedNotes = `[Checkout Type: Web] | Items Spec: ${specsStr}`;
+      let reconstructedNotes = `[Order Edited by Customer] | [Checkout Type: Web] | Items Spec: ${specsStr}`;
       if (customerNote) {
         reconstructedNotes += ` | Customer Note: ${customerNote}`;
       }

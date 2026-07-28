@@ -243,7 +243,7 @@ export default function AccountPage() {
         const res = await fetch('/api/orders/cancel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: orderIdParam, token: tokenParam })
+          body: JSON.stringify({ orderId: orderIdParam, cancelToken: tokenParam })
         });
         const json = await res.json();
         if (json.success) {
@@ -372,7 +372,7 @@ export default function AccountPage() {
         body: JSON.stringify({
           orderId: cancellingOrder.id,
           userId: user?.id,
-          token: cancelOrEditToken,
+          cancelToken: cancelOrEditToken,
           reason: cancelReason
         })
       });
