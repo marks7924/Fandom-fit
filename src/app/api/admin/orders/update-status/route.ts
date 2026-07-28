@@ -95,7 +95,48 @@ export async function POST(request: Request) {
         let subject = '';
         let htmlValue = '';
 
-        if (status === 'paid' || status === 'completed' || status === 'in_progress') {
+        // Handle 'in_progress' status with its own dedicated email
+        if (status === 'in_progress') {
+          const defaultInProgressSubject = `Your order is now being made! 🔨 (Code: ${order.order_code || order.id})`;
+          const defaultInProgressHtml = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 2px solid #000; border-radius: 16px; background-color: #FFFDF9; box-shadow: 6px 6px 0px #000;">
+              <h2 style="color: #3D405B; font-size: 24px; font-weight: 900; text-transform: uppercase; margin-bottom: 5px;">Fandom Fit</h2>
+              <span style="font-size: 10px; font-weight: 900; color: #888; text-transform: uppercase; display: block; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">🔨 Order In Production</span>
+              
+              <p style="font-size: 14px; font-weight: bold; color: #000; line-height: 1.6;">Dear <strong>${order.customer_name || 'Valued Customer'}</strong>,</p>
+              <p style="font-size: 13px; font-weight: 600; color: #333; line-height: 1.6;">Great news! Your order is now <strong>in production</strong>. Our team has started crafting and printing your custom streetwear.</p>
+              
+              <div style="background-color: #3D405B; border: 2px solid #000; border-radius: 12px; padding: 15px; margin: 20px 0; color: #EDE0D0; font-family: monospace;">
+                <p style="margin: 0; font-size: 10px; font-weight: 900; color: rgba(237,224,208,0.6); text-transform: uppercase;">Order Code:</p>
+                <p style="margin: 4px 0 12px 0; font-size: 16px; font-weight: 900;">${order.order_code || order.id}</p>
+                
+                <p style="margin: 0; font-size: 10px; font-weight: 900; color: rgba(237,224,208,0.6); text-transform: uppercase;">Total Amount:</p>
+                <p style="margin: 4px 0 0 0; font-size: 20px; font-weight: 900; color: #F2CC8F;">${order.price} EGP</p>
+              </div>
+              
+              <div style="background-color: #FFF8E7; border: 2px solid #F2CC8F; border-radius: 12px; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 12px; font-weight: 900; color: #7C6300;">⚠️ Important Notice:</p>
+                <p style="margin: 8px 0 0 0; font-size: 12px; font-weight: 600; color: #7C6300; line-height: 1.6;">
+                  Since your order is now <strong>in production</strong>, you can <strong>no longer cancel or edit it</strong>. If you have any urgent concerns, please contact us directly on Instagram: <a href="https://www.instagram.com/fandom.__.fit" style="color: #E07A5F; font-weight: bold;">@fandom.__.fit</a>
+                </p>
+              </div>
+              
+              <p style="font-size: 12px; font-weight: 600; color: #333; line-height: 1.6; margin-bottom: 25px;">
+                We will contact you via phone/WhatsApp when your package is ready for shipment. Estimated delivery: <strong>2–4 business days</strong> from today.
+              </p>
+              
+              <p style="font-size: 10px; font-weight: 600; color: #999; line-height: 1.5; border-top: 1px dashed rgba(0,0,0,0.15); padding-top: 15px; margin-top: 25px;">
+                Fandom Fit — Wear What You Love. Check your Spam/Junk folder if you miss our updates.
+              </p>
+            </div>
+          `;
+          
+          const rawSubject = settings.email_template_inprogress_subject || defaultInProgressSubject;
+          const rawHtml = settings.email_template_inprogress_body || defaultInProgressHtml;
+          
+          subject = replacePlaceholders(rawSubject);
+          htmlValue = replacePlaceholders(rawHtml);
+        } else if (status === 'paid' || status === 'completed') {
           const defaultApprovedSubject = 'Your payment was accepted! Work has started 🎉';
           const defaultApprovedHtml = `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 2px solid #000; border-radius: 16px; background-color: #FFFDF9; box-shadow: 6px 6px 0px #000;">

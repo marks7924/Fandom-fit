@@ -84,7 +84,18 @@ export async function POST(request: Request) {
 
     const orderCode = txn.order?.merchant_order_id || txn.order?.id;
     const isSuccess = txn.success === true;
-    const newStatus = isSuccess ? 'paid' : 'payment_failed';
+
+    // Retrieve order to preserve preorder status if needed
+    const { data: order } = await supabase
+      .from('orders')
+      .select('status, notes')
+      .eq('order_code', orderCode)
+      .maybeSingle();
+
+    let newStatus = isSuccess ? 'paid' : 'payment_failed';
+    if (isSuccess && order && (order.status === 'preorder' || (order.notes || '').includes('[PRE-ORDER]'))) {
+      newStatus = 'preorder';
+    }
 
     const { error: updateErr } = await supabase
       .from('orders')

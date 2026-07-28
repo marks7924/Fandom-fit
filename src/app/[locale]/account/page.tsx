@@ -90,6 +90,19 @@ export default function AccountPage() {
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
+  // Order cancel & edit states
+  const [editingOrder, setEditingOrder] = useState<any | null>(null);
+  const [editOrderForm, setEditOrderForm] = useState({
+    customer_name: '',
+    customer_phone: '',
+    governorate: '',
+    city: '',
+    address: '',
+    notes: ''
+  });
+  const [cancelOrEditToken, setCancelOrEditToken] = useState<string | null>(null);
+  const [isActionSubmitting, setIsActionSubmitting] = useState(false);
+
   // Address lookup options
   const governorates = [
     { en: 'Cairo', ar: 'القاهرة' },
@@ -257,6 +270,146 @@ export default function AccountPage() {
       setAuthError('Failed to retrieve orders');
     } finally {
       setIsGuestLoading(false);
+    }
+  };
+
+  // Handle cancel/edit links from email
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const orderId = params.get('orderId');
+    const token = params.get('token');
+    if (!orderId || !token) return;
+
+    setCancelOrEditToken(token);
+
+    if (action === 'cancel') {
+      const confirmCancel = window.confirm(
+        locale === 'ar'
+          ? 'هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟'
+          : 'Are you sure you want to cancel this order?'
+      );
+      if (confirmCancel) {
+        setIsActionSubmitting(true);
+        fetch('/api/orders/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId, cancelToken: token })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              alert(locale === 'ar' ? 'تم إلغاء الطلب بنجاح!' : 'Order cancelled successfully!');
+              window.history.replaceState({}, '', '/account');
+            } else {
+              alert(data.error || 'Failed to cancel order. It may already be in progress.');
+            }
+          })
+          .catch(() => alert('An error occurred.'))
+          .finally(() => setIsActionSubmitting(false));
+      }
+    } else if (action === 'edit') {
+      supabase.from('orders').select('*').eq('id', orderId).maybeSingle()
+        .then(({ data, error }: any) => {
+          if (data && !error) {
+            setEditingOrder(data);
+            setEditOrderForm({
+              customer_name: data.customer_name || '',
+              customer_phone: data.customer_phone || '',
+              governorate: data.governorate || '',
+              city: data.city || '',
+              address: data.address || data.location || '',
+              notes: data.notes || ''
+            });
+            window.history.replaceState({}, '', '/account');
+          } else {
+            alert(locale === 'ar' ? 'عذراً، لم يتم العثور على الطلب.' : 'Sorry, order not found or cannot be edited.');
+          }
+        });
+    }
+  }, [locale]);
+
+  const handleCancelOrder = async (orderId: string) => {
+    const confirmCancel = window.confirm(
+      locale === 'ar'
+        ? 'هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.'
+        : 'Are you sure you want to cancel this order? This action cannot be undone.'
+    );
+    if (!confirmCancel) return;
+    try {
+      setIsActionSubmitting(true);
+      const res = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, userId: user?.id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(locale === 'ar' ? 'تم إلغاء الطلب بنجاح! سنتواصل معك قريباً.' : 'Order cancelled successfully!');
+        if (user) {
+          const updated = await fetchAccountOrders(user.id, profile?.phone || undefined);
+          setUserOrders(updated || []);
+        }
+      } else {
+        alert(data.error || 'Failed to cancel order.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('An error occurred.');
+    } finally {
+      setIsActionSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (order: any) => {
+    setEditingOrder(order);
+    setEditOrderForm({
+      customer_name: order.customer_name || '',
+      customer_phone: order.customer_phone || '',
+      governorate: order.governorate || '',
+      city: order.city || '',
+      address: order.address || order.location || '',
+      notes: order.notes || ''
+    });
+    setCancelOrEditToken(order.cancel_token || null);
+  };
+
+  const handleSaveEditOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrder) return;
+    if (!/^01[0-25]\d{8}$/.test(editOrderForm.customer_phone.trim())) {
+      alert(locale === 'ar' ? 'الرجاء إدخال رقم موبايل مصري صحيح' : 'Invalid Egyptian phone number');
+      return;
+    }
+    try {
+      setIsActionSubmitting(true);
+      const res = await fetch('/api/orders/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: editingOrder.id,
+          cancelToken: cancelOrEditToken,
+          userId: user?.id,
+          updates: editOrderForm
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(locale === 'ar' ? 'تم تعديل بيانات الطلب بنجاح!' : 'Order details updated successfully!');
+        setEditingOrder(null);
+        if (user) {
+          const updated = await fetchAccountOrders(user.id, profile?.phone || undefined);
+          setUserOrders(updated || []);
+        }
+      } else {
+        alert(data.error || 'Failed to update order.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('An error occurred.');
+    } finally {
+      setIsActionSubmitting(false);
     }
   };
 
@@ -1489,6 +1642,36 @@ ${isCod ? `COD Upfront split: Paid 50% items + shipping (${chargeAmount} EGP) vi
                               <span className="text-black/60">{locale === 'ar' ? 'الإجمالي الكلي:' : 'Total Amount:'}</span>
                               <span className="text-brand-accent text-sm font-black">{o.price} EGP</span>
                             </div>
+
+                            {/* Cancel / Edit Action Buttons */}
+                            {!['in_progress', 'completed', 'cancelled', 'shipped'].includes(o.status) ? (
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  onClick={() => handleEditClick(o)}
+                                  disabled={isActionSubmitting}
+                                  className="flex-1 py-1.5 text-[10px] font-black uppercase bg-white text-black border-2 border-black rounded-lg hover:bg-[#EDE0D0] transition-all cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5"
+                                >
+                                  ✏️ {locale === 'ar' ? 'تعديل الطلب' : 'Edit Order'}
+                                </button>
+                                <button
+                                  onClick={() => handleCancelOrder(o.id)}
+                                  disabled={isActionSubmitting}
+                                  className="flex-1 py-1.5 text-[10px] font-black uppercase bg-red-50 text-red-600 border-2 border-red-300 rounded-lg hover:bg-red-100 transition-all cursor-pointer"
+                                >
+                                  🚫 {locale === 'ar' ? 'إلغاء الطلب' : 'Cancel Order'}
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-1">
+                                <span className="text-[9px] font-black text-black/40 uppercase">
+                                  {o.status === 'cancelled' ? (
+                                    locale === 'ar' ? '🚫 تم إلغاء هذا الطلب' : '🚫 This order was cancelled'
+                                  ) : (
+                                    locale === 'ar' ? '🔒 هذا الطلب في مرحلة التنفيذ ولا يمكن تعديله' : '🔒 Order is locked — in progress or completed'
+                                  )}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1612,6 +1795,147 @@ ${isCod ? `COD Upfront split: Paid 50% items + shipping (${chargeAmount} EGP) vi
       <ProductQuickPreview />
       {/* Cart Drawer overlay */}
       <CartDrawer />
+
+      {/* ===== Edit Order Modal ===== */}
+      {editingOrder && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm cursor-pointer"
+            onClick={() => setEditingOrder(null)}
+          />
+          {/* Modal */}
+          <div className="relative z-10 w-full max-w-md bg-white border-4 border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+            {/* Header */}
+            <div className="bg-black text-white px-6 py-4 flex justify-between items-center">
+              <div>
+                <h2 className="text-sm font-black uppercase tracking-widest">
+                  {locale === 'ar' ? '✏️ تعديل بيانات الطلب' : '✏️ Edit Order Details'}
+                </h2>
+                <span className="text-[10px] font-mono text-white/60">
+                  #{editingOrder.order_code || editingOrder.id.substring(0, 8).toUpperCase()}
+                </span>
+              </div>
+              <button
+                onClick={() => setEditingOrder(null)}
+                className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-white text-lg font-black cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+            {/* Body */}
+            <form onSubmit={handleSaveEditOrder} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                    {locale === 'ar' ? 'الاسم الكامل' : 'Full Name'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editOrderForm.customer_name}
+                    onChange={(e) => setEditOrderForm(prev => ({ ...prev, customer_name: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                    {locale === 'ar' ? 'رقم الهاتف' : 'Phone Number'}
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={editOrderForm.customer_phone}
+                    onChange={(e) => setEditOrderForm(prev => ({ ...prev, customer_phone: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                    {locale === 'ar' ? 'المحافظة' : 'Governorate'}
+                  </label>
+                  <select
+                    value={editOrderForm.governorate}
+                    onChange={(e) => setEditOrderForm(prev => ({ ...prev, governorate: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                  >
+                    <option value="">{locale === 'ar' ? '-- اختر المحافظة --' : '-- Select Governorate --'}</option>
+                    {governorates.map((gov, i) => (
+                      <option key={i} value={gov.en}>{locale === 'ar' ? gov.ar : gov.en}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                    {locale === 'ar' ? 'المدينة / المنطقة' : 'City / Area'}
+                  </label>
+                  <input
+                    type="text"
+                    value={editOrderForm.city}
+                    onChange={(e) => setEditOrderForm(prev => ({ ...prev, city: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                    placeholder="e.g. Nasr City"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                  {locale === 'ar' ? 'العنوان التفصيلي' : 'Street / Building / Floor'}
+                </label>
+                <input
+                  type="text"
+                  value={editOrderForm.address}
+                  onChange={(e) => setEditOrderForm(prev => ({ ...prev, address: e.target.value }))}
+                  className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                  placeholder="e.g. 15 El-Tahrir St, 3rd Floor"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                  {locale === 'ar' ? 'ملاحظات إضافية' : 'Order Notes'}
+                </label>
+                <textarea
+                  rows={2}
+                  value={editOrderForm.notes}
+                  onChange={(e) => setEditOrderForm(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white resize-none"
+                  placeholder={locale === 'ar' ? 'أي ملاحظة خاصة بطلبك...' : 'Any special notes for your order...'}
+                />
+              </div>
+
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3">
+                <p className="text-[10px] font-black text-amber-700">
+                  ⚠️ {locale === 'ar'
+                    ? 'يمكنك تعديل بيانات الطلب فقط قبل بدء التنفيذ. بعد تغيير الطلب إلى "قيد التنفيذ" لن يكون بالإمكان إجراء أي تعديلات.'
+                    : 'You can only edit order details before processing begins. Once marked In Progress, no further edits are allowed.'}
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingOrder(null)}
+                  className="flex-1 py-2.5 bg-white text-black border-2 border-black rounded-xl font-black uppercase text-xs hover:bg-zinc-50 cursor-pointer"
+                >
+                  {locale === 'ar' ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isActionSubmitting}
+                  className="flex-1 py-2.5 bg-black text-white border-2 border-black rounded-xl font-black uppercase text-xs hover:bg-brand-accent transition-colors cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"
+                >
+                  {isActionSubmitting
+                    ? (locale === 'ar' ? 'جاري الحفظ...' : 'Saving...')
+                    : (locale === 'ar' ? 'حفظ التعديلات' : 'Save Changes')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

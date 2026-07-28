@@ -22,7 +22,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const getProductEffectivePrice = useStore((state) => state.getProductEffectivePrice);
   const { hasDiscount, originalPrice, discountedPrice } = getProductEffectivePrice(product);
 
-  const { user, profile, toggleFavorite, setIsAuthModalOpen } = useStore();
+  const { user, profile, settings, toggleFavorite, setIsAuthModalOpen } = useStore();
   const isFav = profile?.favorites?.includes(product.id) || false;
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
@@ -83,6 +83,16 @@ export default function ProductCard({ product }: ProductCardProps) {
             {t('new')}
           </span>
         )}
+        {product.is_soon && (
+          <span className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1 bg-purple-600 text-white border-2 border-black rounded-md rotate-[1deg]">
+            {locale === 'ar' ? 'قريباً جداً' : 'Coming Soon'}
+          </span>
+        )}
+        {product.is_preorder && (
+          <span className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1 bg-blue-600 text-white border-2 border-black rounded-md rotate-[-1deg]">
+            {locale === 'ar' ? 'طلب مسبق' : 'Pre-Order'}
+          </span>
+        )}
         {product.is_trending && (
           <span className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1 bg-[#F2CC8F] text-black border-2 border-black rounded-md rotate-[1deg]">
             {t('trending')}
@@ -98,7 +108,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             {t('best_seller')}
           </span>
         )}
-        {!product.is_in_stock && (
+        {!product.is_in_stock && !product.is_soon && (
           <span className="text-[10px] font-black tracking-wider uppercase px-2.5 py-1 bg-red-600 text-white border-2 border-black rounded-md">
             {t('out_of_stock')}
           </span>
@@ -125,7 +135,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           onError={() => setImgSrc(defaultPlaceholder)}
-          className={`object-contain p-2 group-hover:scale-105 transition-transform duration-500 ${!product.is_in_stock ? 'blur-[3px] opacity-50' : ''}`}
+          className={`object-contain p-2 group-hover:scale-105 transition-transform duration-500 ${!product.is_in_stock || product.is_soon ? 'blur-[3px] opacity-50' : ''}`}
         />
 
         {/* Positioned Visual Tags Overlay */}
@@ -155,8 +165,15 @@ export default function ProductCard({ product }: ProductCardProps) {
           <Heart size={12} className={isFav ? 'text-red-500 fill-red-500' : 'text-black'} />
         </button>
 
-        {/* Out of Stock visual label */}
-        {!product.is_in_stock && (
+        {/* Out of Stock or Coming Soon visual label */}
+        {product.is_soon && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 select-none">
+            <span className="px-4 py-2 border-3 border-black bg-purple-600 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] rotate-[-4deg]">
+              {locale === 'ar' ? 'قريباً' : 'Coming Soon'}
+            </span>
+          </div>
+        )}
+        {!product.is_in_stock && !product.is_soon && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/10 select-none">
             <span className="px-4 py-2 border-3 border-black bg-zinc-900 text-[#EDE0D0] text-xs font-black uppercase tracking-wider rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] rotate-[-4deg]">
               {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
@@ -165,7 +182,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         )}
 
         {/* Quick View Hover Overlay */}
-        <div className={`absolute inset-0 bg-black/25 opacity-0 ${product.is_in_stock ? 'group-hover:opacity-100' : 'pointer-events-none'} transition-opacity duration-300 flex items-center justify-center gap-2`}>
+        <div className={`absolute inset-0 bg-black/25 opacity-0 ${product.is_in_stock || product.is_soon ? 'group-hover:opacity-100' : 'pointer-events-none'} transition-opacity duration-300 flex items-center justify-center gap-2`}>
           <button
             onClick={() => setPreviewProduct(product)}
             className="flex items-center gap-1 px-4 py-2 text-xs font-black uppercase bg-white text-black border-2 border-black rounded-lg hover:bg-[#EDE0D0] transition-colors"
@@ -246,27 +263,61 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* CTA Button */}
         <div className="mt-4 pt-3 border-t border-black/10">
-          {product.is_in_stock ? (
-            <button
-              onClick={() => {
-                const defaultFit = product.fit_type === 'regular' ? 'regular' : 'oversized';
-                const firstInStockSize = product.available_sizes.find(
-                  (size) => (product.stock_quantities?.[size] ?? 10) > 0
-                ) || product.available_sizes?.[0] || 'M';
-                addToCart(product, firstInStockSize, 'Standard Cotton', 1, defaultFit);
-              }}
-              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white transition-all duration-300 border-2 border-black rounded-lg cursor-pointer"
-            >
-              {t('add_to_cart') || 'Add to Cart'}
-            </button>
-          ) : (
-            <button
-              disabled
-              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-zinc-400 text-zinc-100 border-2 border-zinc-500 rounded-lg cursor-not-allowed"
-            >
-              {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
-            </button>
-          )}
+          {(() => {
+            const isPreorderMode = product.is_preorder || settings?.global_preorder_mode === true;
+            
+            if (product.is_soon && !isPreorderMode) {
+              return (
+                <button
+                  disabled
+                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-purple-200 text-purple-600 border-2 border-purple-300 rounded-lg cursor-not-allowed"
+                >
+                  {locale === 'ar' ? 'قريباً جداً' : 'Coming Soon'}
+                </button>
+              );
+            }
+
+            if (isPreorderMode) {
+              return (
+                <button
+                  onClick={() => {
+                    const defaultFit = product.fit_type === 'regular' ? 'regular' : 'oversized';
+                    const firstSize = product.available_sizes?.[0] || 'M';
+                    addToCart(product, firstSize, 'Standard Cotton', 1, defaultFit);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-blue-600 text-white hover:bg-blue-700 transition-all duration-300 border-2 border-black rounded-lg cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5"
+                >
+                  {locale === 'ar' ? 'طلب مسبق 🛒' : 'Pre-Order 🛒'}
+                </button>
+              );
+            }
+
+            if (product.is_in_stock) {
+              return (
+                <button
+                  onClick={() => {
+                    const defaultFit = product.fit_type === 'regular' ? 'regular' : 'oversized';
+                    const firstInStockSize = product.available_sizes.find(
+                      (size) => (product.stock_quantities?.[size] ?? 10) > 0
+                    ) || product.available_sizes?.[0] || 'M';
+                    addToCart(product, firstInStockSize, 'Standard Cotton', 1, defaultFit);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-black text-[#EDE0D0] hover:bg-brand-accent hover:text-white transition-all duration-300 border-2 border-black rounded-lg cursor-pointer"
+                >
+                  {t('add_to_cart') || 'Add to Cart'}
+                </button>
+              );
+            }
+
+            return (
+              <button
+                disabled
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-black uppercase bg-zinc-400 text-zinc-100 border-2 border-zinc-500 rounded-lg cursor-not-allowed"
+              >
+                {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
+              </button>
+            );
+          })()}
         </div>
       </div>
 

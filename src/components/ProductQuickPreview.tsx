@@ -14,7 +14,7 @@ export default function ProductQuickPreview() {
   const tp = useTranslations('products');
   const locale = useLocale();
   
-  const { previewProduct, setPreviewProduct, setCheckoutProduct, getProductEffectivePrice, addToCart } = useStore();
+  const { previewProduct, setPreviewProduct, setCheckoutProduct, getProductEffectivePrice, addToCart, settings } = useStore();
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedFabric, setSelectedFabric] = useState('Standard Cotton');
@@ -27,14 +27,15 @@ export default function ProductQuickPreview() {
     if (previewProduct) {
       const defaultFit = previewProduct.fit_type === 'regular' ? 'regular' : 'oversized';
       setSelectedFit(defaultFit);
+      const isPreorderMode = previewProduct.is_preorder || settings?.global_preorder_mode === true;
       const firstInStockSize = previewProduct.available_sizes.find(
-        (size) => (previewProduct.stock_quantities?.[size] ?? 10) > 0
+        (size) => isPreorderMode || (previewProduct.stock_quantities?.[size] ?? 10) > 0
       ) || previewProduct.available_sizes?.[0] || 'M';
       setSelectedSize(firstInStockSize);
       setSelectedFabric(previewProduct.material_options?.[0] || 'Standard Cotton');
       setActiveImageIdx(0);
     }
-  }, [previewProduct]);
+  }, [previewProduct, settings]);
 
   // Esc key closes modal
   useEffect(() => {
@@ -56,6 +57,8 @@ export default function ProductQuickPreview() {
   }, [previewProduct]);
 
   if (!previewProduct) return null;
+
+  const isPreorderMode = previewProduct.is_preorder || settings?.global_preorder_mode === true;
 
   const name = locale === 'ar' ? previewProduct.name_ar : previewProduct.name_en;
   const description = locale === 'ar' ? previewProduct.description_ar : previewProduct.description_en;
@@ -137,9 +140,16 @@ export default function ProductQuickPreview() {
                     alt={name}
                     fill
                     sizes="400px"
-                    className={`object-contain p-3 ${!previewProduct.is_in_stock ? 'blur-[3px] opacity-60' : ''}`}
+                    className={`object-contain p-3 ${(!previewProduct.is_in_stock && !isPreorderMode) || previewProduct.is_soon ? 'blur-[3px] opacity-60' : ''}`}
                   />
-                  {!previewProduct.is_in_stock && (
+                  {previewProduct.is_soon && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 select-none pointer-events-none">
+                      <span className="px-4 py-2 border-3 border-black bg-purple-600 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] rotate-[-4deg]">
+                        {locale === 'ar' ? 'قريباً' : 'Coming Soon'}
+                      </span>
+                    </div>
+                  )}
+                  {!previewProduct.is_in_stock && !previewProduct.is_soon && !isPreorderMode && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/10 select-none pointer-events-none">
                       <span className="px-4 py-2 border-3 border-black bg-zinc-900 text-[#EDE0D0] text-xs font-black uppercase tracking-wider rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] rotate-[-4deg]">
                         {locale === 'ar' ? 'نفدت الكمية' : 'Out of Stock'}
@@ -177,6 +187,16 @@ export default function ProductQuickPreview() {
                     <span className="text-[9px] font-black tracking-widest bg-black text-[#EDE0D0] px-2 py-0.5 rounded-full uppercase border border-white/20">
                       {tp('unisex')}
                     </span>
+                    {previewProduct.is_soon && (
+                      <span className="text-[9px] font-black tracking-wider uppercase bg-purple-600 text-white px-2.5 py-0.5 rounded-full border-2 border-black shadow-[1px_1px_0px_rgba(0,0,0,1)]">
+                        {locale === 'ar' ? 'قريباً' : 'Coming Soon'}
+                      </span>
+                    )}
+                    {isPreorderMode && (
+                      <span className="text-[9px] font-black tracking-wider uppercase bg-blue-600 text-white px-2.5 py-0.5 rounded-full border-2 border-black shadow-[1px_1px_0px_rgba(0,0,0,1)]">
+                        {locale === 'ar' ? 'طلب مسبق' : 'Pre-Order'}
+                      </span>
+                    )}
                     {hasDiscount && (
                       <span className="text-[9px] font-black tracking-wider uppercase bg-brand-accent text-white px-2.5 py-0.5 rounded-full border-2 border-black shadow-[1px_1px_0px_rgba(0,0,0,1)] flex items-center gap-1">
                         <span>🔥</span>
@@ -253,21 +273,6 @@ export default function ProductQuickPreview() {
                     </div>
                   )}
 
-                  {previewProduct.fit_type === 'regular' && (
-                    <div className="mt-4">
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-600 border border-zinc-300 px-2 py-1 rounded">
-                        ℹ️ {locale === 'ar' ? 'متوفر بمقاس معتاد فقط' : 'Regular Fit Only'}
-                      </span>
-                    </div>
-                  )}
-                  {previewProduct.fit_type === 'oversized' && (
-                    <div className="mt-4">
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-600 border border-zinc-300 px-2 py-1 rounded">
-                        ℹ️ {locale === 'ar' ? 'متوفر بمقاس واسع فقط' : 'Oversized Fit Only'}
-                      </span>
-                    </div>
-                  )}
-
                   {/* Size Selector */}
                   <div className="mt-6">
                     <div className="flex justify-between items-center mb-2">
@@ -284,7 +289,7 @@ export default function ProductQuickPreview() {
                     <div className="flex gap-2 flex-wrap">
                       {previewProduct.available_sizes.map((size) => {
                         const qty = previewProduct.stock_quantities?.[size] ?? 10;
-                        const isOutOfStock = qty <= 0;
+                        const isOutOfStock = qty <= 0 && !isPreorderMode;
                         return (
                           <button
                             key={size}
@@ -304,9 +309,17 @@ export default function ProductQuickPreview() {
                       })}
                     </div>
 
-                    {/* Size Stock Status — only show warnings, not counts */}
+                    {/* Size Stock Status */}
                     <div className="mt-2 min-h-[1.25rem] flex items-center">
                       {(() => {
+                        if (isPreorderMode) {
+                          return (
+                            <span className="text-[10px] font-black text-blue-600 flex items-center gap-1.5">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                              {locale === 'ar' ? '🕐 هذا المنتج متاح للحجز المسبق فقط وسيتأخر شحنه قليلاً' : '🕐 This item is available for Pre-Order. Shipping will be slightly delayed.'}
+                            </span>
+                          );
+                        }
                         const qty = previewProduct.stock_quantities?.[selectedSize] ?? 10;
                         if (qty <= 0) {
                           return (
@@ -323,7 +336,7 @@ export default function ProductQuickPreview() {
                             </span>
                           );
                         } else {
-                          return null; // Don't show count for normal stock items
+                          return null;
                         }
                       })()}
                     </div>
@@ -373,25 +386,56 @@ export default function ProductQuickPreview() {
           {/* Sticky Drawer Footer actions */}
           <div className="p-6 bg-white border-t-3 border-black flex flex-col sm:flex-row gap-3">
             
-            {/* Direct Order Button */}
-            {previewProduct.is_in_stock && (previewProduct.stock_quantities?.[selectedSize] ?? 10) > 0 ? (
-              <button
-                onClick={() => {
-                  addToCart(previewProduct, selectedSize, selectedFabric, 1, selectedFit);
-                  setPreviewProduct(null); // Close quick preview
-                }}
-                className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
-              >
-                {tp('add_to_cart') || 'Add to Cart'}
-              </button>
-            ) : (
-              <button
-                disabled
-                className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase bg-zinc-400 text-zinc-100 border-3 border-zinc-500 rounded-xl cursor-not-allowed"
-              >
-                {locale === 'ar' ? 'المقاس غير متوفر' : 'Size Out of Stock'}
-              </button>
-            )}
+            {/* Direct Order / Pre-order Button */}
+            {(() => {
+              if (previewProduct.is_soon && !isPreorderMode) {
+                return (
+                  <button
+                    disabled
+                    className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase bg-purple-200 text-purple-600 border-3 border-purple-300 rounded-xl cursor-not-allowed"
+                  >
+                    {locale === 'ar' ? 'قريباً جداً' : 'Coming Soon'}
+                  </button>
+                );
+              }
+              
+              if (isPreorderMode) {
+                return (
+                  <button
+                    onClick={() => {
+                      addToCart(previewProduct, selectedSize, selectedFabric, 1, selectedFit);
+                      setPreviewProduct(null);
+                    }}
+                    className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-blue-600 hover:bg-blue-700 border-3 border-black rounded-xl sticker cursor-pointer transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"
+                  >
+                    {locale === 'ar' ? 'طلب مسبق الآن 🛒' : 'Pre-Order Now 🛒'}
+                  </button>
+                );
+              }
+
+              if (previewProduct.is_in_stock && (previewProduct.stock_quantities?.[selectedSize] ?? 10) > 0) {
+                return (
+                  <button
+                    onClick={() => {
+                      addToCart(previewProduct, selectedSize, selectedFabric, 1, selectedFit);
+                      setPreviewProduct(null);
+                    }}
+                    className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase text-white bg-black hover:bg-brand-accent border-3 border-black rounded-xl sticker cursor-pointer transition-colors"
+                  >
+                    {tp('add_to_cart') || 'Add to Cart'}
+                  </button>
+                );
+              }
+
+              return (
+                <button
+                  disabled
+                  className="flex-grow flex items-center justify-center gap-2 py-4 text-sm font-black uppercase bg-zinc-400 text-zinc-100 border-3 border-zinc-500 rounded-xl cursor-not-allowed"
+                >
+                  {locale === 'ar' ? 'المقاس غير متوفر' : 'Size Out of Stock'}
+                </button>
+              );
+            })()}
 
             {/* Share link button */}
             <button

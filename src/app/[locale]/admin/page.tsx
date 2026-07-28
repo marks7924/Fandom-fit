@@ -53,6 +53,8 @@ export default function AdminPage() {
     is_new_arrival: false, is_best_seller: false, is_limited_edition: false,
     is_pinned: false,
     gives_cotton_reward: false,
+    is_soon: false,
+    is_preorder: false,
     available_sizes: ['S', 'M', 'L', 'XL'], material_options: ['Standard Cotton', 'Premium Cotton'],
     images: [] as string[], display_order: 0,
     fit_type: 'both',
@@ -164,6 +166,7 @@ export default function AdminPage() {
     loading_logo_url: '',
     delivery_fee: 50,
     chat_widget_enabled: true,
+    global_preorder_mode: false,
     hero_product_id: '',
     terms_en: '',
     terms_ar: '',
@@ -475,6 +478,7 @@ export default function AdminPage() {
         loading_logo_url: settings.loading_logo_url || '',
         delivery_fee: Number(settings.delivery_fee ?? 50),
         chat_widget_enabled: settings.chat_widget_enabled !== false,
+        global_preorder_mode: settings.global_preorder_mode === true,
         hero_product_id: settings.hero_product_id || '',
         terms_en: settings.terms_en || '',
         terms_ar: settings.terms_ar || '',
@@ -1843,7 +1847,7 @@ export default function AdminPage() {
                               setEditingItem(p);
                               setTagsText((p.tags || []).join(', '));
                               setQueuedDesigns([]);
-                              setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false, gives_cotton_reward: p.gives_cotton_reward || false, fit_type: p.fit_type || 'both', stock_quantities: p.stock_quantities || {} });
+                              setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false, gives_cotton_reward: p.gives_cotton_reward || false, is_soon: p.is_soon || false, is_preorder: p.is_preorder || false, fit_type: p.fit_type || 'both', stock_quantities: p.stock_quantities || {} });
                               setIsFormOpen(true);
                             }}
                             className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-full text-[10px] font-bold text-zinc-300 cursor-pointer transition-colors"
@@ -1873,7 +1877,7 @@ export default function AdminPage() {
                                 setEditingItem(p);
                                 setTagsText((p.tags || []).join(', '));
                                 setQueuedDesigns([]);
-                                setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false, gives_cotton_reward: p.gives_cotton_reward || false, fit_type: p.fit_type || 'both', stock_quantities: p.stock_quantities || {} });
+                                setProdForm({ ...p, sale_price: p.sale_price || '', is_pinned: p.is_pinned || false, gives_cotton_reward: p.gives_cotton_reward || false, is_soon: p.is_soon || false, is_preorder: p.is_preorder || false, fit_type: p.fit_type || 'both', stock_quantities: p.stock_quantities || {} });
                                 setIsFormOpen(true);
                               }}
                               className="px-2.5 py-1 bg-rose-950/40 hover:bg-rose-950/60 border border-rose-900/60 rounded-full text-[10px] font-bold text-rose-300 cursor-pointer transition-colors"
@@ -1984,6 +1988,8 @@ export default function AdminPage() {
                       is_new_arrival: true, is_best_seller: false, is_limited_edition: false,
                       is_pinned: false,
                       gives_cotton_reward: false,
+                      is_soon: false,
+                      is_preorder: false,
                       available_sizes: defaultSizes,
                       material_options: defaultFabrics,
                       images: [], display_order: 0,
@@ -2378,7 +2384,7 @@ export default function AdminPage() {
                     />
                     📌 {locale === 'ar' ? 'تثبيت المنتج' : 'Pin Drop'}
                   </label>
-                  <label className="flex items-center gap-2 text-xs font-bold text-[#E07A5F]">
+                   <label className="flex items-center gap-2 text-xs font-bold text-[#E07A5F]">
                     <input 
                       type="checkbox" 
                       checked={prodForm.gives_cotton_reward || false}
@@ -2386,6 +2392,24 @@ export default function AdminPage() {
                       className="accent-[#E07A5F]" 
                     />
                     🧶 {locale === 'ar' ? 'يعطي مكافأة قطن' : 'Gives Cotton Reward'}
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-purple-400">
+                    <input 
+                      type="checkbox" 
+                      checked={prodForm.is_soon || false}
+                      onChange={(e) => setProdForm({ ...prodForm, is_soon: e.target.checked })}
+                      className="accent-purple-400" 
+                    />
+                    🕐 {locale === 'ar' ? 'قريباً (Coming Soon)' : 'Coming Soon'}
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-blue-400">
+                    <input 
+                      type="checkbox" 
+                      checked={prodForm.is_preorder || false}
+                      onChange={(e) => setProdForm({ ...prodForm, is_preorder: e.target.checked })}
+                      className="accent-blue-400" 
+                    />
+                    🛒 {locale === 'ar' ? 'طلب مسبق (Pre-Order)' : 'Pre-Order'}
                   </label>
                 </div>
 
@@ -3079,6 +3103,8 @@ export default function AdminPage() {
                                     sale_price: p.sale_price || '',
                                     is_pinned: p.is_pinned || false,
                                     gives_cotton_reward: p.gives_cotton_reward || false,
+                                    is_soon: p.is_soon || false,
+                                    is_preorder: p.is_preorder || false,
                                     fit_type: p.fit_type || 'both',
                                     stock_quantities: p.stock_quantities || {}
                                   });
@@ -4787,6 +4813,32 @@ export default function AdminPage() {
                     </span>
                     <p className="text-[9px] text-zinc-500 mt-1">
                       Toggle the floating support chat bubble globally on your storefront homepages.
+                    </p>
+                  </div>
+
+                  {/* Global Preorder Mode Toggle Switch */}
+                  <div className="pt-3 border-t border-zinc-850">
+                    <label className="text-[9px] uppercase font-bold text-zinc-500 block mb-1.5 font-mono">
+                      🛒 Global Pre-Order Shop Mode
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsForm({ ...settingsForm, global_preorder_mode: !settingsForm.global_preorder_mode })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        settingsForm.global_preorder_mode ? 'bg-blue-600' : 'bg-zinc-800'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          settingsForm.global_preorder_mode ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-xs font-bold text-zinc-300 ml-2 align-middle uppercase select-none font-mono">
+                      {settingsForm.global_preorder_mode ? 'Pre-Order Only Mode / Enabled' : 'Normal Catalog Mode / Disabled'}
+                    </span>
+                    <p className="text-[9px] text-zinc-500 mt-1">
+                      Enabling this forces all products across the entire store to act as Pre-Order items, ignoring local stock values.
                     </p>
                   </div>
 

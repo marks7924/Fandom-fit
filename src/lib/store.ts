@@ -44,6 +44,8 @@ export interface Product {
   is_pinned?: boolean;
   gives_cotton_reward?: boolean;
   is_hidden?: boolean;
+  is_soon?: boolean;
+  is_preorder?: boolean;
   tags?: string[];
   fit_type?: 'regular' | 'oversized' | 'both';
   stock_quantities?: Record<string, number>;
@@ -124,6 +126,7 @@ export interface Order {
   payment_method?: string | null;
   payment_receipt_url?: string | null;
   rejection_reason?: string | null;
+  cancel_token?: string | null;
 }
 
 export interface CartItem {
@@ -926,8 +929,10 @@ export const useStore = create<StoreState>((set, get) => ({
       }
 
       // 3. Save order with pre-generated reward coupon code linked (none for buyer here)
+      const cancelToken = 'tok_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const finalOrder = {
         ...order,
+        cancel_token: cancelToken,
         reward_coupon_code: undefined,
         user_id: get().user?.id || undefined
       };
@@ -952,6 +957,7 @@ export const useStore = create<StoreState>((set, get) => ({
           payment_method: order.payment_method,
           payment_receipt_url: order.payment_receipt_url,
           rejection_reason: order.rejection_reason,
+          cancel_token: cancelToken,
           location: order.location || `${order.governorate || ''} ${order.city || ''}`.trim() || 'N/A',
           notes: [
             order.notes,

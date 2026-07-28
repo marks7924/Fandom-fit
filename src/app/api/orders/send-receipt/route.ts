@@ -48,6 +48,17 @@ export async function POST(request: Request) {
     const location = order.location || 'N/A';
     const notes = order.notes || '';
     const paymentMethod = order.payment_method || 'N/A';
+    const cancelToken = order.cancel_token || '';
+
+    // Build cancel/edit links using token
+    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const host = request.headers.get('host') || 'fandom-fit.vercel.app';
+    const websiteUrl = `${protocol}://${host}`;
+    const cancelLink = `${websiteUrl}/account?action=cancel&orderId=${orderId}&token=${cancelToken}`;
+    const editLink = `${websiteUrl}/account?action=edit&orderId=${orderId}&token=${cancelToken}`;
+
+    // Detect preorder
+    const isPreorder = (notes || '').includes('[PRE-ORDER]');
 
     // Format items list if available
     let itemsHtml = '';
@@ -91,7 +102,9 @@ export async function POST(request: Request) {
         .replace(/{location}/g, location)
         .replace(/{paymentMethod}/g, paymentMethod.replace(/_/g, ' ').toUpperCase())
         .replace(/{itemsHtml}/g, itemsHtml)
-        .replace(/{websiteUrl}/g, 'https://fandom-fit.vercel.app');
+        .replace(/{cancelLink}/g, cancelLink)
+        .replace(/{editLink}/g, editLink)
+        .replace(/{websiteUrl}/g, websiteUrl);
     };
 
     const defaultSubject = `Your Fandom Fit Order Confirmation! 📦 (Code: {orderCode})`;
@@ -126,7 +139,25 @@ export async function POST(request: Request) {
           </div>
         </div>
         
-        <p style="font-size: 12px; font-weight: 600; color: #333; line-height: 1.6; margin-bottom: 25px;">We will contact you via phone/WhatsApp when the package is out for delivery.</p>
+        <p style="font-size: 12px; font-weight: 600; color: #333; line-height: 1.6; margin-bottom: 15px;">We will contact you via phone/WhatsApp when the package is out for delivery.</p>
+        
+        ${isPreorder ? `
+        <div style="background-color: #EDE0D0; border: 2px solid #000; border-radius: 10px; padding: 12px; margin-bottom: 20px; text-align: center;">
+          <p style="margin: 0; font-size: 11px; font-weight: 900; color: #3D405B; text-transform: uppercase;">🕐 Pre-Order Notice</p>
+          <p style="margin: 6px 0 0 0; font-size: 11px; font-weight: 600; color: #333;">This is a pre-order. We will notify you via email and phone when your item is ready for production and shipping.</p>
+        </div>
+        ` : ''}
+        
+        ${cancelToken ? `
+        <div style="background-color: #f9f9f9; border: 2px dashed #000; border-radius: 10px; padding: 12px; margin-bottom: 20px; text-align: center;">
+          <p style="margin: 0 0 8px 0; font-size: 10px; font-weight: 900; color: #555; text-transform: uppercase;">Order Actions (Before Processing Begins)</p>
+          <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+            <a href="${editLink}" style="background-color: #fff; color: #000; text-decoration: none; padding: 8px 16px; border: 2px solid #000; border-radius: 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block;">✏️ Edit Order</a>
+            <a href="${cancelLink}" style="background-color: #E07A5F; color: #fff; text-decoration: none; padding: 8px 16px; border: 2px solid #000; border-radius: 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; display: inline-block;">🚫 Cancel Order</a>
+          </div>
+          <p style="margin: 8px 0 0 0; font-size: 9px; font-weight: 600; color: #999;">These links expire once your order status changes to "In Progress".</p>
+        </div>
+        ` : ''}
         
         <div style="font-size: 11px; font-weight: 600; color: #E07A5F; line-height: 1.5; border-top: 1px dashed rgba(0,0,0,0.15); padding-top: 15px; margin-top: 25px; text-align: center;">
           💡 Note: If you do not see this email in your inbox, please make sure to check your <strong>Spam or Junk folder</strong> and mark Fandom Fit as a safe sender.

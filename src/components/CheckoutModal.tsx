@@ -483,12 +483,22 @@ export default function CheckoutModal() {
     const codBalance = Math.max(0, total - codDeposit);
 
     const isCod = paymentMethod === 'cod';
-    const finalNotes = isCod 
+    let finalNotes = isCod 
       ? `[COD Deposit split: Paid 10% items + shipping (${codDeposit} EGP) upfront. Balance due on delivery: ${codBalance} EGP.] | ${fullNotes}`
       : fullNotes;
 
+    const isPreorder = isSingle
+      ? (checkoutProduct?.is_preorder || settings?.global_preorder_mode === true)
+      : (cart.some(item => item.product?.is_preorder || settings?.global_preorder_mode === true));
+
+    if (isPreorder) {
+      finalNotes = `[PRE-ORDER] | ${finalNotes}`;
+    }
+
     const actualPaymentMethod = isCod ? 'cod_instapay_upfront' : paymentMethod;
-    const orderStatus = (paymentMethod === 'instapay' || paymentMethod === 'cod') ? 'pending_verification' : 'pending_payment';
+    const orderStatus = isPreorder 
+      ? 'preorder' 
+      : ((paymentMethod === 'instapay' || paymentMethod === 'cod') ? 'pending_verification' : 'pending_payment');
 
     const result = await addOrder({
       product_id: isSingle && checkoutProduct ? checkoutProduct.id : null,
