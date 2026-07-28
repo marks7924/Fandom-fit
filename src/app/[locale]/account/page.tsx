@@ -198,6 +198,79 @@ export default function AccountPage() {
     }
   }, [settings, userCustomRequests]);
 
+  // Handle ?action=cancel/edit URL params from email links
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const orderIdParam = params.get('orderId');
+    const tokenParam = params.get('token');
+    if (!action || !orderIdParam || !tokenParam) return;
+
+    // Fetch the target order from Supabase so we can show the correct form
+    const loadOrderForAction = async () => {
+      const { data: ord } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderIdParam)
+        .maybeSingle();
+
+      if (!ord) {
+        alert(locale === 'ar'
+          ? 'لم يتم العثور على الطلب أو انتهت صلاحية الرابط.'
+          : 'Order not found or the link has expired.');
+        return;
+      }
+
+      // Guard: locked once in_progress
+      if (ord.status === 'in_progress' || ord.status === 'completed' || ord.status === 'cancelled') {
+        alert(locale === 'ar'
+          ? 'لا يمكن تعديل أو إلغاء هذا الطلب بعد الآن. الحالة: ' + ord.status
+          : `This order can no longer be edited or cancelled. Status: ${ord.status}`);
+        return;
+      }
+
+      if (action === 'cancel') {
+        const confirmed = window.confirm(locale === 'ar'
+          ? `هل أنت متأكد أنك تريد إلغاء الطلب #${ord.order_code}؟`
+          : `Are you sure you want to cancel order #${ord.order_code}?`);
+        if (!confirmed) return;
+
+        const res = await fetch('/api/orders/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: orderIdParam, token: tokenParam })
+        });
+        const json = await res.json();
+        if (json.success) {
+          alert(locale === 'ar' ? 'تم إلغاء طلبك بنجاح.' : 'Your order has been cancelled successfully.');
+        } else {
+          alert(locale === 'ar'
+            ? 'فشل الإلغاء: ' + (json.error || 'خطأ غير معروف')
+            : 'Cancellation failed: ' + (json.error || 'Unknown error'));
+        }
+      } else if (action === 'edit') {
+        setCancelOrEditToken(tokenParam);
+        setEditingOrder(ord);
+        setEditOrderForm({
+          customer_name: ord.customer_name || '',
+          customer_phone: ord.customer_phone || '',
+          governorate: (ord.location || '').split(' - ')[0] || '',
+          city: (ord.location || '').split(' - ')[1] || '',
+          address: (ord.location || '').split(' - ')[2] || '',
+          notes: ord.notes || ''
+        });
+      }
+
+      // Clean up URL so params don't persist on refresh
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    };
+
+    loadOrderForAction();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, locale]);
+
   if (!mounted || isLoading) {
     return <LoadingScreen />;
   }
@@ -273,62 +346,6 @@ export default function AccountPage() {
     }
   };
 
-  // Handle cancel/edit links from email
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const action = params.get('action');
-    const orderId = params.get('orderId');
-    const token = params.get('token');
-    if (!orderId || !token) return;
-
-    setCancelOrEditToken(token);
-
-    if (action === 'cancel') {
-      const confirmCancel = window.confirm(
-        locale === 'ar'
-          ? 'هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟'
-          : 'Are you sure you want to cancel this order?'
-      );
-      if (confirmCancel) {
-        setIsActionSubmitting(true);
-        fetch('/api/orders/cancel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, cancelToken: token })
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.success) {
-              alert(locale === 'ar' ? 'تم إلغاء الطلب بنجاح!' : 'Order cancelled successfully!');
-              window.history.replaceState({}, '', '/account');
-            } else {
-              alert(data.error || 'Failed to cancel order. It may already be in progress.');
-            }
-          })
-          .catch(() => alert('An error occurred.'))
-          .finally(() => setIsActionSubmitting(false));
-      }
-    } else if (action === 'edit') {
-      supabase.from('orders').select('*').eq('id', orderId).maybeSingle()
-        .then(({ data, error }: any) => {
-          if (data && !error) {
-            setEditingOrder(data);
-            setEditOrderForm({
-              customer_name: data.customer_name || '',
-              customer_phone: data.customer_phone || '',
-              governorate: data.governorate || '',
-              city: data.city || '',
-              address: data.address || data.location || '',
-              notes: data.notes || ''
-            });
-            window.history.replaceState({}, '', '/account');
-          } else {
-            alert(locale === 'ar' ? 'عذراً، لم يتم العثور على الطلب.' : 'Sorry, order not found or cannot be edited.');
-          }
-        });
-    }
-  }, [locale]);
 
   const handleCancelOrder = async (orderId: string) => {
     const confirmCancel = window.confirm(
