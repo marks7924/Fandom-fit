@@ -497,12 +497,13 @@ export default function AdminPage() {
     }
   }, [isAuthenticated, settings]);
 
-  // ── Supabase Realtime: auto-refresh orders when new ones arrive ──────────
+  // ── Supabase Realtime: auto-refresh orders + requests when anything changes ──
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const channel = supabase
-      .channel('admin-orders-live')
+      .channel('admin-live-feed')
+      // Orders: new orders, edits, cancellations
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, () => {
         fetchOrders();
         fetchAdminRequests();
@@ -510,7 +511,18 @@ export default function AdminPage() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, () => {
         fetchOrders();
       })
-      .subscribe();
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+      })
+      // Custom requests: new requests, status changes
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_requests' }, () => {
+        fetchAdminRequests();
+      })
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Admin] Realtime connected — orders & requests will auto-update');
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
