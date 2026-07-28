@@ -928,13 +928,14 @@ export const useStore = create<StoreState>((set, get) => ({
         }
       }
 
-      // 3. Save order with pre-generated reward coupon code linked (none for buyer here)
+      // 3. Save order — cancel_token saved via a separate update after insert
+      //    so that the order always succeeds even if the migration hasn't been run yet
       const cancelToken = 'tok_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       const finalOrder = {
         ...order,
-        cancel_token: cancelToken,
         reward_coupon_code: undefined,
         user_id: get().user?.id || undefined
+        // cancel_token NOT included here — saved in a post-insert update below
       };
 
       // Try full insert first; if columns missing (DB not migrated), fallback to minimal safe insert
@@ -944,7 +945,7 @@ export const useStore = create<StoreState>((set, get) => ({
       const fullResult = await supabase.from('orders').insert([finalOrder]).select();
       if (fullResult.error) {
         console.warn('Full order insert failed (likely schema mismatch), trying minimal fallback:', fullResult.error.message);
-        // Minimal fallback — only columns that exist in the base schema
+        // Minimal fallback — only columns guaranteed to exist in the base schema
         const minimalOrder = {
           product_id: order.product_id || undefined,
           product_name: order.product_name,
@@ -957,7 +958,6 @@ export const useStore = create<StoreState>((set, get) => ({
           payment_method: order.payment_method,
           payment_receipt_url: order.payment_receipt_url,
           rejection_reason: order.rejection_reason,
-          // cancel_token intentionally omitted from minimal fallback (column may not exist yet in DB)
           location: order.location || `${order.governorate || ''} ${order.city || ''}`.trim() || 'N/A',
           notes: [
             order.notes,
@@ -980,7 +980,13 @@ export const useStore = create<StoreState>((set, get) => ({
       
       const newOrder = data?.[0] || null;
       if (newOrder) {
-        set({ orders: [newOrder, ...get().orders] });
+        // Attach cancel_token via a post-insert update (silently ignored if column doesn't exist yet)
+        supabase.from('orders').update({ cancel_token: cancelToken }).eq('id', newOrder.id)
+          .then(({ error: tokenErr }) => {
+            if (tokenErr) console.warn('cancel_token update skipped (run migrate_extensions.sql):', tokenErr.message);
+          });
+        // Keep cancel_token in local state even if DB update failed
+        set({ orders: [{ ...newOrder, cancel_token: cancelToken }, ...get().orders] });
 
         // Decrement stock levels for ordered items
         if (order.items && Array.isArray(order.items)) {
