@@ -7,16 +7,28 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 // These statuses block editing
 const NON_EDITABLE_STATUSES = ['in_progress', 'completed', 'cancelled', 'shipped'];
 
-// Only these fields are safe to update by users
 const ALLOWED_UPDATE_FIELDS = [
   'customer_name',
   'customer_phone',
   'location',
-  'notes',
   'governorate',
   'city',
-  'address'
+  'address',
+  'items',
+  'price',
+  'notes',
+  'payment_receipt_url',
+  'status'
 ];
+
+const getFabricPremium = (fabric: string): number => {
+  const f = (fabric || '').toLowerCase();
+  if (f.includes('standard')) return 0;
+  if (f.includes('oversized') || f.includes('over-sized')) return 150;
+  if (f.includes('heavy')) return 100;
+  if (f.includes('premium')) return 50;
+  return 0; // default/fallback
+};
 
 export async function POST(request: Request) {
   try {
@@ -60,11 +72,88 @@ export async function POST(request: Request) {
       }, { status: 422 });
     }
 
-    // 4. Sanitize updates — only allow permitted fields
+    // 4. If updates include items, recalculate total price & rebuild technical notes
+    const finalUpdates = { ...updates };
+    
+    if (updates.items && Array.isArray(updates.items) && updates.items.length > 0) {
+      // Calculate original subtotal of items
+      const originalItems = Array.isArray(order.items) ? order.items : [];
+      
+      // We need to calculate the new price for each item based on its fabric/fit premium changes
+      const updatedItems = updates.items.map((newItem: any) => {
+        // Find matching original item to get base price
+        const oldItem = originalItems.find((o: any) => o.id === newItem.id || o.product_id === newItem.product_id) || newItem;
+        
+        const oldPremium = getFabricPremium(oldItem.fabric);
+        const newPremium = getFabricPremium(newItem.fabric);
+        
+        const basePrice = (oldItem.price || 0) - oldPremium;
+        const newPrice = basePrice + newPremium;
+        
+        return {
+          ...newItem,
+          price: newPrice
+        };
+      });
+
+      const oldSubtotal = originalItems.reduce((sum: number, item: any) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
+      const newSubtotal = updatedItems.reduce((sum: number, item: any) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
+      
+      const priceDiff = newSubtotal - oldSubtotal;
+      const originalTotal = Number(order.price || 0);
+      const newTotal = originalTotal + priceDiff;
+
+      // Reconstruct technical notes to prevent user from writing random notes & protect COD info
+      const customerNoteMatch = (order.notes || '').match(/Customer Note:\s*([^|]+)/i);
+      const customerNote = customerNoteMatch ? customerNoteMatch[1].trim() : '';
+
+      const specsStr = updatedItems.map((i: any) => `${i.product_name}: ${i.fabric}/${i.fit_type || 'oversized'}`).join(', ');
+      
+      let reconstructedNotes = `[Checkout Type: Web] | Items Spec: ${specsStr}`;
+      if (customerNote) {
+        reconstructedNotes += ` | Customer Note: ${customerNote}`;
+      }
+
+      // Check payment split details
+      const isCod = (order.payment_method || '').startsWith('cod');
+      const isCustomOrder = (order.product_name || '').toLowerCase().includes('custom design');
+      const depositPercent = isCustomOrder ? 0.50 : 0.10;
+      
+      if (isCod) {
+        // Recalculate deposit and balance
+        const shippingFee = originalTotal - oldSubtotal;
+        const newDeposit = Math.round((newSubtotal * depositPercent) + shippingFee);
+        const newBalance = Math.max(0, newTotal - newDeposit);
+        
+        let splitNote = `[COD Deposit split: Paid ${depositPercent * 100}% items + shipping (${newDeposit} EGP) upfront. Balance due on delivery: ${newBalance} EGP.]`;
+        if (priceDiff > 0) {
+          const additionalDeposit = Math.round(priceDiff * depositPercent);
+          splitNote = `[COD Deposit split: Paid ${depositPercent * 100}% items + shipping (${newDeposit} EGP) upfront. Balance due on delivery: ${newBalance} EGP. Edits: Added +${priceDiff} EGP total, +${additionalDeposit} EGP deposit due.]`;
+        }
+        reconstructedNotes = `${splitNote} | ${reconstructedNotes}`;
+      } else {
+        // Online payments
+        if (priceDiff > 0) {
+          reconstructedNotes = `[Edits: Price rose by +${priceDiff} EGP. Outstanding balance to be verified.] | ${reconstructedNotes}`;
+        }
+      }
+
+      // Apply computed updates
+      finalUpdates.items = updatedItems;
+      finalUpdates.price = newTotal;
+      finalUpdates.notes = reconstructedNotes;
+
+      // If price rises and they paid the difference via screenshot (InstaPay), mark as pending_verification
+      if (priceDiff > 0 && updates.payment_receipt_url) {
+        finalUpdates.status = 'pending_verification';
+      }
+    }
+
+    // 5. Sanitize updates — only allow permitted fields
     const safeUpdates: Record<string, any> = {};
     for (const key of ALLOWED_UPDATE_FIELDS) {
-      if (key in updates) {
-        safeUpdates[key] = updates[key];
+      if (key in finalUpdates) {
+        safeUpdates[key] = finalUpdates[key];
       }
     }
 
@@ -72,7 +161,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'No valid fields provided for update' }, { status: 400 });
     }
 
-    // 5. Apply updates
+    // 6. Apply updates
     const { error: updateErr } = await supabase
       .from('orders')
       .update(safeUpdates)

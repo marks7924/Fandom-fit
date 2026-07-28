@@ -16,3 +16,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_token VARCHAR(255) DEFAULT NU
 INSERT INTO settings (key, value)
 VALUES ('global_preorder_mode', 'false')
 ON CONFLICT (key) DO NOTHING;
+
+-- 4. Extend orders table with cancellation reason and refund status
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_reason TEXT DEFAULT NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_refunded BOOLEAN DEFAULT FALSE;

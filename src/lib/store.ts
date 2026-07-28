@@ -127,6 +127,8 @@ export interface Order {
   payment_receipt_url?: string | null;
   rejection_reason?: string | null;
   cancel_token?: string | null;
+  cancel_reason?: string | null;
+  is_refunded?: boolean | null;
 }
 
 export interface CartItem {

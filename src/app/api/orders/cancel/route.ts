@@ -8,7 +8,7 @@ const NON_CANCELLABLE_STATUSES = ['in_progress', 'completed', 'cancelled', 'ship
 
 export async function POST(request: Request) {
   try {
-    const { orderId, cancelToken, userId } = await request.json();
+    const { orderId, cancelToken, userId, reason } = await request.json();
 
     if (!orderId) {
       return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 });
@@ -48,13 +48,31 @@ export async function POST(request: Request) {
       }, { status: 422 });
     }
 
-    // 4. Mark order as cancelled
-    const { error: updateErr } = await supabase
+    // 4. Mark order as cancelled (safely fallback if cancel_reason column doesn't exist yet)
+    const updatePayload: Record<string, any> = { 
+      status: 'cancelled', 
+      rejection_reason: reason || 'Cancelled by customer',
+      cancel_reason: reason || 'Cancelled by customer'
+    };
+    
+    let { error: updateErr } = await supabase
       .from('orders')
-      .update({ status: 'cancelled', rejection_reason: 'Cancelled by customer' })
+      .update(updatePayload)
       .eq('id', orderId);
 
-    if (updateErr) throw updateErr;
+    if (updateErr) {
+      console.warn('Failed to update with cancel_reason (probably column missing), falling back:', updateErr.message);
+      // Fallback: exclude cancel_reason
+      const fallbackPayload = { 
+        status: 'cancelled', 
+        rejection_reason: reason || 'Cancelled by customer'
+      };
+      const { error: fallbackErr } = await supabase
+        .from('orders')
+        .update(fallbackPayload)
+        .eq('id', orderId);
+      if (fallbackErr) throw fallbackErr;
+    }
 
     // 5. Send admin notification email
     const sendgridApiKey = process.env.SENDGRID_API_KEY;
@@ -83,8 +101,11 @@ export async function POST(request: Request) {
             </div>
 
             <p style="font-size: 12px; font-weight: 600; color: #333; line-height: 1.6;">
-              The customer has voluntarily cancelled this order from their profile or via the cancellation link in their confirmation email. Please review and close the order accordingly.
+              The customer has voluntarily cancelled this order. 
             </p>
+            <div style="background-color: #f5f5f5; border-left: 4px solid #E07A5F; padding: 10px; margin: 10px 0; font-size: 12px; font-style: italic;">
+              <strong>Cancellation Reason:</strong> ${reason || 'Not specified'}
+            </div>
 
             <div style="text-align: center; margin: 20px 0;">
               <a href="${websiteUrl}/admin" style="background-color: #000; color: #fff; text-decoration: none; padding: 12px 24px; border: 2px solid #000; border-radius: 10px; font-size: 11px; font-weight: 900; text-transform: uppercase; display: inline-block;">

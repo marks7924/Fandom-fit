@@ -7,7 +7,7 @@ import supabase, { isUsingMock } from '@/lib/supabase';
 import { 
   LayoutDashboard, ShoppingBag, FolderOpen, Ticket, Palette, Settings, 
   LogOut, Plus, Edit, Trash2, Copy, Eye, EyeOff, ToggleLeft, ToggleRight, Check, Save, X, ShoppingCart, Tag,
-  MessageSquare, Users, BarChart3, Bot, Trophy, ShieldAlert, Mail
+  MessageSquare, Users, BarChart3, Bot, Trophy, ShieldAlert, Mail, Ban
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -107,6 +107,7 @@ export default function AdminPage() {
   });
 
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [isMarkingRefunded, setIsMarkingRefunded] = useState<string | null>(null);
 
   // Live Chat admin panel states
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -1233,6 +1234,28 @@ export default function AdminPage() {
     }
   };
 
+  const handleMarkRefunded = async (orderId: string) => {
+    setIsMarkingRefunded(orderId);
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ is_refunded: true })
+        .eq('id', orderId);
+      if (error) throw error;
+      alert(locale === 'ar' ? 'تم تحديد الطلب كـ مسترجع بنجاح!' : 'Order marked as refunded successfully!');
+      await fetchOrders();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      setIsMarkingRefunded(null);
+    }
+  };
+
+  const getCancelledCount = (phone: string) => {
+    if (!phone) return 0;
+    return orders.filter(o => o.customer_phone === phone && o.status === 'cancelled').length;
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center font-mono">
@@ -1690,6 +1713,7 @@ export default function AdminPage() {
               { id: 'discounts', name: locale === 'ar' ? 'حملات الخصم' : 'Discounts', icon: <Tag size={16} />, cat: 'orders' },
               { id: 'requests', name: t('sidebar.custom_requests'), icon: <Palette size={16} />, cat: 'orders' },
               { id: 'orders', name: locale === 'ar' ? 'الطلبات' : 'Orders', icon: <ShoppingCart size={16} />, cat: 'orders' },
+              { id: 'cancelled-orders', name: locale === 'ar' ? 'الطلبات الملغاة' : 'Cancelled Orders', icon: <Ban size={16} />, cat: 'orders' },
               { id: 'designs-explorer', name: locale === 'ar' ? 'التصاميم والطباعة' : 'Designs Explorer', icon: <Palette size={16} />, cat: 'orders' },
               { id: 'chats', name: locale === 'ar' ? 'المحادثات المباشرة' : 'Live Chat', icon: <MessageSquare size={16} />, cat: 'orders' },
               { id: 'email-sender', name: locale === 'ar' ? 'مرسل البريد الإلكتروني' : 'Email Sender', icon: <Mail size={16} />, cat: 'orders' },
@@ -6588,7 +6612,15 @@ export default function AdminPage() {
                             <td className="p-4 font-bold text-brand-accent uppercase">
                               {order.order_code || `#${order.id.split('-')[0]}`}
                             </td>
-                            <td className="p-4 font-bold text-white">{order.customer_name}</td>
+                            <td className="p-4 font-bold text-white flex items-center gap-1.5">
+                              {getCancelledCount(order.customer_phone) > 1 && (
+                                <span className="relative flex h-2 w-2 mr-0.5 shrink-0" title={`Warning: Cancelled ${getCancelledCount(order.customer_phone)} past orders!`}>
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                </span>
+                              )}
+                              <span>{order.customer_name}</span>
+                            </td>
                             <td className="p-4 text-brand-accent font-semibold">{order.customer_phone}</td>
                             <td className="p-4 max-w-xs font-semibold">{order.location}</td>
                             <td className="p-4 max-w-sm space-y-2">
@@ -6811,6 +6843,120 @@ export default function AdminPage() {
               </table>
             </div>
           </div>
+          </div>
+        )}
+
+        {/* TAB 7.5: CANCELLED ORDERS */}
+        {activeTab === 'cancelled-orders' && (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-black uppercase text-white">
+              {locale === 'ar' ? 'الطلبات الملغاة' : 'Cancelled Orders'}
+            </h2>
+            
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[950px] text-left font-mono">
+                  <thead className="bg-zinc-800 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400">
+                    <tr>
+                      <th className="p-4">{locale === 'ar' ? 'الكود' : 'Code'}</th>
+                      <th className="p-4">{locale === 'ar' ? 'العميل' : 'Customer'}</th>
+                      <th className="p-4">{locale === 'ar' ? 'المنتجات' : 'Items'}</th>
+                      <th className="p-4">{locale === 'ar' ? 'سبب الإلغاء' : 'Cancellation Reason'}</th>
+                      <th className="p-4">{locale === 'ar' ? 'إيصال الدفع' : 'Receipt'}</th>
+                      <th className="p-4">{locale === 'ar' ? 'حالة الاسترجاع' : 'Refund Status'}</th>
+                      <th className="p-4 text-right">{locale === 'ar' ? 'الإجراءات' : 'Actions'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800 text-xs">
+                    {(() => {
+                      const cancelled = orders.filter(o => o.status === 'cancelled');
+                      if (cancelled.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={7} className="p-8 text-center text-zinc-500 font-semibold">
+                              {locale === 'ar' ? 'لا توجد طلبات ملغاة.' : 'No cancelled orders found.'}
+                            </td>
+                          </tr>
+                        );
+                      }
+                      return cancelled.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((order) => (
+                        <tr key={order.id} className="hover:bg-zinc-800/20 text-zinc-300">
+                          <td className="p-4 font-bold text-brand-accent uppercase">
+                            {order.order_code || `#${order.id.split('-')[0]}`}
+                          </td>
+                          <td className="p-4">
+                            <div className="font-bold text-white flex items-center gap-1.5">
+                              {getCancelledCount(order.customer_phone) > 1 && (
+                                <span className="relative flex h-2 w-2 mr-0.5 shrink-0" title={`Warning: Cancelled ${getCancelledCount(order.customer_phone)} past orders!`}>
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                </span>
+                              )}
+                              <span>{order.customer_name}</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-500">{order.customer_phone}</div>
+                          </td>
+                          <td className="p-4 max-w-xs space-y-1">
+                            <div className="text-white font-bold">{order.product_name} ({order.price} EGP)</div>
+                            {order.items && Array.isArray(order.items) && (
+                              <div className="text-[10px] text-zinc-400">
+                                {order.items.map((it: any, idx: number) => (
+                                  <div key={idx}>
+                                    • {it.product_name} ({it.size}) x{it.quantity}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-4 max-w-xs text-red-400 font-semibold break-words">
+                            {order.cancel_reason || order.rejection_reason || (locale === 'ar' ? 'غير محدد' : 'Not specified')}
+                          </td>
+                          <td className="p-4">
+                            {order.payment_receipt_url ? (
+                              <a
+                                href={order.payment_receipt_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-brand-accent rounded text-[10px] uppercase font-bold border border-zinc-750 inline-block"
+                              >
+                                View Receipt
+                              </a>
+                            ) : (
+                              <span className="text-zinc-650 italic">No receipt</span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                              order.is_refunded
+                                ? 'bg-green-950/40 text-green-400 border border-green-900'
+                                : 'bg-red-950/40 text-red-400 border border-red-900 animate-pulse'
+                            }`}>
+                              {order.is_refunded 
+                                ? (locale === 'ar' ? 'تم الاسترجاع' : 'Refunded') 
+                                : (locale === 'ar' ? 'معلق الاسترجاع' : 'Pending Refund')}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            {!order.is_refunded ? (
+                              <button
+                                type="button"
+                                disabled={isMarkingRefunded === order.id}
+                                onClick={() => handleMarkRefunded(order.id)}
+                                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] uppercase font-bold shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all active:translate-y-0.5 cursor-pointer"
+                              >
+                                {isMarkingRefunded === order.id ? 'Saving...' : (locale === 'ar' ? 'تأكيد الاسترجاع' : 'Mark Refunded')}
+                              </button>
+                            ) : (
+                              <span className="text-green-500 font-bold">✓ Complete</span>
+                            )}
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 

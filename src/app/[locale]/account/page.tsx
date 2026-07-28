@@ -92,6 +92,10 @@ export default function AccountPage() {
 
   // Order cancel & edit states
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
+  const [editOrderItems, setEditOrderItems] = useState<any[]>([]);
+  const [editReceiptFile, setEditReceiptFile] = useState<File | null>(null);
+  const [cancellingOrder, setCancellingOrder] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [editOrderForm, setEditOrderForm] = useState({
     customer_name: '',
     customer_phone: '',
@@ -252,6 +256,8 @@ export default function AccountPage() {
       } else if (action === 'edit') {
         setCancelOrEditToken(tokenParam);
         setEditingOrder(ord);
+        setEditOrderItems(JSON.parse(JSON.stringify(ord.items || [])));
+        setEditReceiptFile(null);
         setEditOrderForm({
           customer_name: ord.customer_name || '',
           customer_phone: ord.customer_phone || '',
@@ -347,23 +353,41 @@ export default function AccountPage() {
   };
 
 
-  const handleCancelOrder = async (orderId: string) => {
-    const confirmCancel = window.confirm(
-      locale === 'ar'
-        ? 'هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.'
-        : 'Are you sure you want to cancel this order? This action cannot be undone.'
-    );
-    if (!confirmCancel) return;
+  // ── Cancel modal opener (replaces old window.confirm cancel) ──────────────
+  const handleCancelClick = (order: any) => {
+    setCancellingOrder(order);
+    setCancelReason('');
+    setCancelOrEditToken(order.cancel_token || null);
+  };
+
+  // ── Cancel submission ─────────────────────────────────────────────────────
+  const handleCancelSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cancellingOrder) return;
     try {
       setIsActionSubmitting(true);
       const res = await fetch('/api/orders/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, userId: user?.id })
+        body: JSON.stringify({
+          orderId: cancellingOrder.id,
+          userId: user?.id,
+          token: cancelOrEditToken,
+          reason: cancelReason
+        })
       });
       const data = await res.json();
       if (data.success) {
-        alert(locale === 'ar' ? 'تم إلغاء الطلب بنجاح! سنتواصل معك قريباً.' : 'Order cancelled successfully!');
+        const hasPaid = ['cod', 'instapay', 'card', 'cod_instapay_upfront', 'cod_card_upfront'].includes(
+          cancellingOrder.payment_method || ''
+        );
+        const msg = hasPaid
+          ? (locale === 'ar'
+              ? 'تم إلغاء طلبك بنجاح.\nسيتم استرداد المبلغ قريباً. 💚'
+              : 'Order cancelled successfully.\nYour money will be refunded soon. 💚')
+          : (locale === 'ar' ? 'تم إلغاء طلبك بنجاح.' : 'Order cancelled successfully.');
+        alert(msg);
+        setCancellingOrder(null);
         if (user) {
           const updated = await fetchAccountOrders(user.id, profile?.phone || undefined);
           setUserOrders(updated || []);
@@ -379,8 +403,11 @@ export default function AccountPage() {
     }
   };
 
+  // ── Edit click opener ─────────────────────────────────────────────────────
   const handleEditClick = (order: any) => {
     setEditingOrder(order);
+    setEditOrderItems(JSON.parse(JSON.stringify(order.items || [])));
+    setEditReceiptFile(null);
     setEditOrderForm({
       customer_name: order.customer_name || '',
       customer_phone: order.customer_phone || '',
@@ -392,6 +419,32 @@ export default function AccountPage() {
     setCancelOrEditToken(order.cancel_token || null);
   };
 
+  // ── Fabric premium helper (client-side mirror of backend) ─────────────────
+  const getClientFabricPremium = (fabric: string): number => {
+    if (fabric === '100% Egyptian Cotton') return 50;
+    if (fabric === 'Heavy Cotton Blends') return 100;
+    if (fabric === 'Oversized') return 150;
+    return 0;
+  };
+
+  // Compute price difference between original items and current editOrderItems
+  const computeEditPriceDiff = (): number => {
+    if (!editingOrder) return 0;
+    const origItems: any[] = editingOrder.items || [];
+    return editOrderItems.reduce((diff: number, item: any, idx: number) => {
+      const orig = origItems[idx] || item;
+      const origPremium = getClientFabricPremium(orig.fabric || '');
+      const newPremium = getClientFabricPremium(item.fabric || '');
+      const basePrice = (orig.price || 0) - origPremium;
+      const fabricDiff = newPremium - origPremium;
+      const fitDiff = (item.fit_type === 'oversized' && orig.fit_type !== 'oversized')
+        ? 150
+        : (item.fit_type !== 'oversized' && orig.fit_type === 'oversized' ? -150 : 0);
+      return diff + (basePrice + fabricDiff + fitDiff - (orig.price || 0)) * (item.quantity || 1);
+    }, 0);
+  };
+
+  // ── Edit save handler ─────────────────────────────────────────────────────
   const handleSaveEditOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOrder) return;
@@ -401,6 +454,19 @@ export default function AccountPage() {
     }
     try {
       setIsActionSubmitting(true);
+      let receiptUrl: string | undefined;
+      // Upload diff-payment receipt if provided
+      if (editReceiptFile) {
+        const ext = editReceiptFile.name.split('.').pop();
+        const path = `edit-receipts/${editingOrder.id}-${Date.now()}.${ext}`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('products')
+          .upload(path, editReceiptFile, { upsert: true });
+        if (!uploadErr && uploadData) {
+          const { data: urlData } = supabase.storage.from('products').getPublicUrl(uploadData.path);
+          receiptUrl = urlData?.publicUrl;
+        }
+      }
       const res = await fetch('/api/orders/edit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -408,7 +474,9 @@ export default function AccountPage() {
           orderId: editingOrder.id,
           cancelToken: cancelOrEditToken,
           userId: user?.id,
-          updates: editOrderForm
+          updates: editOrderForm,
+          items: editOrderItems,
+          payment_receipt_url: receiptUrl
         })
       });
       const data = await res.json();
@@ -1671,7 +1739,7 @@ ${isCod ? `COD Upfront split: Paid 50% items + shipping (${chargeAmount} EGP) vi
                                   ✏️ {locale === 'ar' ? 'تعديل الطلب' : 'Edit Order'}
                                 </button>
                                 <button
-                                  onClick={() => handleCancelOrder(o.id)}
+                                  onClick={() => handleCancelClick(o)}
                                   disabled={isActionSubmitting}
                                   className="flex-1 py-1.5 text-[10px] font-black uppercase bg-red-50 text-red-600 border-2 border-red-300 rounded-lg hover:bg-red-100 transition-all cursor-pointer"
                                 >
@@ -1814,138 +1882,383 @@ ${isCod ? `COD Upfront split: Paid 50% items + shipping (${chargeAmount} EGP) vi
       <CartDrawer />
 
       {/* ===== Edit Order Modal ===== */}
-      {editingOrder && (
+      {editingOrder && (() => {
+        const priceDiff = computeEditPriceDiff();
+        const isCodOrder = ['cod', 'cod_instapay_upfront', 'cod_card_upfront'].includes(editingOrder.payment_method || '');
+        const additionalDue = priceDiff > 0
+          ? (isCodOrder ? Math.round(priceDiff * 0.1) : priceDiff)
+          : 0;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm cursor-pointer"
+              onClick={() => setEditingOrder(null)}
+            />
+            {/* Modal */}
+            <div className="relative z-10 w-full max-w-lg bg-white border-4 border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden max-h-[90vh] flex flex-col">
+              {/* Header */}
+              <div className="bg-black text-white px-6 py-4 flex justify-between items-center shrink-0">
+                <div>
+                  <h2 className="text-sm font-black uppercase tracking-widest">
+                    {locale === 'ar' ? '✏️ تعديل بيانات الطلب' : '✏️ Edit Order Details'}
+                  </h2>
+                  <span className="text-[10px] font-mono text-white/60">
+                    #{editingOrder.order_code || editingOrder.id.substring(0, 8).toUpperCase()}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setEditingOrder(null)}
+                  className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-white text-lg font-black cursor-pointer"
+                >
+                  ×
+                </button>
+              </div>
+              {/* Scrollable Body */}
+              <form onSubmit={handleSaveEditOrder} className="p-5 space-y-5 overflow-y-auto">
+
+                {/* ── Item Specs ── */}
+                <div>
+                  <p className="text-[10px] font-black uppercase text-black/50 mb-3 tracking-wider">
+                    {locale === 'ar' ? '🛍️ تعديل مواصفات المنتجات' : '🛍️ Item Specifications'}
+                  </p>
+                  <div className="space-y-4">
+                    {editOrderItems.map((item: any, idx: number) => (
+                      <div key={idx} className="border-2 border-black rounded-2xl overflow-hidden bg-[#EDE0D0]/10">
+                        {/* Item header — image + name */}
+                        <div className="flex items-center gap-3 p-3 border-b border-black/10">
+                          {item.image && (
+                            <img
+                              src={item.image}
+                              alt={item.product_name}
+                              className="w-14 h-14 object-cover rounded-xl border-2 border-black shrink-0"
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-black truncate">{item.product_name}</p>
+                            <p className="text-[10px] text-black/50 font-bold">x{item.quantity}</p>
+                          </div>
+                          <span className="ml-auto shrink-0 text-xs font-black text-brand-accent">
+                            {item.price} EGP
+                          </span>
+                        </div>
+                        {/* Dropdowns */}
+                        <div className="p-3 grid grid-cols-3 gap-2">
+                          {/* Size */}
+                          <div>
+                            <label className="text-[9px] font-black uppercase text-black/50 block mb-1">
+                              {locale === 'ar' ? 'المقاس' : 'Size'}
+                            </label>
+                            <select
+                              value={item.size}
+                              onChange={(e) => {
+                                const updated = [...editOrderItems];
+                                updated[idx] = { ...updated[idx], size: e.target.value };
+                                setEditOrderItems(updated);
+                              }}
+                              className="w-full px-2 py-1.5 bg-white border-2 border-black rounded-lg text-[10px] font-bold focus:outline-none"
+                            >
+                              {['S','M','L','XL','XXL'].map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {/* Fabric */}
+                          <div>
+                            <label className="text-[9px] font-black uppercase text-black/50 block mb-1">
+                              {locale === 'ar' ? 'القماش' : 'Fabric'}
+                            </label>
+                            <select
+                              value={item.fabric}
+                              onChange={(e) => {
+                                const updated = [...editOrderItems];
+                                updated[idx] = { ...updated[idx], fabric: e.target.value };
+                                setEditOrderItems(updated);
+                              }}
+                              className="w-full px-2 py-1.5 bg-white border-2 border-black rounded-lg text-[10px] font-bold focus:outline-none"
+                            >
+                              <option value="Standard Cotton">Standard</option>
+                              <option value="100% Egyptian Cotton">Egyptian (+50)</option>
+                              <option value="Heavy Cotton Blends">Heavy (+100)</option>
+                            </select>
+                          </div>
+                          {/* Fit */}
+                          <div>
+                            <label className="text-[9px] font-black uppercase text-black/50 block mb-1">
+                              {locale === 'ar' ? 'القصة' : 'Fit'}
+                            </label>
+                            <select
+                              value={item.fit_type}
+                              onChange={(e) => {
+                                const updated = [...editOrderItems];
+                                updated[idx] = { ...updated[idx], fit_type: e.target.value };
+                                setEditOrderItems(updated);
+                              }}
+                              className="w-full px-2 py-1.5 bg-white border-2 border-black rounded-lg text-[10px] font-bold focus:outline-none"
+                            >
+                              <option value="regular">Regular</option>
+                              <option value="oversized">Oversized (+150)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Price Difference Panel ── */}
+                {priceDiff !== 0 && (
+                  <div className={`rounded-2xl border-2 p-4 ${priceDiff > 0 ? 'bg-amber-50 border-amber-400' : 'bg-green-50 border-green-400'}`}>
+                    <p className={`text-xs font-black ${priceDiff > 0 ? 'text-amber-800' : 'text-green-800'}`}>
+                      {priceDiff > 0 ? '💳 ' : '✅ '}
+                      {locale === 'ar'
+                        ? `فرق السعر بعد التعديل: ${priceDiff > 0 ? '+' : ''}${priceDiff} EGP`
+                        : `Price change after edits: ${priceDiff > 0 ? '+' : ''}${priceDiff} EGP`}
+                    </p>
+                    {additionalDue > 0 && (
+                      <p className="text-[11px] font-black text-amber-700 mt-1">
+                        {locale === 'ar'
+                          ? `المبلغ الإضافي المطلوب: ${additionalDue} EGP${isCodOrder ? ' (10% وديعة)' : ''}`
+                          : `Additional amount due: ${additionalDue} EGP${isCodOrder ? ' (10% deposit)' : ''}`}
+                      </p>
+                    )}
+                    {additionalDue > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-[10px] font-black text-amber-700 uppercase tracking-wide">
+                          {locale === 'ar' ? '📲 حوّل الفرق عبر InstaPay وأرفق الإيصال:' : '📲 Transfer via InstaPay & attach receipt:'}
+                        </p>
+                        <div className="bg-white border border-amber-300 rounded-xl p-3 text-[10px] font-black text-amber-900 space-y-1">
+                          <p>📱 InstaPay: <span className="font-mono">01XXXXXXXXX</span></p>
+                          <p>{locale === 'ar' ? `المبلغ: ${additionalDue} EGP` : `Amount: ${additionalDue} EGP`}</p>
+                        </div>
+                        <label className="text-[9px] font-black uppercase text-black/60 block">
+                          {locale === 'ar' ? 'ارفع إيصال الدفع (صورة)' : 'Upload Payment Receipt'}
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setEditReceiptFile(e.target.files?.[0] || null)}
+                          className="w-full text-[10px] font-semibold"
+                        />
+                        {editReceiptFile && (
+                          <p className="text-[9px] font-black text-green-600">✓ {editReceiptFile.name}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Delivery Details ── */}
+                <div className="border-t-2 border-black/10 pt-4">
+                  <p className="text-[10px] font-black uppercase text-black/50 mb-3 tracking-wider">
+                    {locale === 'ar' ? '🚚 بيانات التوصيل' : '🚚 Delivery Details'}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                        {locale === 'ar' ? 'الاسم الكامل' : 'Full Name'}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editOrderForm.customer_name}
+                        onChange={(e) => setEditOrderForm(prev => ({ ...prev, customer_name: e.target.value }))}
+                        className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                        {locale === 'ar' ? 'رقم الهاتف' : 'Phone Number'}
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={editOrderForm.customer_phone}
+                        onChange={(e) => setEditOrderForm(prev => ({ ...prev, customer_phone: e.target.value }))}
+                        className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                        {locale === 'ar' ? 'المحافظة' : 'Governorate'}
+                      </label>
+                      <select
+                        value={editOrderForm.governorate}
+                        onChange={(e) => setEditOrderForm(prev => ({ ...prev, governorate: e.target.value }))}
+                        className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                      >
+                        <option value="">{locale === 'ar' ? '-- اختر --' : '-- Select --'}</option>
+                        {governorates.map((gov, i) => (
+                          <option key={i} value={gov.en}>{locale === 'ar' ? gov.ar : gov.en}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                        {locale === 'ar' ? 'المدينة / المنطقة' : 'City / Area'}
+                      </label>
+                      <input
+                        type="text"
+                        value={editOrderForm.city}
+                        onChange={(e) => setEditOrderForm(prev => ({ ...prev, city: e.target.value }))}
+                        className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                        placeholder="e.g. Nasr City"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
+                      {locale === 'ar' ? 'العنوان التفصيلي' : 'Street / Building / Floor'}
+                    </label>
+                    <input
+                      type="text"
+                      value={editOrderForm.address}
+                      onChange={(e) => setEditOrderForm(prev => ({ ...prev, address: e.target.value }))}
+                      className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
+                      placeholder="e.g. 15 El-Tahrir St, 3rd Floor"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-3">
+                  <p className="text-[10px] font-black text-amber-700">
+                    ⚠️ {locale === 'ar'
+                      ? 'يمكنك تعديل بيانات الطلب فقط قبل بدء التنفيذ. بعد تغيير الطلب إلى "قيد التنفيذ" لن يكون بالإمكان إجراء أي تعديلات.'
+                      : 'You can only edit order details before processing begins. Once marked In Progress, no further edits are allowed.'}
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingOrder(null)}
+                    className="flex-1 py-2.5 bg-white text-black border-2 border-black rounded-xl font-black uppercase text-xs hover:bg-zinc-50 cursor-pointer"
+                  >
+                    {locale === 'ar' ? 'إغلاق' : 'Close'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isActionSubmitting}
+                    className="flex-1 py-2.5 bg-black text-white border-2 border-black rounded-xl font-black uppercase text-xs hover:bg-brand-accent transition-colors cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"
+                  >
+                    {isActionSubmitting
+                      ? (locale === 'ar' ? 'جاري الحفظ...' : 'Saving...')
+                      : (locale === 'ar' ? 'حفظ التعديلات' : 'Save Changes')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ===== Cancel Order Modal ===== */}
+      {cancellingOrder && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm cursor-pointer"
-            onClick={() => setEditingOrder(null)}
+            onClick={() => setCancellingOrder(null)}
           />
           {/* Modal */}
-          <div className="relative z-10 w-full max-w-md bg-white border-4 border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+          <div className="relative z-10 w-full max-w-md bg-white border-4 border-red-500 rounded-3xl shadow-[8px_8px_0px_0px_rgba(239,68,68,1)] overflow-hidden max-h-[90vh] flex flex-col">
             {/* Header */}
-            <div className="bg-black text-white px-6 py-4 flex justify-between items-center">
+            <div className="bg-red-500 text-white px-6 py-4 flex justify-between items-center shrink-0">
               <div>
                 <h2 className="text-sm font-black uppercase tracking-widest">
-                  {locale === 'ar' ? '✏️ تعديل بيانات الطلب' : '✏️ Edit Order Details'}
+                  🚫 {locale === 'ar' ? 'إلغاء الطلب' : 'Cancel Order'}
                 </h2>
-                <span className="text-[10px] font-mono text-white/60">
-                  #{editingOrder.order_code || editingOrder.id.substring(0, 8).toUpperCase()}
+                <span className="text-[10px] font-mono text-white/70">
+                  #{cancellingOrder.order_code || cancellingOrder.id.substring(0, 8).toUpperCase()}
                 </span>
               </div>
               <button
-                onClick={() => setEditingOrder(null)}
-                className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-white text-lg font-black cursor-pointer"
+                onClick={() => setCancellingOrder(null)}
+                className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center text-white text-lg font-black cursor-pointer"
               >
                 ×
               </button>
             </div>
             {/* Body */}
-            <form onSubmit={handleSaveEditOrder} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form onSubmit={handleCancelSubmit} className="p-5 space-y-4 overflow-y-auto">
+
+              {/* Ordered Items preview */}
+              {cancellingOrder.items && cancellingOrder.items.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
-                    {locale === 'ar' ? 'الاسم الكامل' : 'Full Name'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editOrderForm.customer_name}
-                    onChange={(e) => setEditOrderForm(prev => ({ ...prev, customer_name: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
-                    {locale === 'ar' ? 'رقم الهاتف' : 'Phone Number'}
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={editOrderForm.customer_phone}
-                    onChange={(e) => setEditOrderForm(prev => ({ ...prev, customer_phone: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
-                    {locale === 'ar' ? 'المحافظة' : 'Governorate'}
-                  </label>
-                  <select
-                    value={editOrderForm.governorate}
-                    onChange={(e) => setEditOrderForm(prev => ({ ...prev, governorate: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
-                  >
-                    <option value="">{locale === 'ar' ? '-- اختر المحافظة --' : '-- Select Governorate --'}</option>
-                    {governorates.map((gov, i) => (
-                      <option key={i} value={gov.en}>{locale === 'ar' ? gov.ar : gov.en}</option>
+                  <p className="text-[10px] font-black uppercase text-black/50 mb-2 tracking-wider">
+                    {locale === 'ar' ? '📦 المنتجات في طلبك' : '📦 Items in your order'}
+                  </p>
+                  <div className="space-y-2">
+                    {cancellingOrder.items.map((item: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-3 bg-[#EDE0D0]/20 border border-black/10 rounded-xl p-2.5">
+                        {item.image && (
+                          <img
+                            src={item.image}
+                            alt={item.product_name}
+                            className="w-12 h-12 object-cover rounded-lg border-2 border-black shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-black truncate">{item.product_name}</p>
+                          <p className="text-[10px] text-black/50 font-bold">{item.size} · {item.fabric} · x{item.quantity}</p>
+                        </div>
+                        <span className="ml-auto shrink-0 text-xs font-black text-black/60">{item.price} EGP</span>
+                      </div>
                     ))}
-                  </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
-                    {locale === 'ar' ? 'المدينة / المنطقة' : 'City / Area'}
-                  </label>
-                  <input
-                    type="text"
-                    value={editOrderForm.city}
-                    onChange={(e) => setEditOrderForm(prev => ({ ...prev, city: e.target.value }))}
-                    className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
-                    placeholder="e.g. Nasr City"
-                  />
-                </div>
-              </div>
+              )}
+
+              {/* Cancellation reason */}
               <div>
-                <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
-                  {locale === 'ar' ? 'العنوان التفصيلي' : 'Street / Building / Floor'}
-                </label>
-                <input
-                  type="text"
-                  value={editOrderForm.address}
-                  onChange={(e) => setEditOrderForm(prev => ({ ...prev, address: e.target.value }))}
-                  className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white"
-                  placeholder="e.g. 15 El-Tahrir St, 3rd Floor"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-black/50 block mb-1">
-                  {locale === 'ar' ? 'ملاحظات إضافية' : 'Order Notes'}
+                <label className="text-[10px] font-black uppercase text-black/60 block mb-2">
+                  {locale === 'ar' ? '💬 لماذا تريد إلغاء هذا الطلب؟' : '💬 Why are you cancelling this order?'}
                 </label>
                 <textarea
-                  rows={2}
-                  value={editOrderForm.notes}
-                  onChange={(e) => setEditOrderForm(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full px-3 py-2 bg-[#EDE0D0]/10 border-2 border-black rounded-xl text-xs font-bold focus:outline-none focus:bg-white resize-none"
-                  placeholder={locale === 'ar' ? 'أي ملاحظة خاصة بطلبك...' : 'Any special notes for your order...'}
+                  rows={3}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-red-50 border-2 border-red-200 rounded-xl text-xs font-bold focus:outline-none focus:border-red-400 resize-none"
+                  placeholder={locale === 'ar' ? 'اكتب سبب الإلغاء هنا...' : 'Write your cancellation reason here...'}
                 />
               </div>
 
-              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3">
-                <p className="text-[10px] font-black text-amber-700">
-                  ⚠️ {locale === 'ar'
-                    ? 'يمكنك تعديل بيانات الطلب فقط قبل بدء التنفيذ. بعد تغيير الطلب إلى "قيد التنفيذ" لن يكون بالإمكان إجراء أي تعديلات.'
-                    : 'You can only edit order details before processing begins. Once marked In Progress, no further edits are allowed.'}
-                </p>
-              </div>
+              {/* Refund notice — show only if any payment was made */}
+              {['cod', 'instapay', 'card', 'cod_instapay_upfront', 'cod_card_upfront'].includes(cancellingOrder.payment_method || '') && (
+                <div className="bg-green-50 border-2 border-green-400 rounded-2xl p-4 flex items-start gap-3">
+                  <span className="text-xl shrink-0">💚</span>
+                  <div>
+                    <p className="text-xs font-black text-green-800">
+                      {locale === 'ar'
+                        ? 'سيتم استرداد المبلغ المدفوع قريباً.'
+                        : 'Your payment will be refunded soon.'}
+                    </p>
+                    <p className="text-[10px] font-bold text-green-600 mt-0.5">
+                      {locale === 'ar'
+                        ? 'سنتواصل معك خلال 24-48 ساعة لإتمام الاسترداد.'
+                        : 'We will contact you within 24–48 hours to complete the refund.'}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setEditingOrder(null)}
+                  onClick={() => setCancellingOrder(null)}
                   className="flex-1 py-2.5 bg-white text-black border-2 border-black rounded-xl font-black uppercase text-xs hover:bg-zinc-50 cursor-pointer"
                 >
-                  {locale === 'ar' ? 'إلغاء' : 'Cancel'}
+                  {locale === 'ar' ? 'رجوع' : 'Go Back'}
                 </button>
                 <button
                   type="submit"
-                  disabled={isActionSubmitting}
-                  className="flex-1 py-2.5 bg-black text-white border-2 border-black rounded-xl font-black uppercase text-xs hover:bg-brand-accent transition-colors cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"
+                  disabled={isActionSubmitting || !cancelReason.trim()}
+                  className="flex-1 py-2.5 bg-red-500 text-white border-2 border-red-600 rounded-xl font-black uppercase text-xs hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-[3px_3px_0px_0px_rgba(185,28,28,1)] hover:shadow-none"
                 >
                   {isActionSubmitting
-                    ? (locale === 'ar' ? 'جاري الحفظ...' : 'Saving...')
-                    : (locale === 'ar' ? 'حفظ التعديلات' : 'Save Changes')}
+                    ? (locale === 'ar' ? 'جاري الإلغاء...' : 'Cancelling...')
+                    : (locale === 'ar' ? '🚫 تأكيد الإلغاء' : '🚫 Confirm Cancellation')}
                 </button>
               </div>
             </form>
@@ -1956,3 +2269,4 @@ ${isCod ? `COD Upfront split: Paid 50% items + shipping (${chargeAmount} EGP) vi
     </div>
   );
 }
+
