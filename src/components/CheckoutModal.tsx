@@ -552,7 +552,12 @@ export default function CheckoutModal() {
         fetch('/api/orders/send-receipt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: result.id })
+          body: JSON.stringify({ 
+            orderId: result.id,
+            // Pass email directly in case customer_email column doesn't exist in DB yet
+            recipientEmail: email.trim(),
+            recipientName: name
+          })
         }).catch(err => console.error('Error triggering receipt email:', err));
       }
 

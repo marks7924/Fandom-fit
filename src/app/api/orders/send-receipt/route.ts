@@ -6,7 +6,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export async function POST(request: Request) {
   try {
-    const { orderId } = await request.json();
+    const { orderId, recipientEmail: bodyEmail, recipientName: bodyName } = await request.json();
     if (!orderId) {
       return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 });
     }
@@ -29,7 +29,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
 
-    const recipientEmail = order.customer_email || '';
+    // Use email from DB if available; fall back to email passed directly from the checkout form
+    const recipientEmail = order.customer_email || bodyEmail || '';
+    const resolvedName = order.customer_name || bodyName || 'Valued Customer';
     if (!recipientEmail) {
       return NextResponse.json({ success: true, message: 'No email address on order' });
     }
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'SendGrid credentials missing' }, { status: 500 });
     }
 
-    const customerName = order.customer_name || 'Valued Customer';
+    const customerName = resolvedName;
     const orderCode = order.order_code || 'N/A';
     const price = order.price || 0;
     const location = order.location || 'N/A';
