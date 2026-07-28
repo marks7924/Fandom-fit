@@ -6693,6 +6693,20 @@ export default function AdminPage() {
                                   })}
                                 </div>
                               )}
+
+                              {/* Before Edit Specifications Diff */}
+                              {(() => {
+                                const beforeEditMatch = order.notes && order.notes.match(/\[Before Edit:\s*([^\]]+)\]/);
+                                if (!beforeEditMatch) return null;
+                                return (
+                                  <div className="mt-1.5 p-2 bg-red-950/20 border border-red-900/60 rounded text-[10px] text-red-400">
+                                    <div className="font-extrabold uppercase text-[8px] tracking-wider mb-1 text-red-500">
+                                      {locale === 'ar' ? '◀ المواصفات السابقة قبل التعديل:' : '◀ PRE-EDIT SPECIFICATIONS:'}
+                                    </div>
+                                    <div className="font-semibold leading-relaxed font-sans">{beforeEditMatch[1]}</div>
+                                  </div>
+                                );
+                              })()}
                               
                               {/* Payment info detail block */}
                                 <div className="text-[10px] text-zinc-400 mt-1.5 font-bold space-y-1 bg-zinc-950 p-2 border border-zinc-850 rounded">
@@ -6704,8 +6718,8 @@ export default function AdminPage() {
                                   </div>
                                   {/* Total / Due breakdown for upfront-paid orders */}
                                   {(() => {
-                                    const notes = order.notes || '';
                                     const total = Number(order.price || 0);
+                                    const notes = order.notes || '';
                                     // COD: parse balance due from notes
                                     const codBalanceMatch = notes.match(/Balance due on delivery:\s*(\d+(?:\.\d+)?)\s*EGP/);
                                     const codDepositMatch = notes.match(/upfront\.\s*Balance/i);
@@ -6994,6 +7008,19 @@ export default function AdminPage() {
                                 ))}
                               </div>
                             )}
+                            {/* Before Edit Specifications Diff */}
+                            {(() => {
+                              const beforeEditMatch = order.notes && order.notes.match(/\[Before Edit:\s*([^\]]+)\]/);
+                              if (!beforeEditMatch) return null;
+                              return (
+                                <div className="mt-1.5 p-2 bg-red-950/20 border border-red-900/60 rounded text-[10px] text-red-400">
+                                  <div className="font-extrabold uppercase text-[8px] tracking-wider mb-1 text-red-500">
+                                    {locale === 'ar' ? '◀ المواصفات السابقة قبل التعديل:' : '◀ PRE-EDIT SPECIFICATIONS:'}
+                                  </div>
+                                  <div className="font-semibold leading-relaxed font-sans">{beforeEditMatch[1]}</div>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="p-4 max-w-xs text-red-400 font-semibold break-words">
                             {order.cancel_reason || order.rejection_reason || (locale === 'ar' ? 'غير محدد' : 'Not specified')}

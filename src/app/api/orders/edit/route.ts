@@ -107,9 +107,16 @@ export async function POST(request: Request) {
       const customerNoteMatch = (order.notes || '').match(/Customer Note:\s*([^|]+)/i);
       const customerNote = customerNoteMatch ? customerNoteMatch[1].trim() : '';
 
-      const specsStr = updatedItems.map((i: any) => `${i.product_name}: ${i.fabric}/${i.fit_type || 'oversized'}`).join(', ');
+      // Capture original items spec for admin diff display
+      // Preserve any existing "Before Edit" snapshot (don't overwrite on multiple edits)
+      const existingBeforeMatch = (order.notes || '').match(/\[Before Edit:\s*([^\]]+)\]/);
+      const beforeSnap = existingBeforeMatch
+        ? `[Before Edit: ${existingBeforeMatch[1]}]`
+        : `[Before Edit: ${originalItems.map((i: any) => `${i.product_name}: ${i.size || ''}/${i.fabric}/${i.fit_type || 'oversized'} x${i.quantity || 1}`).join(', ')}]`;
+
+      const specsStr = updatedItems.map((i: any) => `${i.product_name}: ${i.size || ''}/${i.fabric}/${i.fit_type || 'oversized'} x${i.quantity || 1}`).join(', ');
       
-      let reconstructedNotes = `[Order Edited by Customer] | [Checkout Type: Web] | Items Spec: ${specsStr}`;
+      let reconstructedNotes = `[Order Edited by Customer] | ${beforeSnap} | [Checkout Type: Web] | Items Spec: ${specsStr}`;
       if (customerNote) {
         reconstructedNotes += ` | Customer Note: ${customerNote}`;
       }
