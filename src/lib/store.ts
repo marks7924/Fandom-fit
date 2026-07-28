@@ -982,7 +982,7 @@ export const useStore = create<StoreState>((set, get) => ({
       if (newOrder) {
         // Attach cancel_token via a post-insert update (silently ignored if column doesn't exist yet)
         supabase.from('orders').update({ cancel_token: cancelToken }).eq('id', newOrder.id)
-          .then(({ error: tokenErr }) => {
+          .then(({ error: tokenErr }: { error: any }) => {
             if (tokenErr) console.warn('cancel_token update skipped (run migrate_extensions.sql):', tokenErr.message);
           });
         // Keep cancel_token in local state even if DB update failed
