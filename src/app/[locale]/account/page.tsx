@@ -306,11 +306,12 @@ export default function AccountPage() {
     try {
       const pricePerItem = req.price || 0;
       const totalAmount = pricePerItem * qty;
+      const shippingFee = Number(settings.delivery_fee ?? 50);
       const isCod = pm === 'cod';
       const actualPaymentMethod = isCod 
         ? (upfrontPm === 'upfront_instapay' ? 'cod_instapay_upfront' : 'cod_card_upfront')
         : pm;
-      const chargeAmount = isCod ? totalAmount * 0.5 : totalAmount;
+      const chargeAmount = isCod ? (totalAmount * 0.5) + shippingFee : totalAmount + shippingFee;
 
       // Ensure address is filled
       if (!addrGovernorate || !addrCity || !addrStreet) {
@@ -351,7 +352,7 @@ export default function AccountPage() {
         customer_phone: editPhone || profile?.phone || '',
         customer_email: user.email,
         product_name: `Custom Design Request #${reqId.substring(0, 8).toUpperCase()}`,
-        price: totalAmount,
+        price: totalAmount + shippingFee,
         location: `${addrStreet}, ${addrCity}, ${addrGovernorate}`,
         notes: `[Custom Design Request #${reqId.substring(0, 8).toUpperCase()}]
 Description: ${req.description}
@@ -359,7 +360,7 @@ Size: ${size}
 Fabric: ${fabric}
 Fit Type: ${fit}
 Quantity: ${qty}
-${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm === 'upfront_instapay' ? 'InstaPay' : 'Card'}. Balance due on delivery: ${totalAmount * 0.5} EGP.` : 'Paid in full.'}`,
+${isCod ? `COD Upfront split: Paid 50% items + shipping (${chargeAmount} EGP) via ${upfrontPm === 'upfront_instapay' ? 'InstaPay' : 'Card'}. Balance due on delivery: ${totalAmount * 0.5} EGP.` : 'Paid in full.'}`,
         status: (actualPaymentMethod === 'instapay' || actualPaymentMethod === 'cod_instapay_upfront') ? 'pending_verification' : 'pending_payment',
         payment_method: actualPaymentMethod,
         payment_receipt_url: receiptUrl,
@@ -1125,11 +1126,11 @@ ${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm ===
                                 📢 {' '}
                                 {locale === 'ar' ? (
                                   <>
-                                    <strong>تفاصيل الدفع:</strong> سعر القطعة هو <strong>{pricePerItem} جنيه</strong>. يمكنك اختيار الدفع بالكامل الآن (فيزا/انستاباي) <strong>أو</strong> اختيار الدفع عند الاستلام (COD) لتدفع <strong>٥٠٪ مقدماً فقط</strong> والـ ٥٠٪ المتبقية نقداً عند التسليم.
+                                    <strong>تفاصيل الدفع:</strong> سعر القطعة هو <strong>{pricePerItem} جنيه</strong> (بالإضافة إلى مصاريف الشحن {Number(settings.delivery_fee ?? 50)} جنيه). يمكنك اختيار الدفع بالكامل الآن (فيزا/انستاباي) <strong>أو</strong> اختيار الدفع عند الاستلام (COD) لتدفع <strong>٥٠٪ من الملابس + مصاريف الشحن كعربون مقدماً</strong> والـ ٥٠٪ المتبقية نقداً عند التسليم.
                                   </>
                                 ) : (
                                   <>
-                                    <strong>Payment Options:</strong> The base price is <strong>{pricePerItem} EGP</strong> per item. You can pay 100% online now (via Card/InstaPay) <strong>or</strong> choose Cash on Delivery (COD) to pay only <strong>50% upfront now</strong> and the remaining 50% cash balance upon delivery.
+                                    <strong>Payment Options:</strong> The base price is <strong>{pricePerItem} EGP</strong> per item (+ {Number(settings.delivery_fee ?? 50)} EGP delivery). You can pay 100% online now (via Card/InstaPay) <strong>or</strong> choose Cash on Delivery (COD) to pay only <strong>50% deposit + shipping fee upfront</strong> and the remaining 50% cash balance upon delivery.
                                   </>
                                 )}
                               </div>
@@ -1281,25 +1282,29 @@ ${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm ===
                                           !isCodEnabled ? 'opacity-40 pointer-events-none filter blur-[0.3px]' : ''
                                         } ${payMethod === 'cod' ? 'bg-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white hover:bg-zinc-50'}`}
                                       >
-                                        COD (50% Upfront) {!isCodEnabled && (locale === 'ar' ? ' (غير متوفر)' : ' (N/A)')}
+                                        COD (50% Deposit) {!isCodEnabled && (locale === 'ar' ? ' (غير متوفر)' : ' (N/A)')}
                                       </button>
                                     </div>
 
                                     {/* Calculated Due Summary */}
                                     <div className="p-3 bg-[#EDE0D0]/40 border-2 border-black rounded-xl space-y-1">
-                                      <div className="flex justify-between text-xs font-black">
-                                        <span>{locale === 'ar' ? 'إجمالي قيمة المنتجات:' : 'Subtotal:'}</span>
+                                      <div className="flex justify-between text-xs font-bold text-black/75">
+                                        <span>{locale === 'ar' ? 'قيمة الملابس:' : 'Garments Subtotal:'}</span>
                                         <span>{totalAmount} EGP</span>
+                                      </div>
+                                      <div className="flex justify-between text-xs font-bold text-black/75">
+                                        <span>{locale === 'ar' ? 'مصاريف الشحن:' : 'Shipping Fee:'}</span>
+                                        <span>{Number(settings.delivery_fee ?? 50)} EGP</span>
                                       </div>
                                       
                                       {isCod ? (
                                         <>
-                                          <div className="flex justify-between text-xs font-black text-brand-accent border-b border-black/10 pb-1">
-                                            <span>{locale === 'ar' ? 'المستحق الآن (٥٠٪ مقدماً):' : 'Due Now (50% Upfront):'}</span>
+                                          <div className="flex justify-between text-xs font-black text-brand-accent border-t border-b border-black/10 py-1 my-1">
+                                            <span>{locale === 'ar' ? 'المستحق الآن كعربون (٥٠٪ من الملابس + الشحن):' : 'Deposit Due Now (50% items + shipping):'}</span>
                                             <span>{chargeAmount} EGP</span>
                                           </div>
                                           <div className="flex justify-between text-[10px] font-bold text-black/50">
-                                            <span>{locale === 'ar' ? 'المستحق عند الاستلام:' : 'Remaining on Delivery:'}</span>
+                                            <span>{locale === 'ar' ? 'المتبقي للدفع كاش عند الاستلام:' : 'Remaining Balance on Delivery:'}</span>
                                             <span>{totalAmount * 0.5} EGP</span>
                                           </div>
                                           
@@ -1331,8 +1336,8 @@ ${isCod ? `COD Upfront split: Paid 50% (${chargeAmount} EGP) via ${upfrontPm ===
                                           </div>
                                         </>
                                       ) : (
-                                        <div className="flex justify-between text-xs font-black text-brand-accent">
-                                          <span>{locale === 'ar' ? 'المستحق الآن (١٠٠٪ مقدماً):' : 'Due Now (100%):'}</span>
+                                        <div className="flex justify-between text-xs font-black text-brand-accent border-t border-black/10 pt-1 mt-1">
+                                          <span>{locale === 'ar' ? 'إجمالي المستحق الآن (١٠٠٪ مقدماً):' : 'Total Due Now (100%):'}</span>
                                           <span>{chargeAmount} EGP</span>
                                         </div>
                                       )}

@@ -442,8 +442,8 @@ export default function CheckoutModal() {
     }
 
     // Step 2 Submission logic
-    if (paymentMethod === 'instapay' && !receiptUrl) {
-      alert(locale === 'ar' ? 'يرجى رفع إيصال الدفع أولاً لإتمام الطلب.' : 'Please upload the payment receipt to complete your order.');
+    if ((paymentMethod === 'instapay' || paymentMethod === 'cod') && !receiptUrl) {
+      alert(locale === 'ar' ? 'يرجى رفع إيصال تحويل العربون/الدفع أولاً لإتمام الطلب.' : 'Please upload the transfer receipt screenshot to complete your order.');
       return;
     }
 
@@ -478,7 +478,17 @@ export default function CheckoutModal() {
 
     const fullNotes = `[Checkout Type: Web]${isSingle ? ` | Fabric: ${selectedFabric} | Fit: ${selectedFit}` : ` | Items Spec: ${cart.map(i => `${i.product.name_en}: ${i.fabric}/${i.fitType || 'oversized'}`).join(', ')}`}${notes ? ` | Customer Note: ${notes}` : ''}${appliedDiscount > 0 ? ` | Coupon Code: ${couponCode.trim()} (${appliedDiscount}% Off)` : ''}${referralCode.trim() ? ` | Referral: ${referralCode.trim()}` : ''}`;
 
-    const orderStatus = paymentMethod === 'instapay' ? 'pending_verification' : (paymentMethod === 'cod' ? 'pending' : 'pending_payment');
+    const itemsTotal = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount - discountAmount - loyaltyDiscount);
+    const codDeposit = Math.round((itemsTotal * 0.10) + shippingFee);
+    const codBalance = Math.max(0, total - codDeposit);
+
+    const isCod = paymentMethod === 'cod';
+    const finalNotes = isCod 
+      ? `[COD Deposit split: Paid 10% items + shipping (${codDeposit} EGP) upfront. Balance due on delivery: ${codBalance} EGP.] | ${fullNotes}`
+      : fullNotes;
+
+    const actualPaymentMethod = isCod ? 'cod_instapay_upfront' : paymentMethod;
+    const orderStatus = (paymentMethod === 'instapay' || paymentMethod === 'cod') ? 'pending_verification' : 'pending_payment';
 
     const result = await addOrder({
       product_id: isSingle && checkoutProduct ? checkoutProduct.id : null,
@@ -487,7 +497,7 @@ export default function CheckoutModal() {
       customer_name: name,
       customer_phone: cleanPhone,
       location: `${governorate} - ${city} - ${address}`,
-      notes: fullNotes,
+      notes: finalNotes,
       items: orderItems,
       customer_email: email.trim() || undefined,
       governorate,
@@ -497,8 +507,8 @@ export default function CheckoutModal() {
       referral_code: referralCode.trim() || undefined,
       user_id: user?.id || null,
       order_code: orderCode,
-      payment_method: paymentMethod,
-      payment_receipt_url: paymentMethod === 'instapay' ? receiptUrl : undefined,
+      payment_method: actualPaymentMethod,
+      payment_receipt_url: (paymentMethod === 'instapay' || paymentMethod === 'cod') ? receiptUrl : undefined,
       status: orderStatus
     });
 
@@ -1194,15 +1204,15 @@ export default function CheckoutModal() {
                     )}
 
                     {paymentMethod === 'cod' && (
-                      <div className="p-4 bg-zinc-100 border-2 border-black rounded-xl text-xs font-semibold text-zinc-700 leading-relaxed">
+                      <div className="p-4 bg-amber-50 border-2 border-amber-400 rounded-xl text-xs font-semibold text-amber-900 leading-relaxed shadow-sm">
                         {locale === 'ar'
-                          ? 'لقد اخترت الدفع عند الاستلام. سيتم شحن طلبك والدفع كاش عند التوصيل.'
-                          : 'You selected Cash on Delivery. Pay cash to the courier agent when your shipment arrives.'}
+                          ? `عربون تأكيد طلب الدفع عند الاستلام (COD) هو ١٠٪ من قيمة المنتجات بالإضافة إلى الشحن، وهو ما يعادل: ${Math.round((Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount - discountAmount - loyaltyDiscount) * 0.10) + shippingFee)} جنيه مصري. يرجى تحويل هذا المبلغ عبر InstaPay أدناه ورفع إيصال التحويل لتأكيد طلبك. سيتم دفع المبلغ المتبقي (${Math.max(0, total - Math.round((Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount - discountAmount - loyaltyDiscount) * 0.10) + shippingFee))} جنيه) نقداً عند الاستلام.`
+                          : `The Cash on Delivery (COD) confirmation deposit is 10% of items + shipping, totaling: ${Math.round((Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount - discountAmount - loyaltyDiscount) * 0.10) + shippingFee)} EGP. Please transfer this deposit via InstaPay below and upload the receipt screenshot. The remaining balance (${Math.max(0, total - Math.round((Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount - discountAmount - loyaltyDiscount) * 0.10) + shippingFee))} EGP) will be collected in cash upon delivery.`}
                       </div>
                     )}
 
-                    {/* InstaPay Details Layout */}
-                    {paymentMethod === 'instapay' && (() => {
+                    {/* InstaPay Details Layout / COD Deposit Upfront Transfer */}
+                    {(paymentMethod === 'instapay' || paymentMethod === 'cod') && (() => {
                       const paymentSettings = (() => {
                         try {
                           const ps = settings?.payment_settings;
@@ -1210,12 +1220,18 @@ export default function CheckoutModal() {
                           return typeof ps === 'string' ? JSON.parse(ps) : ps;
                         } catch { return null; }
                       })();
+
+                      const isCod = paymentMethod === 'cod';
+                      const itemsTotal = Math.max(0, subtotal - cottonDiscount - autoAppliedDiscount - thresholdDiscount - discountAmount - loyaltyDiscount);
+                      const codDeposit = Math.round((itemsTotal * 0.10) + shippingFee);
+                      const displayAmount = isCod ? codDeposit : total;
+
                       return (
                         <div className="space-y-4 border-2 border-black p-4 rounded-2xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                           <div className="space-y-2 select-text font-mono text-xs">
                             <div className="flex justify-between items-center border-b border-black/5 pb-2">
                               <span className="font-bold text-zinc-500 uppercase">{locale === 'ar' ? 'المبلغ المطلوب' : 'Amount Due'}</span>
-                              <span className="text-sm font-black text-brand-accent">{total} EGP</span>
+                              <span className="text-sm font-black text-brand-accent">{displayAmount} EGP</span>
                             </div>
 
                             <div className="flex justify-between items-center border-b border-black/5 pb-2">
