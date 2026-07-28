@@ -6609,9 +6609,18 @@ export default function AdminPage() {
                           completed: 'bg-green-950/50 text-green-400 border border-green-900'
                         };
 
-                        return (
-                          <tr key={order.id} className={`text-zinc-300 transition-colors ${order.notes && order.notes.includes('[Order Edited by Customer]') ? 'bg-red-950/25 hover:bg-red-950/40 border-l-2 border-red-500' : 'hover:bg-zinc-800/20'}`}>
-                            <td className="p-4 text-center">
+                        const isEdited = order.notes && order.notes.includes('[Order Edited by Customer]');
+                          const isCancelled = order.status === 'cancelled';
+                          let rowClass = 'hover:bg-zinc-800/20';
+                          if (isCancelled) {
+                            rowClass = 'bg-red-950/20 hover:bg-red-950/30 border-l-2 border-red-500';
+                          } else if (isEdited) {
+                            rowClass = 'bg-yellow-950/20 hover:bg-yellow-950/30 border-l-2 border-yellow-600';
+                          }
+
+                          return (
+                            <tr key={order.id} className={`text-zinc-300 transition-colors ${rowClass}`}>
+<td className="p-4 text-center">
                               <input
                                 type="checkbox"
                                 checked={!!selectedOrderIds[order.id]}

@@ -32,11 +32,14 @@ const getFabricPremium = (fabric: string): number => {
 
 export async function POST(request: Request) {
   try {
-    const { orderId, cancelToken, userId, updates } = await request.json();
+    const { orderId, cancelToken, userId, updates, items, payment_receipt_url } = await request.json();
 
     if (!orderId || !updates || typeof updates !== 'object') {
       return NextResponse.json({ success: false, error: 'Order ID and update fields are required' }, { status: 400 });
     }
+
+    if (items) updates.items = items;
+    if (payment_receipt_url) updates.payment_receipt_url = payment_receipt_url;
 
     const isMock = !supabaseUrl || !supabaseServiceKey || supabaseUrl.includes('placeholder');
     if (isMock) {
