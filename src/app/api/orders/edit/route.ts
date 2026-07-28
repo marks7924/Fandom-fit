@@ -17,6 +17,7 @@ const ALLOWED_UPDATE_FIELDS = [
   'items',
   'price',
   'notes',
+  'product_name',
   'payment_receipt_url',
   'status'
 ];
@@ -152,6 +153,19 @@ export async function POST(request: Request) {
       finalUpdates.items = updatedItems;
       finalUpdates.price = newTotal;
       finalUpdates.notes = reconstructedNotes;
+
+      // Regenerate product_name summary from the updated items
+      if (updatedItems.length === 1) {
+        const fi = updatedItems[0];
+        const sizeLabel = fi.size ? ` (${fi.size} - ${(fi.fit_type || 'oversized').charAt(0).toUpperCase() + (fi.fit_type || 'oversized').slice(1)} Fit)` : '';
+        finalUpdates.product_name = `${fi.product_name || 'Fandom Fit Apparel'}${sizeLabel} x${fi.quantity || 1}`;
+      } else {
+        const names: string[] = Array.from(new Set(updatedItems.map((i: any) => i.product_name || 'Fandom Fit Apparel')));
+        const totalQty = updatedItems.reduce((s: number, i: any) => s + (i.quantity || 1), 0);
+        finalUpdates.product_name = names.length === 1
+          ? `${names[0]} x${totalQty}`
+          : `${names[0]} + ${names.length - 1} more items`;
+      }
 
       // If price rises and they paid the difference via screenshot (InstaPay), mark as pending_verification
       if (priceDiff > 0 && updates.payment_receipt_url) {
